@@ -140,6 +140,13 @@ def main():
                 frame.get_by_role('button',name='Send',exact=True).click()
                 calendar=frame.frame_locator('.snapshot-frame')
                 expect(calendar.locator('.task-title').filter(has_text='Prepare briefing')).to_be_visible(timeout=15000)
+                expect(calendar.locator('.dot')).to_have_count(0)
+                calendar_height=frame.locator('.snapshot-frame').evaluate('(e)=>e.getBoundingClientRect().height')
+                calendar.locator('.task').filter(has_text='Prepare briefing').first.click()
+                expect(frame.locator('#chatSelection').get_by_role('heading',name='Prepare briefing',exact=True)).to_be_visible()
+                expect(calendar.locator('#details')).to_be_hidden()
+                assert abs(frame.locator('.snapshot-frame').evaluate('(e)=>e.getBoundingClientRect().height')-calendar_height)<2
+                frame.get_by_role('button',name='Close details',exact=True).click()
                 with page.expect_download() as download:calendar.get_by_role('button',name='SVG',exact=True).click()
                 assert download.value.suggested_filename.endswith('.svg')
                 frame.get_by_role('button',name='Settings',exact=True).click()

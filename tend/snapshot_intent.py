@@ -12,6 +12,8 @@ def _month_offset(today, offset):
 
 def resolve(message, today=None):
     text=message.strip().lower()
+    text=re.sub(r"^/snapshot\s+(week|month)\s*$",r"/snapshot this \1",text)
+    text=re.sub(r"^/snapshot\s+day\s*$","/snapshot today",text)
     if not (re.search(r"(?<!\w)(snapshot|snapshots)(?!\w)",text) or
             re.search(r"\b(calendar (?:report|view|summary)|visual (?:task |activity )?(?:report|summary))\b",text)):
         return None
