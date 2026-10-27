@@ -14,7 +14,7 @@
   let node=nodes.get(row.id);
   if(!node){node=el('div','bubble '+(row.role==='user'?'user':'assistant'));node.dataset.messageId=row.id;nodes.set(row.id,node)}
   if(node.dataset.body!==row.body){node.dataset.body=row.body;node.textContent=row.body;
-   if(row.role==='assistant'&&row.html){node.innerHTML=row.html;appendSnapshot(node,row.html);matchReferences(node);window.TetherNotes?.enhance(node,parseReference)}
+   if(row.role==='assistant'&&row.html){node.innerHTML=row.html;appendSnapshot(node,row.html);window.TetherNotes?.enhance(node,parseReference)}
   }
   return node;
  }
