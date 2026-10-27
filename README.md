@@ -1,4 +1,4 @@
-# tether.
+# tether-chat
 
 [![PyPI version](https://img.shields.io/pypi/v/tether-chat)](https://pypi.org/project/tether-chat/)
 
@@ -27,7 +27,7 @@ uv tool install --reinstall "tether-chat[desktop]"
 tether-chat-desktop
 ```
 
-The install exposes only **`tether-chat`** and **`tether-chat-desktop`**. On Windows, `tether-chat-desktop` opens a native WebView2 window and remains in the tray after the window closes. Choose **Open tether** to return or **Exit tether** to stop it. The Microsoft Edge WebView2 Runtime is required. macOS and Linux open the browser UI and use a tray/menu-bar entry where supported by the desktop environment.
+The install exposes only **`tether-chat`** and **`tether-chat-desktop`**. On Windows, `tether-chat-desktop` opens a native WebView2 window and remains in the tray after the window closes. Choose **Open tether-chat** to return or **Exit tether-chat** to stop it. The Microsoft Edge WebView2 Runtime is required. macOS and Linux open the browser UI and use a tray/menu-bar entry where supported by the desktop environment.
 
 **Browser/server mode:**
 
@@ -69,9 +69,11 @@ Attention updates automatically after saves, notes, and chat changes. Completed 
 
 **Archive:** Put finished or inactive tasks away without deleting them; restore them from **View archive**.
 
+If a previous server or another program occupies a service port, the launcher selects available local ports and opens the correct address. It remembers the successful ports for the next launch and reuses a compatible running tether. Child services load the installed package even when launched from an older source checkout. Your database and AI settings keep their existing location. The actual web and MCP addresses are printed in server mode and recorded in `~/.tend/launch-ports.json`.
+
 ## Update
 
-Choose **Exit tether** in the tray before replacing a running installation:
+Choose **Exit tether-chat** in the tray before replacing a running installation:
 
 ```sh
 uv tool upgrade tether-chat

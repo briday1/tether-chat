@@ -11,7 +11,7 @@ def notify(reminder):
     report=reminder.get("report")
     if report:message+=f" — {report['count']} activities this {report['period']}"
     if reminder.get("report_error"):message+=" — report unavailable"
-    notification.notify(title="tether · Attention", message=message[:220],
+    notification.notify(title="tether-chat · Attention", message=message[:220],
                         app_name=APP_NAME, app_icon=str(icon_path()), timeout=12)
 
 

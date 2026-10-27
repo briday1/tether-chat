@@ -53,7 +53,7 @@ def install(destination=None):
                 +"$s.TargetPath='"+escape(python)+"';"
                 +"$s.Arguments='-m tend.native';"
                 +"$s.WorkingDirectory='"+escape(str(Path.home()))+"';"
-                +"$s.Description='Open tether';$s.IconLocation='"+escape(str(icon_file))+"';$s.Save()")
+                +"$s.Description='Open tether-chat';$s.IconLocation='"+escape(str(icon_file))+"';$s.Save()")
         subprocess.run(["powershell","-NoProfile","-NonInteractive","-Command",script],check=True)
     elif sys.platform=="darwin":
         path=folder/"tether-chat.command"
@@ -62,6 +62,6 @@ def install(destination=None):
     else:
         path=folder/"tether-chat.desktop"
         exec_line='"'+python.replace("\\","\\\\").replace('"','\\"').replace("%","%%")+'" -m tend.native'
-        path.write_text("[Desktop Entry]\nType=Application\nName=tether.\nComment=Local task assistant\nExec="+exec_line+"\nTerminal=false\nCategories=Office;Utility;\n",encoding="utf-8")
+        path.write_text("[Desktop Entry]\nType=Application\nName=tether-chat\nComment=Local task assistant\nExec="+exec_line+"\nTerminal=false\nCategories=Office;Utility;\n",encoding="utf-8")
         path.chmod(0o755)
     return path

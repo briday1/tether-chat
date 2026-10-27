@@ -1,5 +1,4 @@
 """Windows desktop entry point: start tether-chat only when needed, then open an app window."""
-import json
 import os
 import subprocess
 import sys
@@ -7,8 +6,6 @@ import time
 import webbrowser
 from pathlib import Path
 from . import __version__
-from urllib.request import urlopen
-from urllib.error import URLError
 
 def log(message):
     path=Path.home()/".tend"/"desktop-launch.log"
@@ -16,15 +13,12 @@ def log(message):
     with path.open("a",encoding="utf-8") as f:f.write(message+"\n")
 
 def port():
-    return int(os.environ.get("TEND_WEB_PORT","8765"))
+    from .ports import web_port
+    return web_port()
 
 def healthy():
-    try:
-        with urlopen(f"http://127.0.0.1:{port()}/api/health",timeout=0.75) as response:
-            data=json.load(response)
-            return response.status==200 and data.get("app")=="tend" and data.get("brand")=="tether-chat" and data.get("version")==__version__ and data.get("streaming_chat") is True and data.get("tool_runner")=="unbounded-v2"
-    except (OSError,ValueError,URLError):
-        return False
+    from .ports import compatible
+    return compatible(port())
 
 def open_app():
     url=f"http://127.0.0.1:{port()}/"
@@ -35,14 +29,14 @@ def open_app():
                           str(Path(root)/"Google"/"Chrome"/"Application"/"chrome.exe")])
     for executable in paths:
         if Path(executable).is_file():
-            subprocess.Popen([executable,"--app="+url],close_fds=True)
+            subprocess.Popen([executable,"--app="+url],close_fds=True,cwd=str(Path(__file__).resolve().parent.parent))
             return
     webbrowser.open(url)
 
 def show_error(message):
     try:
         import ctypes
-        ctypes.windll.user32.MessageBoxW(None,str(message),"tether. launcher",0x10)
+        ctypes.windll.user32.MessageBoxW(None,str(message),"tether-chat launcher",0x10)
     except Exception:
         pass
 
@@ -51,7 +45,7 @@ def main():
     create_mutex=ctypes.windll.kernel32.CreateMutexW
     create_mutex.restype=ctypes.c_void_p
     create_mutex.argtypes=(ctypes.c_void_p,ctypes.c_int,ctypes.c_wchar_p)
-    mutex=create_mutex(None,False,"Local\\tether-chatDesktopTray")
+    mutex=create_mutex(None,False,"Local\\tether-chatDesktopTray-"+__version__)
     if not mutex:raise RuntimeError("Could not initialize desktop launcher")
     if ctypes.windll.kernel32.GetLastError()==183:
         # A tray instance already exists; just reopen its application window.
@@ -70,14 +64,9 @@ def main():
         ctypes.windll.kernel32.CloseHandle(mutex)
 
 def start_and_open(open_window=True):
-    if not healthy():
-        # Do not silently reuse a server with an incompatible API.
-        import socket
-        with socket.socket() as probe:
-            probe.settimeout(.5)
-            occupied=probe.connect_ex(("127.0.0.1",port()))==0
-        if occupied:
-            raise RuntimeError("An outdated or different server is using tether-chat's port. Stop that process before launching the new tether-chat shortcut.")
+    from . import ports
+    reuse=ports.configure(log=log)
+    if not reuse:
         # Run the console Python interpreter with its console creation suppressed.
         # The supervisor prints progress; pythonw has no stdout and can crash on print().
         py=os.environ.get("TEND_SERVICE_PYTHON",sys.executable)
@@ -88,18 +77,27 @@ def start_and_open(open_window=True):
         env["TEND_NO_BROWSER"]="1"
         logs=Path.home()/".tend"/"server.log"
         logs.parent.mkdir(parents=True,exist_ok=True)
+        from datetime import datetime,timezone
+        log_offset=logs.stat().st_size if logs.exists() else 0
         with logs.open("ab") as output:
+            output.write(("\n[tether-chat launch "+datetime.now(timezone.utc).isoformat()+"]\n").encode());output.flush()
             child=subprocess.Popen([py,"-m","tend.cli"],env=env,creationflags=flags,
                              stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT,
-                             close_fds=True)
-        for _ in range(120):
-            if healthy():break
-            if child.poll() is not None:
-                raise RuntimeError("tether-chat server process exited. Check ~/.tend/server.log")
-            time.sleep(.25)
-        else:
-            log("tether-chat server failed to become ready; see server.log")
-            raise RuntimeError("tether-chat did not start; see ~/.tend/server.log")
+                             close_fds=True,cwd=str(Path(__file__).resolve().parent.parent))
+        try:
+            for _ in range(120):
+                if healthy():break
+                if child.poll() is not None:
+                    details=logs.read_bytes()[log_offset:][-3000:].decode('utf-8',errors='replace').strip()
+                    raise RuntimeError("tether-chat server process exited.\n"+details)
+                time.sleep(.25)
+            else:
+                raise RuntimeError("tether-chat did not become ready. Check the latest launch in ~/.tend/server.log")
+        except BaseException:
+            from .shutdown import stop_child
+            stop_child(child,log=log)
+            raise
+    ports.remember()
     if open_window:open_app()
     return child if 'child' in locals() else None
 
@@ -115,7 +113,7 @@ def run_tray(server):
             show_error("tether-chat's web server is unavailable. Exit tether and start it again from the desktop shortcut.")
         else:
             open_app()
-    def quit_tend(icon,item):
+    def quit_app(icon,item):
         icon.stop()
         if server is None or server.poll() is not None:
             return
@@ -136,10 +134,10 @@ def run_tray(server):
         except Exception as exc:
             log("Unable to stop services cleanly: "+repr(exc))
     menu=pystray.Menu(
-        pystray.MenuItem("Open tether",reopen,default=True),
-        pystray.MenuItem("Exit tether" if server else "Exit tether tray",quit_tend),
+        pystray.MenuItem("Open tether-chat",reopen,default=True),
+        pystray.MenuItem("Exit tether-chat" if server else "Exit tether-chat tray",quit_app),
     )
-    icon=pystray.Icon("tend",tray_icon,"tether.",menu)
+    icon=pystray.Icon("tether-chat",tray_icon,"tether-chat",menu)
     icon.run()
 
 if __name__=="__main__":

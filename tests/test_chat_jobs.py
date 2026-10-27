@@ -95,6 +95,6 @@ def test_notification_has_tether_icon_and_brand(monkeypatch,tmp_path):
     monkeypatch.setattr(branding,'icon_path',lambda:icon)
     monkeypatch.setattr(branding,'set_process_identity',lambda:None)
     notifications.notify({'title':'Check the draft','task_title':'Prepare briefing'})
-    assert calls[0]['app_icon']==str(icon) and calls[0]['app_name']=='tether.'
-    assert calls[0]['title']=='tether · Attention'
+    assert calls[0]['app_icon']==str(icon) and calls[0]['app_name']=='tether-chat'
+    assert calls[0]['title']=='tether-chat · Attention'
     assert 'Prepare briefing' in calls[0]['message']
