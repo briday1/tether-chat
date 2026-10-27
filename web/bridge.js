@@ -11,20 +11,34 @@
   window.fetch=(...args)=>shell.tetherReady.then(runtime=>runtime.fetch(...args));
   const api=async(path,method='GET',data)=>{
     const response=await fetch(config.base+'api'+path,{method,headers:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
-    const result=await response.json();if(!response.ok)throw Error(result.detail||'Request failed');return result;
+    const result=await response.json();if(!response.ok){const error=Error(result.detail||'Request failed');error.status=response.status;throw error}return result;
   };
   const $=selector=>document.querySelector(selector);
   function status(selector,text){const node=$(selector);if(node)node.textContent=text}
   function configuration(c){
     $('#base').value=c.base_url;$('#model').value=c.model;$('#key').value='';$('#rememberKey').checked=c.remember;
     $('#unlockKey').hidden=!c.has_saved_key;$('#lockKey').hidden=!c.has_key;
-    status('#keyStatus',c.locked?'Saved key is locked. Enter its passphrase and unlock it.':c.has_key?'Key is unlocked for this browser session.':'Enter your API key to enable AI chat.');
+    status('#keyStatus',c.locked?'Saved key is locked. Enter its passphrase and unlock it.':c.has_key?
+      (c.remember?'Key is unlocked. It is saved encrypted for your next visit.':'Key is ready for this session. To keep it after closing the app, save it encrypted with a passphrase.'):
+      'Enter your API key, then save or test the connection.');
   }
-  window.tetherLoadSettings=async()=>{
+  let loadingSettings=Promise.resolve();
+  window.tetherLoadSettings=()=>loadingSettings=(async()=>{
     const form=$('#provider'),controls=[...form.querySelectorAll('input,button')];
     form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
     try{configuration(await api('/settings'))}catch(e){status('#providerStatus',e.message)}
     finally{for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
+  })();
+  window.tetherBeforeChat=async(text,attention)=>{
+    try{await api('/chat/preflight','POST',{text,attention});return true}
+    catch(error){
+      if(error.status!==401)return true;
+      if($('#settings').classList.contains('hidden'))$('#navsettings').click();
+      await loadingSettings;
+      status('#providerStatus','Your message is still in the draft. '+error.message);
+      const target=$('#unlockKey').hidden?$('#key'):$('#keyPassphrase');target.focus();target.scrollIntoView({block:'center'});
+      return false;
+    }
   };
   window.tetherLoadStorage=async()=>{
     const persistent=await navigator.storage?.persisted?.().catch(()=>false);
@@ -46,16 +60,29 @@
   document.addEventListener('DOMContentLoaded',()=>{
     if(!$('#provider'))return;
     status('#browserVersion','tether. '+config.version+' · Browser edition');
-    $('#provider').onsubmit=async event=>{
-      event.preventDefault();const button=$('#provider button[type="submit"]');button.disabled=true;
-      try{configuration(await api('/settings','POST',{base_url:$('#base').value.trim(),model:$('#model').value.trim(),api_key:$('#key').value.trim()||null,
-        remember:$('#rememberKey').checked,passphrase:$('#keyPassphrase').value}));$('#keyPassphrase').value='';status('#providerStatus','Connection saved on this device.')}
-      catch(e){status('#providerStatus',e.message)}finally{button.disabled=false}
-    };
-    $('#unlockKey').onclick=async()=>{try{configuration(await api('/settings/unlock','POST',{passphrase:$('#keyPassphrase').value}));$('#keyPassphrase').value='';status('#providerStatus','Saved key unlocked.')}catch(e){status('#providerStatus',e.message)}};
-    $('#lockKey').onclick=async()=>{await api('/settings/lock','POST',{});$('#key').value='';$('#keyPassphrase').value='';await window.tetherLoadSettings();status('#providerStatus','Key locked.')};
-    $('#forgetKey').onclick=async()=>{const c=await api('/settings');await api('/settings','POST',{...c,remember:false,clear_key:true});$('#keyPassphrase').value='';await window.tetherLoadSettings();status('#providerStatus','Saved key removed.')};
-    $('#testConnection').onclick=async()=>{const b=$('#testConnection');b.disabled=true;status('#providerStatus','Testing provider…');try{const result=await api('/settings/test','POST',{});status('#providerStatus',result.message)}catch(e){status('#providerStatus',e.message)}finally{b.disabled=false}};
+    const form=$('#provider');let providerBusy=false;
+    async function providerAction(action,validate=false){
+      if(providerBusy || validate && !form.reportValidity())return;
+      providerBusy=true;const controls=[...form.querySelectorAll('input,button')];
+      form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
+      try{await action()}catch(e){status('#providerStatus',e.message)}
+      finally{providerBusy=false;for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
+    }
+    async function saveConnection(){
+      const c=await api('/settings','POST',{base_url:$('#base').value.trim(),model:$('#model').value.trim(),api_key:$('#key').value.trim()||null,
+        remember:$('#rememberKey').checked,passphrase:$('#keyPassphrase').value});
+      configuration(c);$('#keyPassphrase').value='';
+      status('#providerStatus',c.locked?'Connection saved. Unlock your saved key to connect.':c.remember?'Connection saved on this device.':'Connection saved for this session.');
+      return c;
+    }
+    form.onsubmit=event=>{event.preventDefault();providerAction(saveConnection,true)};
+    $('#unlockKey').onclick=()=>providerAction(async()=>{configuration(await api('/settings/unlock','POST',{passphrase:$('#keyPassphrase').value}));$('#keyPassphrase').value='';status('#providerStatus','Saved key unlocked.')});
+    $('#lockKey').onclick=()=>providerAction(async()=>{await api('/settings/lock','POST',{});$('#key').value='';$('#keyPassphrase').value='';configuration(await api('/settings'));status('#providerStatus','Key locked.')});
+    $('#forgetKey').onclick=()=>providerAction(async()=>{const c=await api('/settings');configuration(await api('/settings','POST',{...c,remember:false,clear_key:true}));$('#keyPassphrase').value='';status('#providerStatus','Saved key removed.')});
+    $('#testConnection').onclick=()=>providerAction(async()=>{
+      await saveConnection();status('#providerStatus','Testing provider…');
+      const result=await api('/settings/test','POST',{});status('#providerStatus',result.message);
+    },true);
     $('#exportData').onclick=async()=>{try{const backup=await api('/backup');await window.tetherDownload(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),'tether-backup-'+new Date().toISOString().slice(0,10)+'.json');status('#storageStatus','Backup prepared. Save the downloaded file.')}catch(e){status('#storageStatus',e.message)}};
     $('#importData').onchange=async event=>{const file=event.target.files[0];if(!file)return;
       try{if(file.size>20*1024*1024)throw Error('Choose a JSON backup smaller than 20 MB.');const result=await api('/import','POST',JSON.parse(await file.text()));

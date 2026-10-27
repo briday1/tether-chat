@@ -9,6 +9,7 @@ const labels={list_threads:'Searching tracked tasks',get_thread:'Reading task de
 const sleep=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
 const stable=value=>value && typeof value==='object' ? Array.isArray(value) ? value.map(stable)
   : Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])])) : value;
+const readOnlyTools=new Set(['list_threads','get_thread','overview','recurring_items','list_archived','daily_brief','activity_report','run_task_due_action']);
 export async function createRuntime({config,db,network=globalThis.fetch.bind(globalThis),
   locks=globalThis.navigator?.locks,session=globalThis.sessionStorage}={}) {
   db=db || await new Database('tether-chat-web:'+config.base).open();
@@ -18,12 +19,14 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
   const read=fn=>db.read(s=>fn(new Model(s),s)),write=fn=>db.write(s=>fn(new Model(s),s));
   const markdown=text=>renderMarkdown(text,config);
   const rememberSession=()=>{try{if(apiKey)session?.setItem(sessionName,JSON.stringify({key:apiKey,base:keyBase}));else session?.removeItem(sessionName)}catch(_){}};
-  const publicSettings=s=>({base_url:s.settings.base_url||'https://api.openai.com/v1',model:s.settings.model||'gpt-4.1-mini',
-    has_key:!!(apiKey && keyBase===(s.settings.base_url||'https://api.openai.com/v1')),has_saved_key:!!s.settings.encrypted_key,
-    locked:!!s.settings.encrypted_key && !apiKey,remember:!!s.settings.encrypted_key});
+  const publicSettings=s=>{
+    const base_url=s.settings.base_url||'https://api.openai.com/v1',has_key=!!(apiKey && keyBase===base_url);
+    return {base_url,model:s.settings.model||'gpt-4.1-mini',has_key,has_saved_key:!!s.settings.encrypted_key,
+      locked:!!s.settings.encrypted_key && !has_key,remember:!!s.settings.encrypted_key};
+  };
   async function connection() {
     const c=await read((m,s)=>publicSettings(s));
-    if(!c.has_key)throw new Problem(c.locked?'Unlock your saved API key in Settings.':'Enter your API key in Settings before chatting.');
+    if(!c.has_key)throw new Problem(c.locked?'Unlock your saved API key in Settings.':'Enter your API key in Settings, then save or test the connection.',401);
     return {...c,key:apiKey};
   }
   async function saveSettings(body) {
@@ -31,10 +34,19 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     if(base.protocol!=='https:' || base.username || base.password || base.search || base.hash)
       throw new Problem('Use an HTTPS provider base URL without credentials, a query, or a fragment');
     const base_url=base.href.replace(/\/+$/,''),model=required(body.model,'Model',200);
-    let nextKey=body.api_key ? required(body.api_key,'API key',10000) : keyBase===base_url ? apiKey : '';
+    const previous=await read((m,s)=>s.settings),sameBase=base_url===(previous.base_url||'https://api.openai.com/v1');
+    const supplied=body.api_key ? required(body.api_key,'API key',10000) : '';
+    let nextKey=supplied || (keyBase===base_url ? apiKey : ''),encrypted=null;
+    if(!body.clear_key && !nextKey && !(body.remember && sameBase && previous.encrypted_key))
+      throw new Problem(sameBase?'Enter your API key, then save or test the connection.':'The provider URL changed. Re-enter your API key for this URL. Your previous connection is still saved.');
     if(body.clear_key)nextKey='';
-    if(body.remember && !nextKey)throw new Problem('Enter or unlock your key before saving it on this device');
-    const encrypted=body.remember ? await encryptKey(nextKey,body.passphrase) : null;
+    else if(body.remember){
+      // Editing the model or testing a saved connection must not require a new
+      // passphrase or replace an existing encrypted key with an empty value.
+      if(!supplied && !body.passphrase && sameBase && previous.encrypted_key)encrypted=previous.encrypted_key;
+      else if(nextKey)encrypted=await encryptKey(nextKey,body.passphrase);
+      else throw new Problem('Enter or unlock your key before saving it on this device');
+    }
     await write((m,s)=>{s.settings={base_url,model,encrypted_key:encrypted};return null});
     apiKey=nextKey;keyBase=base_url;rememberSession();return read((m,s)=>publicSettings(s));
   }
@@ -54,7 +66,8 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
           }
           throw new Problem(`AI provider returned HTTP ${response.status}. Check your key, model, quota, and endpoint.`);
         }
-        const result=await response.json();if(!Array.isArray(result.choices)||!result.choices[0]?.message)
+        let result;try{result=await response.json()}catch(_){throw new Problem('The provider returned an unreadable response. Check the API base URL; it must provide OpenAI-compatible chat completions.')}
+        if(!Array.isArray(result.choices)||!result.choices[0]?.message)
           throw new Problem('Provider returned an unsupported response; use an OpenAI-compatible chat-completions model.');
         return result;
       }catch(error){
@@ -149,7 +162,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
             seen.add(signature);changed=true;await progress(labels[name]||'Working with saved information');
             result=await write((m,s)=>{
               const current=s.jobs.find(j=>j.id===job.id);if(current?.status!=='running')throw new Problem('This request was interrupted; no further changes were made');
-              return m.dispatch(name,args);
+              const result=m.dispatch(name,args);if(!readOnlyTools.has(name))current.changes_saved=true;return result;
             });used.push(name);await progress((labels[name]||'Tool operation')+' — done');
           }
         }catch(error){result={error:error instanceof Problem?error.message:'Invalid tool arguments'};await progress('Tool operation — could not complete')}
@@ -202,7 +215,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       const existing=s.jobs.find(j=>j.id===id);
       if(existing){if(existing.message!==message||JSON.stringify(existing.context)!==JSON.stringify(context))throw new Problem('This request ID is already in use');return existing}
       const stamp=now(),user={id:uid(),role:'user',body:message,created_at:stamp};s.messages.push(user);
-      const job={id,message,context,status:'queued',progress:[],result:null,error:null,created_at:stamp,updated_at:stamp,
+      const job={id,message,context,status:'queued',progress:[],result:null,error:null,changes_saved:false,created_at:stamp,updated_at:stamp,
         user_message_id:user.id,assistant_message_id:null};s.jobs.push(job);return job;
     });drain();return job;
   }
@@ -233,6 +246,10 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     }
     if(path==='/settings/lock'){apiKey='';rememberSession();return {ok:true}}
     if(path==='/settings/test'){await request([{role:'user',content:'Respond with OK.'}],{tools:false,maxTokens:12});return {ok:true,message:'Connection successful'}}
+    if(path==='/chat/preflight'){
+      if(!body.attention && !await localResponse(String(body.text||'')))await connection();
+      return {ok:true};
+    }
     if(path==='/chat/jobs' && method==='POST')return submit(body);
     if(path==='/chat/state'){drain();return read((m,s)=>({messages:rendered(s),jobs:s.jobs.map(j=>copy(j))}))}
     if(path==='/conversation/rendered')return read((m,s)=>rendered(s));
