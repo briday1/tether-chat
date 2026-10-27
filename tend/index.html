@@ -41,12 +41,15 @@ function syncSnapshotTheme(frame){
 }
 new MutationObserver(()=>document.querySelectorAll('.snapshot-frame').forEach(syncSnapshotTheme)).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 window.addEventListener('message',event=>{
+ if(event.origin===location.origin&&event.data?.type==='tend:snapshot-task'&&typeof event.data.id==='string'&&[...document.querySelectorAll('.snapshot-frame')].some(f=>f.contentWindow===event.source)){
+  browseReference({type:'task',id:event.data.id});return;
+ }
  if(event.origin!==location.origin||event.data?.type!=='tend:snapshot-size'||!Number.isFinite(event.data.height))return;
  const frame=[...document.querySelectorAll('.snapshot-frame')].find(f=>f.contentWindow===event.source);
  if(!frame)return;
- const chat=$('#chat'),wasAtBottom=chat.scrollHeight-chat.scrollTop-chat.clientHeight<60;
  frame.style.height=Math.max(1,Math.ceil(event.data.height))+'px';
- if(wasAtBottom)scrollChat();
+ // Resizing a calendar must not force the conversation to jump down.
+
 });
 let mentionData={categories:[],tasks:[],actions:[]};
 let referenceRequest=0,referenceReturnFocus=null;
