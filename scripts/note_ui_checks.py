@@ -31,10 +31,12 @@ def check_note_replies(page, ui, api_base):
     expect(cells.nth(1)).to_contain_text('Check | attachment (due 2030-05-03; Bring to attention 2030-05-04)')
     expect(cells.nth(2)).to_have_text('Due 2020-01-01; Bring to attention 2035-01-02')
     expect(message).not_to_contain_text('Finished Note action')
+    assert ui.locator('html').evaluate('(e)=>e.scrollHeight<=e.clientHeight+1'),'Note table headers must stay inside the chat scroll area'
     assert cells.nth(0).get_by_role('link',name=title,exact=True).evaluate('(e)=>getComputedStyle(e).backgroundColor')=='rgba(0, 0, 0, 0)'
     for width in (390,320):
         page.set_viewport_size({'width':width,'height':900})
         assert ui.locator('html').evaluate('(e)=>e.scrollWidth<=e.clientWidth'),width
+        assert ui.locator('html').evaluate('(e)=>e.scrollHeight<=e.clientHeight+1'),width
         assert message.locator('.note-table-wrap').first.evaluate('(e)=>e.scrollWidth<=e.clientWidth+1'),width
         assert row.evaluate('(e)=>e.children[1].getBoundingClientRect().top>e.children[0].getBoundingClientRect().top'),width
     page.set_viewport_size(viewport)

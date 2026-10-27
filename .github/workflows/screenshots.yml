@@ -11,6 +11,10 @@ on:
       - tend/index.html
       - tend/board.html
       - tend/theme.css
+      - tend/notes.css
+      - tend/notes.js
+      - tend/notes.py
+      - tend/chat.js
       - tend/store.py
       - tend/mcp_server.py
       - tend/snapshot.html
