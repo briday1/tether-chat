@@ -185,18 +185,10 @@ test('unreadable provider responses are not misreported as browser CORS failures
   const result=await api('/settings/test','POST',{});assert.equal(result.status,422);assert.match(result.data.detail,/unreadable response/);
   assert.equal((await api('/settings')).data.has_key,true);assert.equal(db.state.jobs.length,0);
 });
-test('microphone recordings go directly to the configured provider without entering chat or backups',async t=>{
-  const calls=[],{runtime,api,db}=await setup(t,async(url,options)=>{
-    calls.push({url,options});assert.ok(options.body instanceof FormData);
-    assert.equal(options.body.get('model'),'test-transcriber');assert.equal(options.headers.Authorization,'Bearer voice-test-key');
-    return Response.json({text:'Review this spoken draft.'});
-  });await save(api,'voice-test-key');
-  const audio=new FormData();audio.append('file',new Blob(['synthetic audio'],{type:'audio/webm'}),'voice.webm');
-  audio.append('model','test-transcriber');audio.append('provider_base','https://provider.test/v1');
-  const result=await runtime.fetch(config.origin+config.base+'api/voice/transcribe',{method:'POST',body:audio});
-  assert.deepEqual(await result.json(),{text:'Review this spoken draft.'});assert.equal(calls[0].url,'https://provider.test/v1/audio/transcriptions');
-  assert.equal(db.state.messages.length,0);assert.equal(db.state.jobs.length,0);
-  audio.set('provider_base','https://wrong.example/v1');
-  assert.equal((await runtime.fetch(config.origin+config.base+'api/voice/transcribe',{method:'POST',body:audio})).status,422);
-  assert.equal(calls.length,1);
+test('retired audio API does not send a recording or require a key',async t=>{
+  let calls=0;const {runtime,db}=await setup(t,async()=>{calls++;throw Error('Unexpected network call')});
+  const body=new FormData();body.append('file',new Blob(['audio'],{type:'audio/wav'}),'voice.wav');
+  const result=await runtime.fetch(config.origin+config.base+'api/voice/transcribe',{method:'POST',body});
+  assert.equal(result.status,410);assert.match((await result.json()).detail,/this device/);
+  assert.equal(calls,0);assert.equal(db.state.messages.length,0);assert.equal(db.state.jobs.length,0);
 });

@@ -91,7 +91,7 @@ def build(output, base='/'):
     for source in (ROOT / 'web').iterdir():
         if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
             shutil.copy2(source, output / source.name)
-    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'updates.js', 'notes.js', 'notes.css'):
+    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css'):
         text = paths((ROOT / 'tend' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))

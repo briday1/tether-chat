@@ -20,11 +20,13 @@ AI requests use a short recent conversation window and retrieve task context thr
 
 ## Voice input
 
-The microphone beside Send puts speech into an editable draft; it never sends a chat automatically. Stop to review, or cancel to discard. Existing typed text is preserved. Microphone capture begins only after a click and stops on finish, cancellation, errors, or navigation.
+Click the borderless microphone once to start and again to stop. Its color changes while listening, and recognized words appear in the draft as you speak. × discards this dictation and restores the text that was already there. Manually editing the draft stops dictation and preserves your edits. Voice never sends a chat automatically.
 
-**Settings → Voice input** offers Automatic, Browser dictation, or Provider transcription. Browser dictation may use the browser's speech service. When it is unavailable, including in some embedded desktop browsers, provider transcription records audio and sends it directly to your configured provider's `audio/transcriptions` endpoint using your existing key. Choose the provider's transcription model (separate from the chat model); `whisper-1` is the initial editable value. The provider must support this endpoint and, in the browser edition, CORS for it. Recordings are limited to five minutes and 20 MB, are not added to task or conversation history, and are never automatically retried.
+Both editions default to **On-device speech · English** using open-source Vosk in a WebAssembly worker. No Python speech package, tether backend, provider transcription endpoint, or API key is needed. Microphone audio stays on this device. First use downloads a pinned Vosk runtime from jsDelivr and the small English model from the Vosk browser project's GitHub Pages (about 45 MB total). The runtime is integrity-checked and cached; Vosk stores its model in IndexedDB. Later use works offline unless the browser has cleared those files. Speech files are separate from task backups.
 
-On permission denial, allow microphone access in the browser and operating system. Windows may also require **Privacy & security → Microphone → Let desktop apps access your microphone**. Tether does not automatically grant microphone permissions. Keyboard dictation remains usable too.
+Wait for **Listening** before speaking, especially during first setup. HTTPS or localhost and microphone permission are required. Stopping, cancellation, errors, switching screens, or hiding the app releases the microphone and worker. Audio is not saved to tasks or backups.
+
+**Settings → Voice input** also offers Browser dictation and its language setting. This mode may use the browser's speech service. Existing Automatic and Provider transcription preferences migrate to on-device speech; the app no longer sends microphone audio to your AI provider.
 
 ## Local data and backups
 

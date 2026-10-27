@@ -23,6 +23,7 @@ assert files("tend").joinpath("notes.js").is_file()
 assert files("tend").joinpath("notes.css").is_file()
 assert files("tend").joinpath("action-notes.js").is_file()
 assert files("tend").joinpath("voice.js").is_file()
+assert files("tend").joinpath("speech.mjs").is_file()
 assert files("tend").joinpath("updates.js").is_file()
 for name in ("index.html","board.html"):
     page=files("tend").joinpath(name).read_text(encoding="utf-8")

@@ -97,8 +97,7 @@ def main():
                     route.fulfill(status=200,content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},
                                   body=json.dumps({'choices':[{'message':message}]}))
                 context.route('https://provider.example/v1/chat/completions',provider)
-                context.route('https://provider.example/v1/audio/transcriptions',lambda route:route.fulfill(status=200,
-                  content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps({'text':'Recorded voice draft.'})))
+
                 frame.get_by_role('button',name='Settings',exact=True).click()
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1')
                 frame.get_by_label('Model',exact=True).fill('test-model')

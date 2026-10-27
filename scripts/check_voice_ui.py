@@ -12,11 +12,8 @@ sys.path.insert(0,str(ROOT))
 
 
 def serve():
-    from tend import ai,voice
     from tend.app import app
     import uvicorn
-    ai.public_config=lambda:{'base_url':'https://provider.example/v1','model':'test','has_key':True}
-    voice.transcribe=lambda *args,**kwargs:{'text':'Recorded voice draft.'}
     uvicorn.run(app,host='127.0.0.1',port=18769,log_level='warning')
 
 
@@ -38,7 +35,7 @@ def main():
                 page.goto('http://127.0.0.1:18769/')
                 check_dictation(page,page);check_recording(page,page)
                 assert not errors,errors
-                browser.close();print('Desktop voice input: dictation, recording, permission errors, cancellation, draft preservation, and review before sending passed.')
+                browser.close();print('Desktop voice input: live local speech, dictation, permission errors, cancellation, draft preservation, and review before sending passed.')
         finally:server.terminate();server.wait(timeout=15)
 
 
