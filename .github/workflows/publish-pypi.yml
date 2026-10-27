@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [pyproject.toml, .github/workflows/publish-pypi.yml]
+    paths: [pyproject.toml, scripts/check_ui.py, .github/workflows/publish-pypi.yml]
     tags: ['v20*']
 permissions:
   contents: read

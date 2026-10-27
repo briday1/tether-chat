@@ -31,7 +31,7 @@ def seed(folder):
     second=store.add(task['id'],'action','Check the draft attachment')
     store.update_action(second['id'],{'due_at':'2030-11-02T12:00:00+00:00'})
     store.create('Renew certificate',categories=['Operations'])
-    text=f'In **Projects**, [Prepare briefing](/board#task/{task["id"]}) includes *Contact the review team*.'
+    text=f'In [Projects](/board#category/Projects), [Prepare briefing](/board#task/{task["id"]}) includes *Contact the review team*.'
     store.remember('assistant',text)
     return task['id'],first['id'],second['id']
 
@@ -68,7 +68,7 @@ def main():
                             elif path=='/api/mentions':
                                 tasks=store.list_threads()
                                 data={'categories':sorted({c for t in tasks for c in t['categories']}),'tasks':tasks,'actions':store.query("SELECT * FROM entries WHERE kind='action'")}
-                            elif path=='/api/chat/state':data={'jobs':[],'messages':[{'id':'sample','role':'assistant','body':'Example','html':f'<p>In <strong>Projects</strong>, <a href="/board#task/{task_id}">Prepare briefing</a> includes <em>Contact the review team</em>.</p>'}]}
+                            elif path=='/api/chat/state':data={'jobs':[],'messages':[{'id':'sample','role':'assistant','body':'Example','html':f'<p>In <a href="/board#category/Projects">Projects</a>, <a href="/board#task/{task_id}">Prepare briefing</a> includes <em>Contact the review team</em>.</p>'}]}
                             elif path.startswith('/api/threads/'):data=store.get(path.split('/')[-1])
                             elif path.startswith('/api/actions/') and request.request.method=='PATCH':data=store.update_action(path.split('/')[-1],request.request.post_data_json)
                             else:data={'items':[]}
@@ -83,7 +83,7 @@ def main():
                 expect(page.locator('.brand-word')).to_have_text('tether.')
                 assert page.title()=='tether.'
                 assert page.locator('#chatCategories').count()==0
-                category=page.locator('#chat a.chat-reference').filter(has_text='Projects')
+                category=page.locator('#chat a[href="/board#category/Projects"]')
                 expect(category).to_have_count(1)
                 for theme in THEMES:
                     page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
@@ -128,7 +128,7 @@ def main():
                 expect(page.locator('#actionDrawer h2')).to_have_text('Contact the review team')
                 page.keyboard.press('Escape')
                 page.set_viewport_size({'width':390,'height':844})
-                page.goto(base+'/',wait_until='networkidle');page.locator('#chat a.chat-reference').filter(has_text='Projects').click()
+                page.goto(base+'/',wait_until='networkidle');page.locator('#chat a[href="/board#category/Projects"]').click()
                 expect(drawer).to_be_visible();box=drawer.bounding_box();assert box['x']>=-1 and box['width']<=390
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.keyboard.press('Escape')
