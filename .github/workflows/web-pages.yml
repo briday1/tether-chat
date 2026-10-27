@@ -1,0 +1,68 @@
+name: Browser app and GitHub Pages
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+  push:
+    branches: [main]
+    tags: ['v20*']
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+permissions:
+  contents: read
+concurrency:
+  group: tether-browser-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser build and test dependencies
+        run: python -m pip install '.[dev]' playwright
+      - name: Task engine, queue, encryption, and portable data regressions
+        run: node --test tests/web/*.test.mjs
+      - name: Static build and desktop export compatibility
+        run: python -m pytest -q tests/test_browser_build.py
+      - name: Install a browser on the hosted runner
+        run: python -m playwright install chromium
+      - name: Browser navigation, storage, provider calls, and offline checks
+        run: |
+          python scripts/check_web_ui.py
+          python scripts/check_voice_ui.py
+      - name: Build the GitHub Pages edition
+        env:
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: python scripts/build_web.py --base-path "/$REPO_NAME/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tether-browser-app
+          path: web-dist/
+          include-hidden-files: true
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: web-dist/
+  deploy:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v20'))
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Publish browser edition
+        id: deployment
+        uses: actions/deploy-pages@v4
