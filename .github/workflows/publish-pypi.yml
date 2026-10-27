@@ -82,6 +82,7 @@ jobs:
         run: |
           python scripts/check_ui.py
           python scripts/check_session_ui.py
+          python scripts/check_voice_ui.py
           python scripts/capture_screenshots.py
       - name: Build the tested release
         run: |

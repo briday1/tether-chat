@@ -19,6 +19,7 @@ dependencies = [
   "plyer>=2.1,<3",
   "psutil>=5.9,<8",
   "Pillow>=10,<13",
+  "python-multipart>=0.0.18,<1",
 ]
 
 [project.scripts]
@@ -35,7 +36,7 @@ desktop = ["pywebview>=5,<7", "pystray>=0.19,<1"]
 include = ["tend*"]
 
 [tool.setuptools.package-data]
-tend = ["index.html", "board.html", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "favicon.svg", "manifest.webmanifest"]
+tend = ["index.html", "board.html", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "favicon.svg", "manifest.webmanifest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

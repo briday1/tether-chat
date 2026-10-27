@@ -16,6 +16,14 @@ By default a key stays in session storage for this browser session. Optionally s
 
 AI requests use a short recent conversation window and retrieve task context through tools. The tool declarations and system prompt are extracted from the desktop source during the build. Identical tool calls are not executed twice. Task operations commit to IndexedDB before the model is told they succeeded.
 
+## Voice input
+
+The microphone beside Send puts speech into an editable draft; it never sends a chat automatically. Stop to review, or cancel to discard. Existing typed text is preserved. Microphone capture begins only after a click and stops on finish, cancellation, errors, or navigation.
+
+**Settings → Voice input** offers Automatic, Browser dictation, or Provider transcription. Browser dictation may use the browser's speech service. When it is unavailable, including in some embedded desktop browsers, provider transcription records audio and sends it directly to your configured provider's `audio/transcriptions` endpoint using your existing key. Choose the provider's transcription model (separate from the chat model); `whisper-1` is the initial editable value. The provider must support this endpoint and, in the browser edition, CORS for it. Recordings are limited to five minutes and 20 MB, are not added to task or conversation history, and are never automatically retried.
+
+On permission denial, allow microphone access in the browser and operating system. Windows may also require **Privacy & security → Microphone → Let desktop apps access your microphone**. Tether does not automatically grant microphone permissions. Keyboard dictation remains usable too.
+
 ## Local data and backups
 
 Tasks, entries, action notes, activity, relations, chat history, and jobs use a database scoped to the app's deployment path. IndexedDB transactions prevent simultaneous tab edits from overwriting unrelated changes. **Protect local storage** asks the browser to retain the database; browser settings and clearing website data can still remove it.

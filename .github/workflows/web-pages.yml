@@ -2,11 +2,11 @@ name: Browser app and GitHub Pages
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['web/**', 'scripts/build_web.py', 'scripts/check_web_ui.py', 'tests/web/**', 'tests/test_browser_build.py', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
   push:
     branches: [main]
     tags: ['v20*']
-    paths: ['web/**', 'scripts/build_web.py', 'scripts/check_web_ui.py', 'tests/web/**', 'tests/test_browser_build.py', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
 permissions:
   contents: read
 concurrency:
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install browser build and test dependencies
-        run: python -m pip install Pillow pytest playwright
+        run: python -m pip install '.[dev]' playwright
       - name: Task engine, queue, encryption, and portable data regressions
         run: node --test tests/web/*.test.mjs
       - name: Static build and desktop export compatibility
@@ -32,7 +32,9 @@ jobs:
       - name: Install a browser on the hosted runner
         run: python -m playwright install chromium
       - name: Browser navigation, storage, provider calls, and offline checks
-        run: python scripts/check_web_ui.py
+        run: |
+          python scripts/check_web_ui.py
+          python scripts/check_voice_ui.py
       - name: Build the GitHub Pages edition
         env:
           REPO_NAME: ${{ github.event.repository.name }}

@@ -17,6 +17,7 @@ def main():
     from playwright.sync_api import sync_playwright,expect
     from tend import store
     from tend.portable import export_data
+    from voice_ui_checks import MOCKS,check_dictation,check_recording
     spec=importlib.util.spec_from_file_location('build_web',ROOT/'scripts/build_web.py')
     builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
     with tempfile.TemporaryDirectory(prefix='tether-web-ui-') as temp:
@@ -35,14 +36,16 @@ def main():
         try:
             with sync_playwright() as pw:
                 browser=pw.chromium.launch();context=browser.new_context(viewport={'width':1280,'height':900})
+                context.add_init_script(MOCKS)
                 context.add_init_script("""const originalFetch=window.fetch.bind(window);
                   window.fetch=async(input,options)=>{const response=await originalFetch(input,options);
-                    if(String(input).startsWith('https://provider.example/') && options?.body){
+                    if(String(input).startsWith('https://provider.example/') && typeof options?.body==='string'){
                       const body=JSON.parse(options.body);
                       if(body.tools && !body.messages.some(m=>m.role==='tool'))await new Promise(resolve=>setTimeout(resolve,1800));
                     }return response};""")
                 page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
                 page.goto(base);frame=page.frame_locator('#app-frame')
+                check_dictation(page,frame)
                 frame.get_by_label('Message tether').fill('/brief');frame.get_by_role('button',name='Send',exact=True).click()
                 expect(frame.get_by_role('heading',name='Daily brief')).to_be_visible(timeout=15000)
                 frame.get_by_role('button',name='Settings',exact=True).click()
@@ -83,6 +86,8 @@ def main():
                     route.fulfill(status=200,content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},
                                   body=json.dumps({'choices':[{'message':message}]}))
                 context.route('https://provider.example/v1/chat/completions',provider)
+                context.route('https://provider.example/v1/audio/transcriptions',lambda route:route.fulfill(status=200,
+                  content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps({'text':'Recorded voice draft.'})))
                 frame.get_by_role('button',name='Settings',exact=True).click()
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1')
                 frame.get_by_label('Model',exact=True).fill('test-model')
@@ -101,6 +106,7 @@ def main():
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
                 frame.get_by_role('button',name='Close settings').click()
                 frame.get_by_role('link',name='Conversation',exact=True).click()
+                check_recording(page,frame)
                 frame.get_by_label('Message tether').fill('Capture a new task for me.')
                 frame.get_by_role('button',name='Send',exact=True).click()
                 expect(frame.locator('.chat-pending')).to_be_visible()
@@ -143,7 +149,7 @@ def main():
                 expect(frame.locator('#right')).to_be_visible()
                 assert not errors,errors
                 browser.close()
-                print('Browser edition: shared UI, desktop import, action scope, encrypted keys, navigation during AI, backup, calendar, mobile, and offline checks passed.')
+                print('Browser edition: shared UI, voice dictation and recording, desktop import, action scope, encrypted keys, navigation during AI, backup, calendar, mobile, and offline checks passed.')
         finally:server.shutdown();server.server_close()
 
 

@@ -94,3 +94,18 @@ test('network errors explain browser CORS and never retry an ambiguous call',asy
   await api('/chat/jobs','POST',{request_id:'network-failure-001',text:'Hello'});
   await waitFor(()=>db.state.jobs[0]?.status==='error');assert.equal(calls,1);assert.match(db.state.jobs[0].error,/CORS/);
 });
+test('microphone recordings go directly to the configured provider without entering chat or backups',async t=>{
+  const calls=[],{runtime,api,db}=await setup(t,async(url,options)=>{
+    calls.push({url,options});assert.ok(options.body instanceof FormData);
+    assert.equal(options.body.get('model'),'test-transcriber');assert.equal(options.headers.Authorization,'Bearer voice-test-key');
+    return Response.json({text:'Review this spoken draft.'});
+  });await save(api,'voice-test-key');
+  const audio=new FormData();audio.append('file',new Blob(['synthetic audio'],{type:'audio/webm'}),'voice.webm');
+  audio.append('model','test-transcriber');audio.append('provider_base','https://provider.test/v1');
+  const result=await runtime.fetch(config.origin+config.base+'api/voice/transcribe',{method:'POST',body:audio});
+  assert.deepEqual(await result.json(),{text:'Review this spoken draft.'});assert.equal(calls[0].url,'https://provider.test/v1/audio/transcriptions');
+  assert.equal(db.state.messages.length,0);assert.equal(db.state.jobs.length,0);
+  audio.set('provider_base','https://wrong.example/v1');
+  assert.equal((await runtime.fetch(config.origin+config.base+'api/voice/transcribe',{method:'POST',body:audio})).status,422);
+  assert.equal(calls.length,1);
+});

@@ -36,8 +36,8 @@ def load():
 
 def public_config():
     c=load()
-    return {"base_url":c.get("base_url","https://api.openai.com/v1"),
-            "model":c.get("model","gpt-4.1-mini"),"has_key":bool(secrets.get())}
+    return {"base_url":os.environ.get("TEND_AI_BASE_URL") or c.get("base_url","https://api.openai.com/v1"),
+            "model":os.environ.get("TEND_AI_MODEL") or c.get("model","gpt-4.1-mini"),"has_key":bool(secrets.get())}
 
 def save(base_url,model,key=None,clear_key=False):
     p=urlparse(base_url.rstrip("/"))

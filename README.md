@@ -55,6 +55,8 @@ Open **Settings → AI connection**, enter your provider's HTTPS API base URL, m
 
 **Conversation:** Describe work to track, ask for an update, or record feedback. You can switch to Tasks while a reply is running. Requests are queued on the local server, and returning to Conversation restores their progress or completed replies. A full server shutdown interrupts in-flight requests rather than automatically repeating potentially mutating operations.
 
+**Voice input:** Click the microphone beside Send, speak, then stop and review the text before sending. Both desktop and browser editions support browser dictation and a recorded-audio fallback. In **Settings → Voice input**, choose the mode, dictation language, and provider transcription model. Recorded transcription uses your existing key and requires your provider to support `audio/transcriptions`; it does not change your chat model. Cancel discards a recording and releases the microphone.
+
 **Tasks:** Browse **Categories → Tasks → Action items**. Each task may have several categories and several action items. Individual action items have their own due date and **Bring to attention** time. Click an action row to open its details drawer, including its own notes. Add, edit, or remove a note there; notes stay attached to that action and are included in its check-in context.
 
 **Attention:** Click an item or focus it and press Enter. This sends a contextual check-in to Conversation and asks for your update; it does not silently mark anything complete or change dates. Action-item attention stays scoped to that action, rather than its siblings or category.
