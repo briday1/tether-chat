@@ -251,21 +251,8 @@ def claim_notifications():
     return claimed
 
 def daily_brief():
-    data=overview()
-    lines=["# Daily brief","","## Due dates"]
-    lines.extend("- **"+t["title"]+"** (due "+t["due_at"][:10]+")" for t in data["deadlines"][:15])
-    if not data["deadlines"]:lines.append("No upcoming or overdue deadlines in the current due list.")
-    lines+=["","## Bring to attention"]
-    lines.extend("- **"+t["title"]+"**" for t in data["due"][:15])
-    if not data["due"]:lines.append("Nothing due right now.")
-    lines+=["","## In progress"]
-    lines.extend("- "+t["title"] for t in data["active"][:10])
-    if not data["active"]:lines.append("Nothing active.")
-    lines+=["","## Waiting on"]
-    lines.extend("- "+t["title"] for t in data["waiting"][:10])
-    if not data["waiting"]:lines.append("Nothing waiting.")
-    lines+=["",f"Tracking {len(list_threads())} things in total."]
-    return "\n".join(lines)
+    from .notes import brief
+    return brief(overview(),get)
 
 def record_activity(thread_id,body,kind="progress",occurred_at=None):
     if kind not in {"progress","feedback","decision","blocker","milestone","other"}:raise ValueError("Invalid activity type")

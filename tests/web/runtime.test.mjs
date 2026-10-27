@@ -35,6 +35,23 @@ test('local commands run without a key and submissions are idempotent',async t=>
   const changed=await api('/chat/jobs','POST',{...body,text:'Different'});assert.equal(changed.status,422);
   assert.equal(db.state.messages.length,2);const state=await api('/chat/state');assert.ok(state.data.messages[1].html.includes('Daily brief'));
 });
+test('populated local rollups render current actions and schedules without a provider',async t=>{
+  const {api,db}=await setup(t);
+  const task=(await api('/threads','POST',{title:'Review [A] | draft',summary:'Keep the supporting context.'})).data;
+  await api('/threads/'+task.id+'/entries','POST',{kind:'action',body:'Check the attachment'});
+  await api('/threads/'+task.id,'PATCH',{state:'waiting',due_at:'2020-01-01',revisit_at:'2020-01-02T12:00:00Z'});
+  const archived=(await api('/threads','POST',{title:'Archived reference'})).data;
+  await api('/threads/'+archived.id+'/archive','POST',{});
+  await api('/chat/jobs','POST',{request_id:'note-rollup-001',text:'/brief'});
+  await waitFor(()=>db.state.jobs[0]?.status==='done');
+  const answer=(await api('/chat/state')).data.messages.at(-1).html;
+  assert.ok(answer.includes('<table>')&&answer.includes('Check the attachment')&&answer.includes('Keep the supporting context.'));
+  assert.ok(answer.includes('Due 2020-01-01; Bring to attention 2020-01-02; Waiting'));
+  assert.equal((answer.match(/<a /g)||[]).length,1);
+  await api('/chat/jobs','POST',{request_id:'note-rollup-002',text:'/recent'});
+  await waitFor(()=>db.state.jobs[1]?.status==='done');
+  assert.ok(!db.state.messages.at(-1).body.includes(archived.id));
+});
 test('queue serializes calls and excludes later queued messages from earlier context',async t=>{
   const requests=[];let release;const gate=new Promise(resolve=>release=resolve);
   const {api,db}=await setup(t,async(url,options)=>{

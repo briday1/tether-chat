@@ -42,7 +42,15 @@ def make_demo(db):
         ("Update documentation", "Product", "paused"),
         ("Plan monthly review", "Operations", "open"),
     ]:
-        t = store.create(title, "Sample data for screenshot testing.")
+        summaries={
+            'Prepare briefing notes':'Confirm attendees and assemble the supporting notes.',
+            'Review project milestones':'Waiting for updated milestone dates.',
+            'Renew development certificate':'Renew before the next deployment window.',
+            'Investigate dashboard bug':'Reproduce the missing data with the saved view.',
+            'Update documentation':'Paused until the new workflow is settled.',
+            'Plan monthly review':'Coordinate availability and set the agenda.',
+        }
+        t = store.create(title, summaries[title])
         store.update(t["id"], {"category": category, "state": state})
     store.record_activity(report["id"], "Collected updates for the reporting period.")
     archived = store.create("Completed onboarding checklist")
@@ -57,8 +65,11 @@ def make_demo(db):
                                     ("Update documentation",["Product"],0)]:
         task=next(t for t in store.list_threads() if t["title"]==title)
         store.update(task["id"],{"categories":categories,"due_at":(next_monday+timedelta(days=offset)).isoformat()+"T12:00:00Z"})
-    store.remember("user", "What needs my attention this week?")
-    store.remember("assistant", "There are a few active items in **Projects** and **Operations**. The weekly activity report is scheduled, and milestone review is waiting on input.")
+    from tend.notes import task_table
+    tasks={t['title']:t for t in store.list_threads()}
+    project_tasks=[tasks[title] for title in ('Prepare briefing notes','Review project milestones','Weekly activity report')]
+    store.remember("user", "Give me an update on Projects.")
+    store.remember("assistant", "Briefing preparation is open; milestone review is waiting for updated dates.\n\n### [Projects](/board#category/Projects)\n\n"+task_table(project_tasks,store.get))
     return report["id"]
 
 
@@ -143,9 +154,10 @@ def main():
                     status=200, content_type="application/json",
                     body='{"items":[],"source":"demo"}'))
                 page.goto(base + "/", wait_until="networkidle")
+                page.locator('.note-rows').wait_for()
+                page.screenshot(path=str(OUT / "conversation.png"), full_page=True)
                 request_snapshot(page, "give me my next week snapshot")
                 verify_snapshot_layers(page)
-                page.screenshot(path=str(OUT / "conversation.png"), full_page=True)
                 capture_calendar(page, 'snapshot-week.png')
                 week_start=date.today()+timedelta(days=7-date.today().weekday())
                 week_end=week_start+timedelta(days=6)

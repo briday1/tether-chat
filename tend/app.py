@@ -66,6 +66,10 @@ def theme_css():return FileResponse(Path(__file__).with_name("theme.css"),media_
 def theme_js():return FileResponse(Path(__file__).with_name("theme.js"),media_type="application/javascript")
 @app.get("/updates.js")
 def updates_js():return FileResponse(Path(__file__).with_name("updates.js"),media_type="application/javascript")
+@app.get("/notes.js")
+def notes_js():return FileResponse(Path(__file__).with_name("notes.js"),media_type="application/javascript")
+@app.get("/notes.css")
+def notes_css():return FileResponse(Path(__file__).with_name("notes.css"),media_type="text/css")
 @app.get("/api/health")
 def health():return {"app":"tend","brand":"tether-chat","version":__version__,"status":"ok","streaming_chat":True,"board_categories":True,"tool_runner":"unbounded-v2"}
 @app.get("/manifest.webmanifest")

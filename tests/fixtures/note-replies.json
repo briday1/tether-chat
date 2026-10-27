@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Update and remaining tasks",
+    "markdown": "I've updated [Prepare briefing](/board#task/briefing).\n\nThe access-review check is marked done. I logged today's planning meeting and that you're waiting this week for the review team's response.\n\nBring to attention is set to Friday, Oct 30 to check on that response.\n\n### Still to do today *Tuesday, Oct 27*\n\n| Task | Context / next action | When |\n| --- | --- | --- |\n| [Timecard](/board#task/timecard) | Sign and verify approval. | Due today |\n| [Travel card](/board#task/travel) | Pay the balance. | Due today |\n| [Data-sharing agreement](/board#task/agreement) | Check with the review team on access. | |\n| [Planning sessions](/board#task/planning) | Coordinate the two-session meeting. | |",
+    "tables": 1,
+    "rows": 4,
+    "links": 5
+  },
+  {
+    "name": "One task and its actions",
+    "markdown": "[Prepare briefing](/board#task/briefing) is waiting on the review team. The planning meeting is complete; the response is still outstanding.\n\nThe latest note says the attachment is ready for review.\n\n| Detail | Value |\n| --- | --- |\n| Bring to attention | Friday, Oct 30 |\n| Category | [Projects](/board#category/Projects) |\n\n### Open actions\n\n| Action | Context / next action | When |\n| --- | --- | --- |\n| [Confirm access](/board#action/briefing/access) | Follow up with the review team. | Friday, Oct 30 |\n| [Review attachment](/board#action/briefing/attachment) | The draft is ready. | |",
+    "tables": 2,
+    "rows": 4,
+    "links": 4
+  },
+  {
+    "name": "Category rollup",
+    "markdown": "The current work is grouped below.\n\n### [Projects](/board#category/Projects)\n\n| Task | Context / next action | When |\n| --- | --- | --- |\n| [Prepare briefing](/board#task/briefing) | Waiting for the review team's response. | Check Friday |\n| [Planning sessions](/board#task/planning) | Coordinate two meeting sessions. | |\n\n### [Administration](/board#category/Administration)\n\n| Task | Context / next action | When |\n| --- | --- | --- |\n| [Timecard](/board#task/timecard) | Sign and verify approval. | Due today |\n| [Travel card](/board#task/travel) | Pay the balance. | Due today |",
+    "tables": 2,
+    "rows": 4,
+    "links": 6
+  },
+  {
+    "name": "Recorded activity",
+    "markdown": "For Oct 26–27, these are the recorded updates.\n\n| Task | Recorded activity | When |\n| --- | --- | --- |\n| [Prepare briefing](/board#task/briefing) | Held the planning meeting; waiting for the review team's response. | Oct 27 |\n| [Data-sharing agreement](/board#task/agreement) | Requested the access review. | Oct 26 |\n\nThe agreement update happened Oct 26 and was recorded Oct 27.",
+    "tables": 1,
+    "rows": 2,
+    "links": 2
+  },
+  {
+    "name": "Category overview",
+    "markdown": "### Categories\n\n| Category | Context | Next step |\n| --- | --- | --- |\n| [Projects](/board#category/Projects) | Briefing and meeting preparation. | Review the pending access response on Friday. |\n| [Administration](/board#category/Administration) | Timecard and travel-card payment. | Both have deadlines today. |",
+    "tables": 1,
+    "rows": 2,
+    "links": 2
+  },
+  {
+    "name": "Literal stored content",
+    "markdown": "| Task | Context / next action | When |\n| --- | --- | --- |\n| [Review \\[A\\] \\| \\*draft\\*](/board#task/literal) | Keep \\| pipes and \\[literal links\\](https://example.invalid) as text. <script>alert(1)</script> | |",
+    "tables": 1,
+    "rows": 1,
+    "links": 1
+  }
+]

@@ -36,6 +36,7 @@ def serve_fixture():
 def main():
     from playwright.sync_api import sync_playwright,expect
     from attention_ui_checks import check_attention_updates
+    from note_ui_checks import check_note_replies
     from tend import store
     with tempfile.TemporaryDirectory(prefix='tether-chat-session-') as folder:
         os.environ['TEND_DB']=str(Path(folder)/'session.sqlite3')
@@ -124,6 +125,7 @@ def main():
                 page.get_by_role('button',name='Send',exact=True).click()
                 expect(page.locator('.chat-pending').filter(has_text='Synthetic failure after the action was saved')).to_be_visible(timeout=6000)
                 expect(notice).to_have_count(0,timeout=2000)
+                check_note_replies(page,page,'/api')
                 assert not errors,errors
                 browser.close()
             print('PASS: navigation-safe chat, scoped check-ins and notes, themes, and automatic Attention updates after drawer saves, other-tab edits, outside writes, and partial chat failures.')

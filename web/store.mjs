@@ -1,4 +1,5 @@
 /* Browser task engine. All writes are committed in a single IndexedDB transaction. */
+import {briefNote} from './notes.mjs';
 export const SCHEMA = 1;
 export const now = () => new Date().toISOString();
 export const uid = () => crypto.randomUUID ? crypto.randomUUID().replaceAll('-', '')
@@ -223,11 +224,7 @@ export class Model {
       paused: rows.filter(t => t.state === 'paused'), settled: rows.filter(t => t.state === 'settled')};
   }
   brief() {
-    const d = this.overview(), lines = ['# Daily brief'];
-    for (const [key,label] of [['deadlines','Due dates'],['due','Bring to attention'],['active','In progress'],['waiting','Waiting on']]) {
-      lines.push('', '## ' + label, ...(d[key].length ? d[key].slice(0,15).map(t => `- ${t.title}${key === 'deadlines' ? ' (due ' + t.due_at.slice(0,10) + ')' : ''}`) : ['Nothing here right now.']));
-    }
-    return lines.join('\n');
+    return briefNote(this.overview(),id=>this.get(id));
   }
   record(id, body, kind = 'progress', occurredAt = null) {
     this.task(id); if (!activities.includes(kind)) throw new Problem('Invalid activity type');

@@ -19,7 +19,8 @@ assert names=={"tether-chat","tether-chat-desktop"},names
 assert d.version==__version__
 assert WINDOW_TITLE=="tether."
 assert files("tend").joinpath("chat.js").is_file()
-assert files("tend").joinpath("chat.js").is_file()
+assert files("tend").joinpath("notes.js").is_file()
+assert files("tend").joinpath("notes.css").is_file()
 assert files("tend").joinpath("action-notes.js").is_file()
 assert files("tend").joinpath("voice.js").is_file()
 assert files("tend").joinpath("updates.js").is_file()
