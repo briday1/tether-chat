@@ -3,6 +3,7 @@ import {exportData, importData} from './portable.mjs';
 import {encryptKey, decryptKey} from './credentials.mjs';
 import {renderMarkdown} from './render.mjs';
 import {taskNote,checkInNote} from './notes.mjs';
+import {providerFailure, retryDelay} from './provider.mjs';
 
 const labels={list_threads:'Searching tracked tasks',get_thread:'Reading task details',capture:'Creating a task',
   add_note:'Adding a note',add_action_note:'Adding an action note',update_action:'Updating an action item',
@@ -13,7 +14,7 @@ const stable=value=>value && typeof value==='object' ? Array.isArray(value) ? va
 const readOnlyTools=new Set(['list_threads','get_thread','overview','recurring_items','list_archived','daily_brief','activity_report','run_task_due_action']);
 const attentionRevision=task=>JSON.stringify([task.updated_at,task.title,task.summary,task.state,task.revisit_at,task.due_at,task.next_occurrence]);
 export async function createRuntime({config,db,network=globalThis.fetch.bind(globalThis),
-  locks=globalThis.navigator?.locks,session=globalThis.sessionStorage}={}) {
+  locks=globalThis.navigator?.locks,session=globalThis.sessionStorage,pause=sleep}={}) {
   db=db || await new Database('tether-chat-web:'+config.base).open();
   const sessionName='tether-chat-web-key:'+config.base;
   let apiKey='',keyBase='',draining=false,closed=false,notificationTimer=null;
@@ -27,15 +28,38 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       locked:!!s.settings.encrypted_key && !has_key,remember:!!s.settings.encrypted_key};
   };
   async function connection() {
-    const c=await read((m,s)=>publicSettings(s));
-    if(!c.has_key)throw new Problem(c.locked?'Unlock your saved API key in Settings.':'Enter your API key in Settings, then save or test the connection.',401);
-    return {...c,key:apiKey};
+    return read((m,s)=>{
+      const c=publicSettings(s);
+      if(!c.has_key)throw new Problem(c.locked?'Unlock your saved API key in Settings.':'Enter your API key in Settings, then save or test the connection.',401);
+      return {...c,key:apiKey};
+    });
   }
-  async function saveSettings(body) {
-    const base=new URL(required(body.base_url,'Provider URL',2048));
+  function providerBase(value) {
+    let base;try{base=new URL(required(value,'Provider URL',2048))}catch(_){throw new Problem('Use a valid HTTPS provider base URL')}
     if(base.protocol!=='https:' || base.username || base.password || base.search || base.hash)
       throw new Problem('Use an HTTPS provider base URL without credentials, a query, or a fragment');
-    const base_url=base.href.replace(/\/+$/,''),model=required(body.model,'Model',200);
+    return base.href.replace(/\/+$/,'');
+  }
+  async function models(body) {
+    const saved=await read((m,s)=>({...publicSettings(s),key:apiKey})),base_url=providerBase(body.base_url||saved.base_url);
+    const key=body.api_key?.trim() || (base_url===saved.base_url && saved.has_key ? saved.key : '');
+    if(!key)throw new Problem(base_url!==saved.base_url?'Enter your API key for this provider URL.':saved.locked?'Unlock your saved API key to load models.':'Enter your API key to load models.',401);
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+    try{
+      const response=await network(base_url+'/models',{method:'GET',mode:'cors',credentials:'omit',redirect:'error',cache:'no-store',
+        headers:{Authorization:'Bearer '+key},signal:controller.signal});
+      if(!response.ok){const failure=await providerFailure(response,key,base_url);throw new Problem(failure.message)}
+      let result;try{result=await response.json()}catch(_){throw new Problem('This provider did not return a model list. You can enter a model ID manually.')}
+      if(!Array.isArray(result.data))throw new Problem('This provider does not expose a compatible model list. You can enter a model ID manually.');
+      return {models:[...new Set(result.data.map(item=>item?.id).filter(id=>typeof id==='string' && id.trim() && id.length<=200))].sort()};
+    }catch(error){
+      if(error instanceof Problem)throw error;
+      throw new Problem(controller.signal.aborted?'Loading models timed out. Try again or enter a model ID manually.':
+        'Could not load models from this browser. Check the URL and browser access (CORS), or enter a model ID manually.');
+    }finally{clearTimeout(timeout)}
+  }
+  async function saveSettings(body) {
+    const base_url=providerBase(body.base_url),model=required(body.model,'Model',200);
     const previous=await read((m,s)=>s.settings),sameBase=base_url===(previous.base_url||'https://api.openai.com/v1');
     const supplied=body.api_key ? required(body.api_key,'API key',10000) : '';
     let nextKey=supplied || (keyBase===base_url ? apiKey : ''),encrypted=null;
@@ -62,11 +86,12 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
         response=await network(c.base_url+'/chat/completions',{method:'POST',mode:'cors',credentials:'omit',redirect:'error',cache:'no-store',
           headers:{Authorization:'Bearer '+c.key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});
         if(!response.ok){
-          if([429,500,502,503,504].includes(response.status) && attempt<2){
-            await progress('Provider is busy; retrying the rejected request');
-            const retry=Number(response.headers.get('Retry-After'));await sleep(Math.min(8,Math.max(1,retry||2**attempt))*1000);continue;
+          const failure=await providerFailure(response,c.key,c.base_url),delay=retryDelay(response.headers.get('Retry-After'),attempt);
+          if(failure.retryable && attempt<2 && delay<=20){
+            clearTimeout(timeout);await progress(`Provider is busy; retrying in ${Math.ceil(delay)} seconds`);
+            await pause(delay*1000);continue;
           }
-          throw new Problem(`AI provider returned HTTP ${response.status}. Check your key, model, quota, and endpoint.`);
+          throw new Problem(failure.message+(failure.retryable && delay>20?` Try again in ${Math.ceil(delay)} seconds.`:''));
         }
         let result;try{result=await response.json()}catch(_){throw new Problem('The provider returned an unreadable response. Check the API base URL; it must provide OpenAI-compatible chat completions.')}
         if(!Array.isArray(result.choices)||!result.choices[0]?.message)
@@ -225,13 +250,14 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
   async function route(path,method,body,query){
     if(path==='/health')return {app:'tend',brand:'tether-chat',version:config.version,status:'ok',runtime:'browser'};
     if(path==='/settings')return method==='POST'?saveSettings(body):read((m,s)=>publicSettings(s));
+    if(path==='/settings/models' && method==='POST')return models(body);
     if(path==='/settings/unlock'){
       const encrypted=await read((m,s)=>s.settings.encrypted_key);if(!encrypted)throw new Problem('There is no saved key');
       const key=await decryptKey(encrypted,body.passphrase),c=await read((m,s)=>publicSettings(s));
       apiKey=key;keyBase=c.base_url;rememberSession();return read((m,s)=>publicSettings(s));
     }
     if(path==='/settings/lock'){apiKey='';rememberSession();return {ok:true}}
-    if(path==='/settings/test'){await request([{role:'user',content:'Respond with OK.'}],{tools:false,maxTokens:12});return {ok:true,message:'Connection successful'}}
+    if(path==='/settings/test'){await request([{role:'user',content:'Respond with OK.'}],{tools:false});return {ok:true,message:'Connection successful'}}
     if(path==='/chat/preflight'){
       if(!body.attention && !await localResponse(String(body.text||'')))await connection();
       return {ok:true};

@@ -37,7 +37,8 @@ def main():
         base=f'http://127.0.0.1:{server.server_port}/tether-chat/'
         try:
             with sync_playwright() as pw:
-                browser=pw.chromium.launch();context=browser.new_context(viewport={'width':1280,'height':900})
+                executable=os.environ.get('TETHER_TEST_CHROMIUM')
+                browser=pw.chromium.launch(**({'executable_path':executable} if executable else {}));context=browser.new_context(viewport={'width':1280,'height':900})
                 context.add_init_script(MOCKS)
                 context.add_init_script("""const originalFetch=window.fetch.bind(window);
                   window.fetch=async(input,options)=>{const response=await originalFetch(input,options);
@@ -80,14 +81,19 @@ def main():
                 frame.get_by_role('button',name='Close action item').click()
 
                 # Fake only the remote paid provider; the UI, IndexedDB and tool runner are real.
-                requests=[]
+                requests=[];model_requests=[];provider_error=None
                 # An unexpected destination must never receive even the synthetic key.
                 context.route('https://**/*',lambda route:route.fulfill(status=418,body='Unexpected provider URL'))
                 def provider(route):
                     if route.request.method=='OPTIONS':
                         route.fulfill(status=204,headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,content-type'});return
                     body=route.request.post_data_json;requests.append(body)
+                    if provider_error:
+                        route.fulfill(status=429,content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},body=json.dumps({'error':{'code':provider_error,'type':'insufficient_quota'}}));return
                     if body['messages'][-1]['content']=='Respond with OK.':message={'role':'assistant','content':'OK'}
+                    elif body['messages'][-1]['content']=='Check the saved connection without reloading.':
+                        assert route.request.headers['authorization']=='Bearer rotated-synthetic-key'
+                        message={'role':'assistant','content':'Ready using the saved connection.'}
                     elif len([m for m in body['messages'] if m['role']=='tool'])==0:
                         message={'role':'assistant','content':None,'tool_calls':[{'id':'capture-test-001','type':'function',
                           'function':{'name':'capture','arguments':json.dumps({'title':'Created in browser'})}}]}
@@ -97,16 +103,37 @@ def main():
                     route.fulfill(status=200,content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},
                                   body=json.dumps({'choices':[{'message':message}]}))
                 context.route('https://provider.example/v1/chat/completions',provider)
+                def models(route):
+                    if route.request.method=='OPTIONS':
+                        route.fulfill(status=204,headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,content-type'});return
+                    assert route.request.method=='GET'
+                    model_requests.append(route.request.headers['authorization'])
+                    route.fulfill(status=200,content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},
+                                  body=json.dumps({'data':[{'id':id} for id in ['test-model','test-mini','changed-test-model','text-embedding-fixture']]}))
+                context.route('https://provider.example/v1/models',models)
 
                 frame.get_by_role('button',name='Settings',exact=True).click()
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1')
-                frame.get_by_label('Model',exact=True).fill('test-model')
                 frame.get_by_label('API key',exact=True).fill('synthetic-test-key')
+                expect(frame.locator('#modelStatus')).to_contain_text('4 models found')
+                expect(frame.get_by_label('Model',exact=True)).to_have_value('test-mini')
+                assert model_requests==['Bearer synthetic-test-key'] and requests==[]
+                frame.get_by_label('Model',exact=True).fill('test-model')
                 frame.get_by_label('Save encrypted key on this device').check()
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 # Test must save the newly entered key and fields, with no prior Save click.
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
+                # A billing error keeps the saved key usable and must not be retried.
+                page.set_viewport_size({'width':1280,'height':1400})
+                frame.locator('#provider').screenshot(path=str(ROOT/'docs/screenshots/browser-connection-2026-18.jpg'),type='jpeg',quality=90)
+                page.set_viewport_size({'width':1280,'height':900})
+                before=len(requests);provider_error='credit_balance_exhausted'
+                frame.get_by_role('button',name='Test connection',exact=True).click()
+                expect(frame.locator('#providerStatus')).to_contain_text('API credit balance is empty')
+                expect(frame.locator('#keyStatus')).to_contain_text('Key is unlocked')
+                assert len(requests)==before+1
+                provider_error=None
                 expect(frame.get_by_label('Provider API base URL')).to_have_value('https://provider.example/v1')
                 frame.get_by_label('Provider API base URL').fill('https://wrong-provider.example/v1')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
@@ -122,6 +149,19 @@ def main():
                 expect(frame.locator('#providerStatus')).to_contain_text('Saved key unlocked')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
+                # Save and close immediately, then chat while encryption/save is still pending.
+                frame.get_by_role('button',name='Close settings').click()
+                frame.get_by_role('link',name='Conversation',exact=True).click()
+                frame.get_by_role('button',name='Settings',exact=True).click()
+                frame.get_by_label('API key',exact=True).fill('rotated-synthetic-key')
+                frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
+                frame.locator('#provider').evaluate('(form)=>form.requestSubmit()')
+                frame.get_by_role('button',name='Close settings').click()
+                frame.get_by_label('Message tether').fill('Check the saved connection without reloading.')
+                frame.get_by_role('button',name='Send',exact=True).click()
+                expect(frame.locator('.bubble.assistant').filter(has_text='Ready using the saved connection.')).to_have_count(1,timeout=15000)
+                expect(frame.get_by_role('dialog',name='Settings',exact=True)).to_be_hidden()
+                frame.get_by_role('button',name='Settings',exact=True).click()
                 frame.get_by_role('button',name='Close settings').click()
                 frame.get_by_role('link',name='Conversation',exact=True).click()
                 check_recording(page,frame)
@@ -133,7 +173,7 @@ def main():
                 expect(frame.locator('.bubble.assistant').filter(has_text='Saved Created in browser')).to_have_count(1,timeout=15000)
                 frame.get_by_role('link',name='Tasks',exact=True).click()
                 expect(frame.locator('.task-row').filter(has_text='Created in browser')).to_have_count(1)
-                assert len([request for request in requests if 'tools' in request])==2,requests
+                assert len([request for request in requests if 'tools' in request])==3,requests
 
                 frame.get_by_role('link',name='Conversation',exact=True).click()
                 frame.get_by_label('Message tether').fill('/snapshot 2026-10-26 to 2026-11-01')

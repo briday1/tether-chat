@@ -185,6 +185,18 @@ def settings_save(data:Provider):
     try:return ai.save(data.base_url,data.model,data.api_key,data.clear_key)
     except ValueError as exc:raise HTTPException(422,str(exc)) from None
 
+class ModelConnection(BaseModel):
+    base_url:str|None=None
+    api_key:str|None=None
+
+@app.post('/api/settings/models')
+def settings_models(data:ModelConnection):
+    try:return ai.models(data.base_url,data.api_key)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
+
+@app.get('/provider-models.js')
+def provider_models_script():return FileResponse(Path(__file__).with_name('provider-models.js'),media_type='application/javascript')
+
 @app.get("/api/conversation")
 def history():return db.conversation()
 
@@ -318,7 +330,7 @@ def chat_stream(data:Message):
 @app.post("/api/settings/test")
 def test_ai_connection():
     try:
-        response=ai.request([{"role":"user","content":"Respond with OK."}],tools=False,max_tokens=12)
+        response=ai.request([{"role":"user","content":"Respond with OK."}],tools=False)
         if not response.get("choices"):raise ValueError("Provider returned no response")
         return {"ok":True,"message":"Connection successful"}
     except ValueError as exc:raise HTTPException(502,str(exc)) from None
