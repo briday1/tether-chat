@@ -78,7 +78,7 @@ jobs:
       - name: Install browser on the hosted runner
         timeout-minutes: 3
         run: python -m playwright install chromium
-      - name: Browser, shared close controls, and calendar regression tests
+      - name: Browser, Attention, voice, and calendar regression tests
         run: |
           python scripts/check_ui.py
           python scripts/check_session_ui.py
