@@ -69,8 +69,40 @@ test('encrypted saved keys unlock explicitly and remain pinned to their provider
   assert.equal((await api('/settings/unlock','POST',{passphrase:'wrong-passphrase'})).status,422);
   assert.equal((await api('/settings/unlock','POST',{passphrase:'unlock-passphrase'})).status,200);
   assert.equal((await api('/settings/test','POST',{})).status,200);
-  assert.equal((await api('/settings','POST',{base_url:'https://another-provider.test/v1',model:'test',remember:false})).data.has_key,false);
-  assert.ok(!session.getItem('tether-chat-web-key:'+config.base));
+  const previous=copy(db.state.settings);
+  const changed=await api('/settings','POST',{base_url:'https://another-provider.test/v1',model:'test',remember:false});
+  assert.equal(changed.status,422);assert.match(changed.data.detail,/Re-enter your API key/);
+  assert.deepEqual(db.state.settings,previous);assert.equal((await api('/settings')).data.has_key,true);
+  await api('/settings','POST',{base_url:'https://another-provider.test/v1',model:'test',api_key:'new-provider-key',remember:false});
+  assert.equal((await api('/settings')).data.has_key,true);
+  assert.ok(!session.getItem('tether-chat-web-key:'+config.base).includes('secret-user-key'));
+});
+test('missing keys are caught before chat and a blank save cannot claim success',async t=>{
+  const {api,db}=await setup(t);
+  assert.equal((await api('/settings','POST',{base_url:'https://api.openai.com/v1',model:'test',remember:false})).status,422);
+  assert.deepEqual(db.state.settings,{});
+  assert.equal((await api('/chat/preflight','POST',{text:'Remember this task'})).status,401);
+  assert.equal(db.state.jobs.length,0);assert.equal(db.state.messages.length,0);
+  assert.equal((await api('/chat/preflight','POST',{text:'/brief'})).status,200);
+  assert.equal((await api('/chat/preflight','POST',{text:'calendar view this week'})).status,200);
+});
+test('encrypted connections survive model edits and reopening without losing the saved key',async t=>{
+  const network=async(url,options)=>{
+    assert.equal(url,'https://provider.test/v1/chat/completions');assert.equal(options.headers.Authorization,'Bearer retained-key');
+    return provider({role:'assistant',content:'OK'});
+  };
+  const first=await setup(t,network);
+  await first.api('/settings','POST',{base_url:'https://provider.test/v1',model:'first-model',api_key:'retained-key',remember:true,passphrase:'unlock-passphrase'});
+  const encrypted=copy(first.db.state.settings.encrypted_key);
+  assert.equal((await first.api('/settings','POST',{base_url:'https://provider.test/v1',model:'second-model',remember:true})).status,200);
+  assert.deepEqual(first.db.state.settings.encrypted_key,encrypted);first.runtime.close();
+  const reopened=await setup(t,network,first.db);
+  assert.equal((await reopened.api('/settings')).data.locked,true);
+  assert.equal((await reopened.api('/settings','POST',{base_url:'https://provider.test/v1',model:'third-model',remember:true})).status,200);
+  assert.deepEqual(first.db.state.settings.encrypted_key,encrypted);
+  assert.equal((await reopened.api('/chat/preflight','POST',{text:'Hello'})).status,401);
+  assert.equal((await reopened.api('/settings/unlock','POST',{passphrase:'unlock-passphrase'})).status,200);
+  assert.equal((await reopened.api('/settings/test','POST',{})).status,200);
 });
 test('an interrupted running job is retained and never replayed',async t=>{
   const db=new MemoryDB();db.state.jobs.push({id:'interrupted-001',message:'Do something',status:'running',progress:[],user_message_id:'user-001'});
@@ -93,6 +125,20 @@ test('network errors explain browser CORS and never retry an ambiguous call',asy
   let calls=0;const {api,db}=await setup(t,async()=>{calls++;throw TypeError('Failed to fetch')});await save(api);
   await api('/chat/jobs','POST',{request_id:'network-failure-001',text:'Hello'});
   await waitFor(()=>db.state.jobs[0]?.status==='error');assert.equal(calls,1);assert.match(db.state.jobs[0].error,/CORS/);
+  assert.equal(db.state.jobs[0].changes_saved,false);assert.equal((await api('/settings')).data.has_key,true);
+});
+test('errors only flag saved changes after a task mutation commits',async t=>{
+  let calls=0;const {api,db}=await setup(t,async()=>{
+    if(++calls>1)throw TypeError('Failed to fetch');
+    return provider({role:'assistant',content:null,tool_calls:[{id:'capture-once',type:'function',function:{name:'capture',arguments:'{"title":"Saved before failure"}'}}]});
+  });await save(api);await api('/chat/jobs','POST',{request_id:'partial-changes-001',text:'Save a task'});
+  await waitFor(()=>db.state.jobs[0]?.status==='error');assert.equal(calls,2);
+  assert.equal(db.state.jobs[0].changes_saved,true);assert.equal(db.state.tasks.length,1);
+});
+test('unreadable provider responses are not misreported as browser CORS failures',async t=>{
+  const {api,db}=await setup(t,async()=>new Response('<html>Not an API</html>'));await save(api);
+  const result=await api('/settings/test','POST',{});assert.equal(result.status,422);assert.match(result.data.detail,/unreadable response/);
+  assert.equal((await api('/settings')).data.has_key,true);assert.equal(db.state.jobs.length,0);
 });
 test('microphone recordings go directly to the configured provider without entering chat or backups',async t=>{
   const calls=[],{runtime,api,db}=await setup(t,async(url,options)=>{

@@ -2,7 +2,7 @@
 (() => {
  const chat=document.querySelector('#chat');if(!chat)return;
  const journalKey='tether-chat-outbox',draftKey='tether-chat-draft';
- let syncing=false,timer=null,jobs=[],first=true;
+ let syncing=false,timer=null,jobs=[],first=true,submitting=false;
  const nodes=new Map(),pendingNodes=new Map(),sending=new Set(),attentionSending=new Set();
  function readJournal(){try{return JSON.parse(localStorage.getItem(journalKey)||'{}')}catch(_){return {}}}
  function writeJournal(value){try{localStorage.setItem(journalKey,JSON.stringify(value))}catch(_){}}
@@ -23,10 +23,11 @@
   if(node.dataset.signature===signature)return node;
   node.dataset.signature=signature;node.replaceChildren();node.setAttribute('role','status');
   if(job.status==='error'||job.status==='interrupted'){
-   node.append(el('span','retry-error',job.error+' Changes may have been saved before the failure.'));
+   const unchanged=job.changes_saved===false || !job.progress?.length && /^(Enter your API key in Settings|Unlock your saved API key in Settings)/.test(job.error);
+   node.append(el('span','retry-error',job.error+(unchanged?' No tasks were changed.':' Changes may have been saved before the failure.')));
    const retry=el('button','retry-icon');retry.type='button';retry.title='Retry this request';retry.setAttribute('aria-label','Retry this request');
    retry.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.2 5.5M20 4v7h-7"/></svg>';
-   retry.onclick=()=>{retry.disabled=true;enqueue(job.message,job.context?.kind==='attention'?{task_id:job.context.task_id,action_id:job.context.action_id}:null)};
+   retry.onclick=async()=>{retry.disabled=true;try{await enqueue(job.message,job.context?.kind==='attention'?{task_id:job.context.task_id,action_id:job.context.action_id}:null)}finally{retry.disabled=false}};
    node.append(retry);
   }else{
    node.append(el('div','tend-activity-heading',job.status==='queued'?'Queued…':'Working on your request'));
@@ -71,7 +72,8 @@
    const node=pendingNodes.get(payload.request_id);if(node){node.textContent=error.message;node.dataset.signature=''}
   }finally{sending.delete(payload.request_id)}
  }
- function enqueue(text,attention=null){
+ async function enqueue(text,attention=null){
+  if(window.tetherBeforeChat && !await window.tetherBeforeChat(text,attention))return null;
   const payload={request_id:newId(),text,...(attention?{attention}:{})};remember(payload);
   if(chat.querySelector('.welcome'))chat.replaceChildren();
   const user=messageNode({id:'outbox-'+payload.request_id,role:'user',body:text});chat.append(user,pendingNode({id:payload.request_id,status:'queued',progress:['Sending your request…']}));scrollChat();
@@ -94,9 +96,15 @@
   }catch(error){if(!target.children.length)target.append(el('p','muted','Attention could not be loaded.'))}
  }
  // Plain chat and attention clicks use the same durable submission path.
- document.querySelector('#composer').onsubmit=event=>{
-  event.preventDefault();const input=document.querySelector('#message'),text=input.value.trim();if(!text)return;
-  document.querySelector('#command-menu').classList.add('hidden');input.value='';try{localStorage.removeItem(draftKey)}catch(_){}enqueue(text);input.focus();
+ document.querySelector('#composer').onsubmit=async event=>{
+  event.preventDefault();const input=document.querySelector('#message'),text=input.value.trim();if(!text||submitting)return;
+  submitting=true;
+  try{
+   if(!await enqueue(text))return;
+   document.querySelector('#command-menu').classList.add('hidden');
+   if(input.value.trim()===text){input.value='';try{localStorage.removeItem(draftKey)}catch(_){}}
+   input.focus();
+  }finally{submitting=false}
  };
  document.querySelector('#refreshAttention').onclick=()=>reminders(true);
  const input=document.querySelector('#message');try{input.value=localStorage.getItem(draftKey)||''}catch(_){}
