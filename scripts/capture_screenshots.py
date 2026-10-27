@@ -154,9 +154,10 @@ def main():
                     status=200, content_type="application/json",
                     body='{"items":[],"source":"demo"}'))
                 page.goto(base + "/", wait_until="networkidle")
+                page.locator('.note-rows').wait_for()
+                page.screenshot(path=str(OUT / "conversation.png"), full_page=True)
                 request_snapshot(page, "give me my next week snapshot")
                 verify_snapshot_layers(page)
-                page.screenshot(path=str(OUT / "conversation.png"), full_page=True)
                 capture_calendar(page, 'snapshot-week.png')
                 week_start=date.today()+timedelta(days=7-date.today().weekday())
                 week_end=week_start+timedelta(days=6)
