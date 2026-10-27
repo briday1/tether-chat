@@ -67,6 +67,8 @@ def main():
 
                 # Fake only the remote paid provider; the UI, IndexedDB and tool runner are real.
                 requests=[]
+                # An unexpected destination must never receive even the synthetic key.
+                context.route('https://**/*',lambda route:route.fulfill(status=418,body='Unexpected provider URL'))
                 def provider(route):
                     if route.request.method=='OPTIONS':
                         route.fulfill(status=204,headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,content-type'});return
@@ -89,6 +91,7 @@ def main():
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 frame.get_by_role('button',name='Save connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection saved')
+                expect(frame.get_by_label('Provider API base URL')).to_have_value('https://provider.example/v1')
                 frame.get_by_role('button',name='Lock key',exact=True).click()
                 expect(frame.locator('#keyStatus')).to_contain_text('Saved key is locked')
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')

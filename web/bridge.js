@@ -20,7 +20,12 @@
     $('#unlockKey').hidden=!c.has_saved_key;$('#lockKey').hidden=!c.has_key;
     status('#keyStatus',c.locked?'Saved key is locked. Enter its passphrase and unlock it.':c.has_key?'Key is unlocked for this browser session.':'Enter your API key to enable AI chat.');
   }
-  window.tetherLoadSettings=async()=>{try{configuration(await api('/settings'))}catch(e){status('#providerStatus',e.message)}};
+  window.tetherLoadSettings=async()=>{
+    const form=$('#provider'),controls=[...form.querySelectorAll('input,button')];
+    form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
+    try{configuration(await api('/settings'))}catch(e){status('#providerStatus',e.message)}
+    finally{for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
+  };
   window.tetherLoadStorage=async()=>{
     const persistent=await navigator.storage?.persisted?.().catch(()=>false);
     status('#storageStatus',persistent?'Local storage protection is enabled. Keep an exported backup too.':'Use Protect local storage to request storage protection, and keep an exported backup.');
