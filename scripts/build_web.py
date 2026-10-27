@@ -32,6 +32,7 @@ def paths(text, base):
                      ('/theme.css', base + 'theme.css'), ('/theme.js', base + 'theme.js'),
                      ('/chat.js', base + 'chat.js'), ('/action-notes.js', base + 'action-notes.js'),
                      ('/voice.js', base + 'voice.js'),
+                     ('/updates.js', base + 'updates.js'),
                      ('/favicon.svg', base + 'favicon.svg'), ('/manifest.webmanifest', base + 'manifest.webmanifest')]:
         for quote in ('"', "'"):
             text = text.replace(quote + old, quote + new)
@@ -89,7 +90,7 @@ def build(output, base='/'):
     for source in (ROOT / 'web').iterdir():
         if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
             shutil.copy2(source, output / source.name)
-    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js'):
+    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'updates.js'):
         text = paths((ROOT / 'tend' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))

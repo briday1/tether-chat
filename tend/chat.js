@@ -2,7 +2,8 @@
 (() => {
  const chat=document.querySelector('#chat');if(!chat)return;
  const journalKey='tether-chat-outbox',draftKey='tether-chat-draft';
- let syncing=false,timer=null,jobs=[],first=true,submitting=false;
+ let syncing=false,timer=null,jobs=[],first=true,submitting=false,jobStamp='';
+ let attentionRequest=0,attentionStamp='',attentionTimer=null;
  const nodes=new Map(),pendingNodes=new Map(),sending=new Set(),attentionSending=new Set();
  function readJournal(){try{return JSON.parse(localStorage.getItem(journalKey)||'{}')}catch(_){return {}}}
  function writeJournal(value){try{localStorage.setItem(journalKey,JSON.stringify(value))}catch(_){}}
@@ -39,6 +40,9 @@
  function renderState(state){
   const bottom=chat.scrollHeight-chat.scrollTop-chat.clientHeight<100;
   jobs=state.jobs||[];const byUser=new Map(jobs.map(j=>[j.user_message_id,j]));const accepted=new Set(jobs.map(j=>j.id));
+  // Tools can save changes before a reply finishes, including a failed reply.
+  const stamp=JSON.stringify(jobs.map(j=>[j.id,j.status,j.updated_at,j.progress]));
+  if(stamp!==jobStamp){jobStamp=stamp;queueAttention();refreshReferences()}
   const desired=[];
   for(const row of state.messages||[]){desired.push(messageNode(row));const job=byUser.get(row.id);if(job&&job.status!=='done')desired.push(pendingNode(job))}
   for(const id of accepted)forget(id);
@@ -87,14 +91,19 @@
   document.querySelector('#message').focus();setTimeout(()=>attentionSending.delete(key),1200);
  }
  async function reminders(force=false){
-  const target=document.querySelector('#due');
-  try{const data=await api('/attention'+(force?'?force=true':''));target.replaceChildren();
+  const target=document.querySelector('#due'),request=++attentionRequest;
+  try{const data=await api('/attention'+(force?'?force=true':''));if(request!==attentionRequest)return;
+   const stamp=JSON.stringify(data.items||[]);if(stamp===attentionStamp)return;attentionStamp=stamp;target.replaceChildren();
    if(!data.items?.length){target.append(el('p','muted','Nothing needs attention right now.'));return}
    for(const item of data.items){const button=el('button','item attention-item');button.type='button';button.dataset.taskId=item.task_id||item.id;if(item.action_id)button.dataset.actionId=item.action_id;
     button.append(el('strong','',item.title),el('small','',[item.task_title,item.reason].filter(Boolean).join(' · ')));
     button.title='Start a check-in about this item';button.onclick=()=>checkIn(item);target.append(button)}
-  }catch(error){if(!target.children.length)target.append(el('p','muted','Attention could not be loaded.'))}
+  }catch(error){if(request===attentionRequest&&!target.children.length)target.append(el('p','muted','Attention could not be loaded.'))}
  }
+ function queueAttention(){clearTimeout(attentionTimer);attentionTimer=setTimeout(()=>{if(!document.hidden)reminders()},50)}
+ function resume(){sync();queueAttention()}
+ window.addEventListener('tether:data-changed',()=>{queueAttention();refreshReferences()});
+ window.addEventListener('focus',queueAttention);
  // Plain chat and attention clicks use the same durable submission path.
  document.querySelector('#composer').onsubmit=async event=>{
   event.preventDefault();const input=document.querySelector('#message'),text=input.value.trim();if(!text||submitting)return;
@@ -109,10 +118,10 @@
  document.querySelector('#refreshAttention').onclick=()=>reminders(true);
  const input=document.querySelector('#message');try{input.value=localStorage.getItem(draftKey)||''}catch(_){}
  input.addEventListener('input',()=>{try{localStorage.setItem(draftKey,input.value)}catch(_){}});
- window.addEventListener('pageshow',()=>sync());document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});
- window.addEventListener('online',()=>sync());
+ window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',()=>{if(!document.hidden)resume()});
+ window.addEventListener('online',resume);
  const discuss=new URLSearchParams(location.search).get('discuss');if(discuss&&!input.value){input.value=discuss;input.focus()}
  refreshReferences();sync();reminders();
- // Refresh attention after a completed job without coupling it to chat delivery.
- let completed='';setInterval(()=>{const stamp=jobs.filter(j=>j.status==='done').map(j=>j.id).join();if(stamp!==completed){completed=stamp;reminders();refreshReferences()}},3000);
+ // Covers due times and updates from MCP or another process without an event.
+ setInterval(()=>{if(!document.hidden)reminders()},3000);
 })();

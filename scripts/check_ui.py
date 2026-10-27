@@ -74,7 +74,7 @@ def main():
                             else:data={'items':[]}
                             request.fulfill(status=200,content_type='application/json',body=json.dumps(data));return
                         file={'/':'index.html','/board':'board.html'}.get(path,path.lstrip('/'))
-                        if file not in {'index.html','board.html','theme.css','theme.js','chat.js','action-notes.js','voice.js','favicon.svg'}:request.fulfill(status=404);return
+                        if file not in {'index.html','board.html','theme.css','theme.js','chat.js','action-notes.js','voice.js','updates.js','favicon.svg'}:request.fulfill(status=404);return
                         mime='text/css' if file.endswith('.css') else 'application/javascript' if file.endswith('.js') else 'text/html'
                         request.fulfill(status=200,content_type=mime,body=(ROOT/'tend'/file).read_text(encoding='utf-8'))
                     page.route('**/*',route)

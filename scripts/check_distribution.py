@@ -22,6 +22,7 @@ assert files("tend").joinpath("chat.js").is_file()
 assert files("tend").joinpath("chat.js").is_file()
 assert files("tend").joinpath("action-notes.js").is_file()
 assert files("tend").joinpath("voice.js").is_file()
+assert files("tend").joinpath("updates.js").is_file()
 for name in ("index.html","board.html"):
     page=files("tend").joinpath(name).read_text(encoding="utf-8")
     assert '<span class="brand-word">tether<span>.</span></span>' in page

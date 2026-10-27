@@ -11,7 +11,7 @@
   window.fetch=(...args)=>shell.tetherReady.then(runtime=>runtime.fetch(...args));
   const api=async(path,method='GET',data)=>{
     const response=await fetch(config.base+'api'+path,{method,headers:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
-    const result=await response.json();if(!response.ok){const error=Error(result.detail||'Request failed');error.status=response.status;throw error}return result;
+    const result=await response.json();if(!response.ok){const error=Error(result.detail||'Request failed');error.status=response.status;throw error}window.tetherDataChanged?.(path,method);return result;
   };
   const $=selector=>document.querySelector(selector);
   function status(selector,text){const node=$(selector);if(node)node.textContent=text}

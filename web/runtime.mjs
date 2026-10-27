@@ -10,6 +10,7 @@ const sleep=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds))
 const stable=value=>value && typeof value==='object' ? Array.isArray(value) ? value.map(stable)
   : Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])])) : value;
 const readOnlyTools=new Set(['list_threads','get_thread','overview','recurring_items','list_archived','daily_brief','activity_report','run_task_due_action']);
+const attentionRevision=task=>JSON.stringify([task.updated_at,task.title,task.summary,task.state,task.revisit_at,task.due_at,task.next_occurrence]);
 export async function createRuntime({config,db,network=globalThis.fetch.bind(globalThis),
   locks=globalThis.navigator?.locks,session=globalThis.sessionStorage}={}) {
   db=db || await new Database('tether-chat-web:'+config.base).open();
@@ -227,12 +228,14 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     let raw=response.choices[0].message.content||'{}';raw=raw.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');
     let data;try{data=JSON.parse(raw)}catch(_){throw new Problem('The model did not return a valid attention list. Scheduled reminders are unchanged.')}
     const items=[];for(const item of Array.isArray(data.items)?data.items.slice(0,5):[]){const task=candidates.find(t=>t.id===item.id);
-      if(task && !items.some(i=>i.id===task.id))items.push({id:task.id,task_id:task.id,action_id:null,title:task.title,reason:String(item.reason||'Worth checking').slice(0,180)});}
+      if(task && !items.some(i=>i.id===task.id))items.push({id:task.id,task_id:task.id,action_id:null,title:task.title,reason:String(item.reason||'Worth checking').slice(0,180),revision:attentionRevision(task)});}
     await write((m,s)=>{s.attention=items;return null});return currentAttention();
   }
   function currentAttention(){return read((m,s)=>{
     const scheduled=m.attention(),active=new Map(m.list().filter(t=>!t.archived_at && t.state!=='settled').map(t=>[t.id,t]));
-    for(const item of s.attention||[])if(active.has(item.id) && !scheduled.items.some(i=>i.task_id===item.id && !i.action_id))scheduled.items.push({...item,title:active.get(item.id).title});
+    for(const item of s.attention||[])if(active.has(item.id) && item.revision===attentionRevision(active.get(item.id)) && !scheduled.items.some(i=>i.task_id===item.id && !i.action_id)){
+      const {revision,...publicItem}=item;scheduled.items.push({...publicItem,title:active.get(item.id).title});
+    }
     return {...scheduled,items:scheduled.items.slice(0,20)};
   })}
   const rendered=s=>s.messages.slice(-100).map(row=>({...row,html:row.role==='assistant'?markdown(row.body):null}));

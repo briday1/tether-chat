@@ -32,6 +32,8 @@ Tasks, entries, action notes, activity, relations, chat history, and jobs use a 
 
 Use **Settings → Download backup** regularly. Portable JSON backups include all task data and conversations, but no provider settings, API keys, or queued jobs. **Import backup** validates the full file and merges new records in one transaction. Identical IDs are accepted once; conflicting versions or broken references reject the entire import and retain current data. To preserve two conflicting versions, import the other backup into a separate empty browser profile. The import UI accepts files up to 20 MB.
 
+Attention refreshes after task and action edits, notes, and chat updates, including changes saved before a chat failure. Other open tabs receive change notifications; a three-second refresh also catches time-based reminders and outside changes. Completed, archived, or rescheduled items reflect their current state. An AI suggestion is discarded when its source task changes; scheduled reminders still appear when due. Automatic refresh uses saved data. The reconsider button requests a new AI selection.
+
 To copy existing desktop data into the browser, update the desktop package and run:
 
 ```sh

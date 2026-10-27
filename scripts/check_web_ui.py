@@ -18,6 +18,7 @@ def main():
     from tend import store
     from tend.portable import export_data
     from voice_ui_checks import MOCKS,check_dictation,check_recording
+    from attention_ui_checks import check_attention_updates
     spec=importlib.util.spec_from_file_location('build_web',ROOT/'scripts/build_web.py')
     builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
     with tempfile.TemporaryDirectory(prefix='tether-web-ui-') as temp:
@@ -164,9 +165,15 @@ def main():
                 expect(frame.get_by_role('button',name='Attention',exact=True)).to_be_visible()
                 frame.get_by_role('button',name='Attention',exact=True).click()
                 expect(frame.locator('#right')).to_be_visible()
+                page.set_viewport_size({'width':1280,'height':900})
+                frame.get_by_role('button',name='Settings',exact=True).click()
+                frame.get_by_role('button',name='Forget key',exact=True).click()
+                expect(frame.locator('#providerStatus')).to_contain_text('Saved key removed')
+                frame.get_by_role('button',name='Close settings').click()
+                check_attention_updates(page,frame,'/tether-chat/api',base+'?view=board','/tether-chat/board.html',embedded=True)
                 assert not errors,errors
                 browser.close()
-                print('Browser edition: shared UI, voice dictation and recording, desktop import, action scope, encrypted keys, navigation during AI, backup, calendar, mobile, and offline checks passed.')
+                print('Browser edition: shared UI, voice, imports, scoped actions, encrypted keys, durable chat, backup, calendar, mobile, offline, and automatic Attention updates passed.')
         finally:server.shutdown();server.server_close()
 
 

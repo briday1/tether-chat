@@ -15,10 +15,16 @@ BASE='http://127.0.0.1:18768'
 
 
 def serve_fixture():
-    from tend import ai
+    from tend import ai,store
     from tend.app import app
     import uvicorn
     def fake(message,progress=None,history=None):
+        if message=='Complete an Attention action before a simulated failure':
+            task=next(task for task in store.list_threads() if task['title']=='Partial failure fixture')
+            action=next(action for action in store.get(task['id'])['entries'] if action['kind']=='action')
+            store.update_action(action['id'],{'done':True})
+            if progress:progress('Action completion saved')
+            raise ValueError('Synthetic failure after the action was saved')
         if progress:progress('Working on the requested update')
         time.sleep(4)
         return {'answer':'Finished: '+message,'actions':[]}
@@ -29,6 +35,7 @@ def serve_fixture():
 
 def main():
     from playwright.sync_api import sync_playwright,expect
+    from attention_ui_checks import check_attention_updates
     from tend import store
     with tempfile.TemporaryDirectory(prefix='tether-chat-session-') as folder:
         os.environ['TEND_DB']=str(Path(folder)/'session.sqlite3')
@@ -105,9 +112,20 @@ def main():
                 page.once('dialog',lambda dialog:dialog.accept())
                 drawer.locator('.action-note').get_by_role('button',name='Delete',exact=True).click()
                 expect(drawer.locator('.action-note-body')).to_have_count(0)
-                page.keyboard.press('Escape');assert not errors,errors
+                page.keyboard.press('Escape')
+                check_attention_updates(page,page,'/api',BASE+'/board','/board')
+                failure=store.create('Partial failure fixture')
+                failed_action=store.add(failure['id'],'action','Finish before provider failure')
+                store.update_action(failed_action['id'],{'revisit_at':'2020-01-01T12:00:00Z'})
+                notice=page.locator('#due button[data-action-id="'+failed_action['id']+'"]')
+                expect(notice).to_be_visible(timeout=6000)
+                page.get_by_label('Message tether').fill('Complete an Attention action before a simulated failure')
+                page.get_by_role('button',name='Send',exact=True).click()
+                expect(page.locator('.chat-pending').filter(has_text='Synthetic failure after the action was saved')).to_be_visible(timeout=6000)
+                expect(notice).to_have_count(0,timeout=2000)
+                assert not errors,errors
                 browser.close()
-            print('PASS: chat continues across Tasks navigation and reload; one reply per request; Enter sends scoped Attention check-in; draft preserved; compact controls; 9-theme consistent wordmark; pale categories without rails/dots; action-specific notes add/edit/delete from both drawers.')
+            print('PASS: navigation-safe chat, scoped check-ins and notes, themes, and automatic Attention updates after drawer saves, other-tab edits, outside writes, and partial chat failures.')
         finally:
             server.terminate()
             try:server.wait(timeout=10)

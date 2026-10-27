@@ -61,6 +61,8 @@ Open **Settings → AI connection**, enter your provider's HTTPS API base URL, m
 
 **Attention:** Click an item or focus it and press Enter. This sends a contextual check-in to Conversation and asks for your update; it does not silently mark anything complete or change dates. Action-item attention stays scoped to that action, rather than its siblings or category.
 
+Attention updates automatically after saves, notes, and chat changes. Completed or rescheduled items reflect their current state; other-tab and outside changes appear within a few seconds while Conversation is visible. Automatic refresh reads saved records; the ↻ button asks AI to reconsider. Updating a task clears any stale AI suggestion for it while retaining reminders that are still due.
+
 **Calendars:** Ask “give me my next week snapshot” or use `/snapshot last month`. The calendar appears inside chat, with transparent day cells and category-colored task blocks. Monday–Friday remain visible; weekends appear when they contain work. PNG and SVG buttons export the calendar.
 
 **Archive:** Put finished or inactive tasks away without deleting them; restore them from **View archive**.

@@ -64,6 +64,8 @@ def favicon():return FileResponse(Path(__file__).with_name("favicon.svg"),media_
 def theme_css():return FileResponse(Path(__file__).with_name("theme.css"),media_type="text/css")
 @app.get("/theme.js")
 def theme_js():return FileResponse(Path(__file__).with_name("theme.js"),media_type="application/javascript")
+@app.get("/updates.js")
+def updates_js():return FileResponse(Path(__file__).with_name("updates.js"),media_type="application/javascript")
 @app.get("/api/health")
 def health():return {"app":"tend","brand":"tether-chat","version":__version__,"status":"ok","streaming_chat":True,"board_categories":True,"tool_runner":"unbounded-v2"}
 @app.get("/manifest.webmanifest")
