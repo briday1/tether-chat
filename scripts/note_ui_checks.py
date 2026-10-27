@@ -35,9 +35,12 @@ def check_note_replies(page, ui, api_base):
     # A server-side validation rejection must also survive later state syncs.
     ui.locator('body').evaluate('''()=>{
       const original=window.fetch;
+      const beforeChat=window.tetherBeforeChat;
+      window.tetherBeforeChat=async()=>true;
       window.fetch=async function(url,options){
         if(String(url).endsWith('/chat/jobs')&&options?.method==='POST'){
           window.fetch=original;
+          window.tetherBeforeChat=beforeChat;
           return Response.json({detail:'Synthetic validation rejection'},{status:422});
         }
         return original.apply(this,arguments);
