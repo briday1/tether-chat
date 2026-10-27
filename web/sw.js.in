@@ -1,6 +1,6 @@
 /* Only the app's public static assets are cached. Provider calls and data are excluded. */
 const CACHE=__CACHE__,PREFIX=__PREFIX__,ASSETS=__ASSETS__,BASE=__BASE__;
-self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS.map(url=>new Request(url,{cache:'reload'}))))));
 // Do not skipWaiting: open app sessions keep one consistent release until closed.
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
   for(const key of await caches.keys())if(key.startsWith(PREFIX)&&key!==CACHE)await caches.delete(key);
