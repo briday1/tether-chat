@@ -1,4 +1,4 @@
-"""Synthetic microphone fixtures shared by desktop and standalone-browser CI."""
+"""Deterministic live speech events shared by desktop and standalone-browser CI."""
 MOCKS="""(() => {
   class Recognition {
     start(){this.active=true;setTimeout(()=>{if(!this.active)return;
@@ -9,62 +9,96 @@ MOCKS="""(() => {
     abort(){this.active=false;queueMicrotask(()=>this.onend?.())}
   }
   window.SpeechRecognition=Recognition;window.webkitSpeechRecognition=Recognition;
-  const track={stop(){window.voiceTrackStopped=true}};
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{window.voiceTrackStopped=false;return {getTracks:()=>[track]}}}});
-  class Recorder {
-    static isTypeSupported(type){return type==='audio/webm;codecs=opus'}
-    constructor(){this.state='inactive';this.mimeType='audio/webm;codecs=opus'}
-    start(){this.state='recording'}
-    stop(){if(this.state==='inactive')return;this.state='inactive';queueMicrotask(()=>{this.ondataavailable?.({data:new Blob(['synthetic audio'],{type:this.mimeType})});this.onstop?.()})}
+  class Model {
+    constructor(){this.handlers={};window.voiceModel=this;setTimeout(()=>this.handlers.load?.({result:true}),20)}
+    on(event,handler){this.handlers[event]=handler}
+    terminate(){window.voiceWorkerStopped=true}
+    get KaldiRecognizer(){return class {
+      constructor(){this.handlers={};window.voiceRecognizer=this}
+      on(event,handler){this.handlers[event]=handler}
+      acceptWaveformFloat(){this.handlers.partialresult?.({result:{partial:'Live words in progress'}})}
+      retrieveFinalResult(){setTimeout(()=>this.handlers.result?.({result:{text:'Live words in progress finalized.'}}),20)}
+      remove(){}
+    }}
   }
-  window.MediaRecorder=Recorder;
+  window.Vosk={Model};
+  const track={stop(){window.voiceTrackStopped=true}};
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{
+    if(window.voicePermissionDenied)throw new DOMException('Denied','NotAllowedError');
+    window.voiceTrackStopped=false;window.voiceWorkerStopped=false;return {getTracks:()=>[track]};
+  }}});
+  class Audio {
+    constructor(){this.sampleRate=48000;window.voiceContext=this}
+    resume(){return Promise.resolve()}
+    close(){window.voiceContextClosed=true;return Promise.resolve()}
+    createMediaStreamSource(){return {connect(node){setTimeout(()=>node.onaudioprocess?.({inputBuffer:{getChannelData:()=>new Float32Array(4096)}}),100)},disconnect(){}}}
+    createScriptProcessor(){return {connect(){},disconnect(){},onaudioprocess:null}}
+    createGain(){return {gain:{value:0},connect(){},disconnect(){}}}
+  }
+  window.AudioContext=Audio;
 })();"""
+
+
+def mode(frame,value):
+    frame.get_by_role('button',name='Settings',exact=True).click()
+    frame.get_by_label('Voice mode',exact=True).select_option(value)
+    frame.get_by_role('button',name='Close settings').click()
 
 
 def check_dictation(page,frame):
     from playwright.sync_api import expect
-    field=frame.get_by_label('Message tether')
-    field.fill('Typed first.')
+    mode(frame,'browser')
+    field=frame.get_by_label('Message tether');field.fill('Typed first.')
     before=frame.locator('.bubble.user').count()
-    frame.get_by_role('button',name='Start voice input',exact=True).click()
+    frame.locator('#voiceInput').click()
     expect(field).to_have_value('Typed first. Spoken words for review.')
     expect(frame.get_by_role('button',name='Send',exact=True)).to_be_disabled()
-    frame.get_by_role('button',name='Stop voice input',exact=True).click()
-    expect(frame.get_by_role('button',name='Start voice input',exact=True)).to_be_enabled()
+    frame.locator('#voiceInput').click()
+    expect(frame.locator('#voiceInput')).to_have_attribute('aria-pressed','false')
     expect(field).to_have_value('Typed first. Spoken words for review.')
     assert frame.locator('.bubble.user').count()==before,'Dictation sent a chat automatically'
     field.fill('Keep this draft.')
     field.evaluate('(element)=>element.ownerDocument.defaultView.voicePermissionDenied=true')
-    frame.get_by_role('button',name='Start voice input',exact=True).click()
+    frame.locator('#voiceInput').click()
     expect(frame.locator('#voiceStatus')).to_contain_text('denied')
     expect(field).to_have_value('Keep this draft.')
     field.evaluate('(element)=>element.ownerDocument.defaultView.voicePermissionDenied=false')
-    field.fill('')
+    mode(frame,'local');field.fill('')
 
 
 def check_recording(page,frame):
     from playwright.sync_api import expect
-    frame.get_by_role('button',name='Settings',exact=True).click()
-    frame.get_by_label('Voice mode',exact=True).select_option('provider')
-    frame.get_by_label('Provider transcription model',exact=True).fill('test-transcriber')
-    frame.get_by_label('Provider transcription model',exact=True).press('Tab')
-    frame.get_by_role('button',name='Close settings').click()
+    mode(frame,'local')
     field=frame.get_by_label('Message tether');field.fill('Before recording.')
     before=frame.locator('.bubble.user').count()
-    frame.get_by_role('button',name='Start voice input',exact=True).click()
-    expect(frame.get_by_role('button',name='Stop voice input',exact=True)).to_be_visible()
-    frame.get_by_role('button',name='Stop voice input',exact=True).click()
-    expect(frame.locator('#voiceStatus')).to_contain_text('Transcript added')
-    expect(field).to_have_value('Before recording. Recorded voice draft.')
-    assert frame.locator('.bubble.user').count()==before,'Recorded audio sent a chat automatically'
-    assert field.evaluate('(element)=>element.ownerDocument.defaultView.voiceTrackStopped')
+    frame.locator('#voiceInput').click()
+    expect(frame.locator('#voiceInput')).to_have_class('voice-button listening')
+    # This assertion runs before Stop: text must arrive during capture.
+    expect(field).to_have_value('Before recording. Live words in progress')
+    for selector in ['#voiceInput','#voiceCancel']:
+        styles=frame.locator(selector).evaluate('(e)=>({border:getComputedStyle(e).borderTopWidth,background:getComputedStyle(e).backgroundColor,shadow:getComputedStyle(e).boxShadow})')
+        assert styles=={'border':'0px','background':'rgba(0, 0, 0, 0)','shadow':'none'},styles
+    assert frame.locator('#voiceInput').evaluate('(e)=>getComputedStyle(e).color!==getComputedStyle(e.ownerDocument.querySelector("#voiceCancel")).color')
+    frame.locator('#voiceInput').click()
+    expect(frame.locator('#voiceStatus')).to_contain_text('Dictation stopped')
+    expect(field).to_have_value('Before recording. Live words in progress finalized.')
+    assert frame.locator('.bubble.user').count()==before,'Local speech sent a chat automatically'
+    assert field.evaluate('(e)=>e.ownerDocument.defaultView.voiceTrackStopped&&e.ownerDocument.defaultView.voiceWorkerStopped')
     field.fill('Cancel keeps this draft.')
-    frame.get_by_role('button',name='Start voice input',exact=True).click()
-    expect(frame.get_by_role('button',name='Stop voice input',exact=True)).to_be_visible()
-    frame.get_by_role('button',name='Cancel voice input',exact=True).click()
-    expect(frame.locator('#voiceStatus')).to_contain_text('cancelled')
+    frame.locator('#voiceInput').click()
+    expect(field).to_have_value('Cancel keeps this draft. Live words in progress')
+    frame.locator('#voiceCancel').click()
     expect(field).to_have_value('Cancel keeps this draft.')
-    assert field.evaluate('(element)=>element.ownerDocument.defaultView.voiceTrackStopped')
-    frame.get_by_role('button',name='Settings',exact=True).click()
-    frame.get_by_label('Voice mode',exact=True).select_option('auto')
-    frame.get_by_role('button',name='Close settings').click();field.fill('')
+    expect(frame.locator('#voiceInput')).to_have_attribute('aria-pressed','false')
+    assert field.evaluate('(e)=>e.ownerDocument.defaultView.voiceTrackStopped&&e.ownerDocument.defaultView.voiceWorkerStopped')
+    frame.locator('#voiceInput').click()
+    expect(field).to_have_value('Cancel keeps this draft. Live words in progress')
+    field.fill('Manually edited while listening.')
+    expect(frame.locator('#voiceInput')).to_have_attribute('aria-pressed','false')
+    expect(field).to_have_value('Manually edited while listening.')
+    field.evaluate('(e)=>e.ownerDocument.defaultView.voicePermissionDenied=true')
+    frame.locator('#voiceInput').click()
+    expect(frame.locator('#voiceStatus')).to_contain_text('denied')
+    expect(field).to_have_value('Manually edited while listening.')
+    field.evaluate('(e)=>e.ownerDocument.defaultView.voicePermissionDenied=false')
+    field.fill('')

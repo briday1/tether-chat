@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 from datetime import datetime
-from fastapi import FastAPI,HTTPException,File,Form,UploadFile
+from fastapi import FastAPI,HTTPException
 from fastapi.responses import FileResponse,Response
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel,Field
@@ -333,11 +333,12 @@ def action_notes_script():return FileResponse(Path(__file__).with_name("action-n
 @app.get("/voice.js")
 def voice_script():return FileResponse(Path(__file__).with_name("voice.js"),media_type="application/javascript")
 
+@app.get("/speech.mjs")
+def speech_script():return FileResponse(Path(__file__).with_name("speech.mjs"),media_type="application/javascript")
+
 @app.post("/api/voice/transcribe")
-def voice_transcribe(file:UploadFile=File(...),model:str=Form('whisper-1'),provider_base:str=Form('')):
-    from . import voice
-    try:return voice.transcribe(file.file.read(voice.MAX_AUDIO+1),file.content_type,model,provider_base or None)
-    except ValueError as exc:raise HTTPException(422,str(exc)) from None
+def retired_voice_transcribe():
+    raise HTTPException(410,"Voice input now runs on this device. Reload tether to update the microphone.")
 
 from .chat_api import router as chat_router
 app.include_router(chat_router)

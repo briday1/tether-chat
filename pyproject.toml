@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # Distribution name; the application displays tether.
 name = "tether-chat"
-version = "2026.11"
+version = "2026.12"
 description = "Local-first task and action-item assistant"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -36,7 +36,7 @@ desktop = ["pywebview>=5,<7", "pystray>=0.19,<1"]
 include = ["tend*"]
 
 [tool.setuptools.package-data]
-tend = ["index.html", "board.html", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "updates.js", "notes.js", "notes.css", "favicon.svg", "manifest.webmanifest"]
+tend = ["index.html", "board.html", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "speech.mjs", "updates.js", "notes.js", "notes.css", "favicon.svg", "manifest.webmanifest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

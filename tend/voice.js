@@ -1,115 +1,104 @@
-/* Shared microphone input: editable dictation, never an automatic chat submission. */
+/* Click to dictate into an editable draft; click again to keep it. Never auto-send. */
 (() => {
+  const engineURL=new URL('speech.mjs',document.currentScript.src);
   function init(){
     const input=document.querySelector('#message'),form=document.querySelector('#composer');if(!input||!form)return;
     const namespace=window.TETHER_CONFIG?'tether-web:'+window.TETHER_CONFIG.base:'tether-desktop:'+location.port;
-    const preferenceKey=namespace+':voice';let prefs={mode:'auto',language:navigator.language||'en-US',model:'whisper-1'};
+    const preferenceKey=namespace+':voice';let prefs={mode:'local',language:navigator.language||'en-US'};
     try{prefs={...prefs,...JSON.parse(localStorage.getItem(preferenceKey)||'{}')}}catch(_){}
-    const make=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n};
+    // Upgrade Automatic/Provider preferences to local speech, including providers without an audio API.
+    if(prefs.mode!=='browser')prefs.mode='local';
+    const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node};
     const mic=make('button','voice-button'),cancel=make('button','voice-button voice-cancel'),status=make('div','voice-status');
-    mic.type=cancel.type='button';mic.id='voiceInput';cancel.id='voiceCancel';cancel.hidden=true;status.id='voiceStatus';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+    mic.type=cancel.type='button';mic.id='voiceInput';cancel.id='voiceCancel';status.id='voiceStatus';
+    status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     mic.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>';
     cancel.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
-    cancel.title='Cancel voice input';cancel.setAttribute('aria-label','Cancel voice input');
+    cancel.title='Discard this dictation';cancel.setAttribute('aria-label','Cancel voice input');
     const send=document.querySelector('#send');send.before(mic,cancel);form.append(status);
-    let phase='idle',recognizer=null,recorder=null,stream=null,chunks=[],timer=null,controller=null,generation=0,original='',acceptResults=true,settingInput=false,useRecorderNext=false;
-    const settingsURL='/api/settings',transcribeURL='/api/voice/transcribe';
+    let phase='idle',recognizer=null,session=null,generation=0,original='',acceptResults=false,settingInput=false,timer;
+    const say=text=>{status.textContent=text};
     function refresh(){
-      const active=phase!=='idle';mic.classList.toggle('listening',phase==='listening'||phase==='recording');
-      mic.disabled=phase==='transcribing'||phase==='starting';mic.setAttribute('aria-pressed',String(phase==='listening'||phase==='recording'));
-      mic.title=phase==='listening'||phase==='recording'?'Stop voice input':phase==='transcribing'?'Transcribing voice input':'Start voice input';
-      mic.setAttribute('aria-label',phase==='listening'||phase==='recording'?'Stop voice input':phase==='transcribing'?'Transcribing voice input':'Start voice input');
+      const active=phase!=='idle';mic.classList.toggle('listening',phase==='listening');
+      mic.setAttribute('aria-pressed',String(active));mic.setAttribute('aria-busy',String(phase==='starting'||phase==='stopping'));
+      mic.title=active?'Stop voice input':'Start voice input';mic.setAttribute('aria-label',mic.title);
       cancel.hidden=!active;send.disabled=active;
     }
-    function say(text){status.textContent=text}
     function writeDraft(text){settingInput=true;input.value=text;input.dispatchEvent(new Event('input',{bubbles:true}));settingInput=false}
-    function append(text){const before=input.value;writeDraft(before+(before&&!/\s$/.test(before)?' ':'')+text.trim());input.focus()}
-    function release(){clearTimeout(timer);timer=null;for(const track of stream?.getTracks()||[])track.stop();stream=null}
-    function idle(){phase='idle';release();refresh()}
-    function cancelVoice(){
-      const restoreSpeech=!!recognizer&&acceptResults;
-      generation++;acceptResults=false;controller?.abort();controller=null;
-      if(recognizer){try{recognizer.abort()}catch(_){}recognizer=null}
-      if(recorder && recorder.state!=='inactive'){recorder.onstop=null;try{recorder.stop()}catch(_){}}
-      recorder=null;chunks=[];if(restoreSpeech)writeDraft(original);idle();say('Voice input cancelled.');
+    function transcript(text){if(!acceptResults)return;writeDraft(original+(original&&text&&!/\s$/.test(original)?' ':'')+text)}
+    function idle(){clearTimeout(timer);phase='idle';session=null;recognizer=null;refresh()}
+    function cancelVoice(restore=true){
+      generation++;const shouldRestore=restore&&acceptResults;acceptResults=false;
+      session?.cancel();try{recognizer?.abort()}catch(_){}
+      if(shouldRestore)writeDraft(original);idle();say('Dictation discarded.');
     }
-    function speech(){
+    function errorMessage(error){
+      if(error.name==='NotAllowedError')return 'Microphone access was denied. Allow it in your browser or system settings.';
+      if(error.name==='NotFoundError')return 'No microphone was found. Check its connection and try again.';
+      if(error.name==='NotReadableError')return 'The microphone is in use or unavailable. Close other recording apps and try again.';
+      return error.message||'On-device speech could not start. Check internet access for the first download, then try again.';
+    }
+    async function stopVoice(){
+      if(phase==='idle'||phase==='stopping')return;
+      if(phase==='starting'){cancelVoice(false);say('Voice input stopped.');return}
+      phase='stopping';refresh();say('Finishing dictation…');
+      if(recognizer){try{recognizer.stop()}catch(_){idle()}return}
+      const token=generation;
+      try{await session?.stop()}finally{
+        if(token===generation){acceptResults=false;idle();say('Dictation stopped. Review your message before sending.');input.focus()}
+      }
+    }
+    function browserSpeech(token){
       const Constructor=window.SpeechRecognition||window.webkitSpeechRecognition;
-      if(!Constructor)return false;
+      if(!Constructor)throw Error('Browser dictation is unavailable here. Choose On-device speech in Settings.');
+      recognizer=new Constructor();recognizer.lang=prefs.language;recognizer.continuous=true;recognizer.interimResults=true;
+      recognizer.onstart=()=>{if(token!==generation)return;phase='listening';refresh();say('Listening… Click the microphone again to stop.')};
+      recognizer.onresult=event=>{if(token===generation)transcript(Array.from(event.results).map(result=>result[0]?.transcript||'').join(' ').trim())};
+      let failed=false;
+      recognizer.onerror=event=>{
+        if(token!==generation)return;failed=true;acceptResults=false;
+        if(['not-allowed','service-not-allowed'].includes(event.error))say('Microphone or speech access was denied. Allow it in browser or system settings.');
+        else if(event.error==='no-speech')say('No speech was detected.');
+        else if(event.error==='audio-capture')say('No microphone is available. Check its connection and permissions.');
+        else say('Browser dictation is unavailable. Choose On-device speech in Settings; it uses no provider audio API.');
+      };
+      recognizer.onend=()=>{if(token!==generation)return;acceptResults=false;idle();if(!failed)say('Dictation stopped. Review your message before sending.')};
+      recognizer.start();
+    }
+    async function startVoice(){
       const token=++generation;original=input.value;acceptResults=true;phase='starting';refresh();say('Opening microphone…');
       try{
-        recognizer=new Constructor();recognizer.lang=prefs.language;recognizer.continuous=true;recognizer.interimResults=true;
-        recognizer.onstart=()=>{if(token!==generation)return;phase='listening';refresh();say('Listening… Stop when finished, then review your message. Browser dictation may use its speech service.')};
-        recognizer.onresult=event=>{
-          if(token!==generation||!acceptResults)return;
-          const text=Array.from(event.results).map(result=>result[0]?.transcript||'').join(' ').trim();
-          writeDraft(original+(original&&!/\s$/.test(original)?' ':'')+text);
-        };
-        recognizer.onerror=event=>{
-          if(token!==generation)return;acceptResults=false;
-          if(['not-allowed','service-not-allowed'].includes(event.error))say('Microphone or speech access was denied. Allow it in your browser or system settings.');
-          else if(event.error==='no-speech')say('No speech was detected. Your draft is unchanged.');
-          else if(event.error==='audio-capture')say('No microphone is available. Check your microphone connection and permissions.');
-          else{useRecorderNext=true;say('Browser dictation is unavailable. Tap the microphone again to record for your configured AI provider, or choose a voice mode in Settings.');}
-        };
-        recognizer.onend=()=>{if(token!==generation)return;const hadError=!acceptResults;recognizer=null;idle();if(!hadError)say('Dictation stopped. Review your message before sending.')};
-        recognizer.start();return true;
-      }catch(_){recognizer=null;idle();useRecorderNext=true;say('Browser dictation could not start. Tap the microphone again to use provider transcription.');return true}
+        if(prefs.mode==='browser'){browserSpeech(token);return}
+        const engine=await import(engineURL.href);if(token!==generation)return;
+        session=engine.localSpeech({
+          onText:text=>{if(token===generation)transcript(text)},
+          onStatus:text=>{if(token!==generation)return;if(text.startsWith('Listening')){phase='listening';refresh()}say(text)},
+          onError:error=>{if(token!==generation)return;acceptResults=false;idle();say(errorMessage(error))},
+        });
+        await session.start();if(token!==generation)return;
+        timer=setTimeout(stopVoice,10*60*1000);
+      }catch(error){if(token===generation){session?.cancel();acceptResults=false;idle();say(errorMessage(error))}}
     }
-    async function record(){
-      const token=++generation;phase='starting';refresh();say('Preparing microphone…');
-      try{
-        if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw Error('Audio recording is unavailable here. Try a current browser or your keyboard’s microphone.');
-        const response=await fetch(settingsURL),connection=await response.json();
-        if(!response.ok||!connection.has_key)throw Error('Configure or unlock your AI connection in Settings before using provider transcription.');
-        if(token!==generation)return;
-        say('Opening microphone. This recording will be sent to your configured AI provider when you stop.');
-        const acquired=await navigator.mediaDevices.getUserMedia({audio:true});
-        if(token!==generation){for(const track of acquired.getTracks())track.stop();return}
-        stream=acquired;const type=['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg;codecs=opus'].find(value=>MediaRecorder.isTypeSupported(value));
-        recorder=type?new MediaRecorder(stream,{mimeType:type}):new MediaRecorder(stream);chunks=[];let size=0;
-        recorder.ondataavailable=event=>{if(event.data.size){chunks.push(event.data);size+=event.data.size;if(size>20*1024*1024){cancelVoice();say('The recording reached the size limit. Try a shorter recording.')}}};
-        recorder.onerror=()=>{cancelVoice();say('The microphone recording failed. Your draft is unchanged.')};
-        recorder.onstop=async()=>{
-          if(token!==generation)return;
-          const mime=recorder.mimeType||chunks[0]?.type||'audio/webm',blob=new Blob(chunks,{type:mime});recorder=null;chunks=[];release();
-          if(!blob.size){idle();say('No audio was recorded.');return}
-          phase='transcribing';refresh();say('Transcribing with your configured AI provider…');controller=new AbortController();
-          try{
-            const payload=new FormData(),extension=mime.includes('mp4')?'m4a':mime.includes('ogg')?'ogg':'webm';
-            payload.append('file',blob,'voice.'+extension);payload.append('model',prefs.model);payload.append('provider_base',connection.base_url);
-            const result=await fetch(transcribeURL,{method:'POST',body:payload,signal:controller.signal});
-            const body=await result.json();if(!result.ok)throw Error(typeof body.detail==='string'?body.detail:'Transcription failed.');
-            if(token!==generation)return;if(typeof body.text!=='string'||!body.text.trim())throw Error('No speech was recognized.');
-            append(body.text);say('Transcript added. Review your message before sending.');
-          }catch(error){if(token===generation)say(error.name==='AbortError'?'Transcription cancelled.':error.message)}
-          finally{if(token===generation){controller=null;idle()}}
-        };
-        recorder.start(1000);phase='recording';refresh();say('Recording… Stop to transcribe with your AI provider, or cancel to discard.');
-        timer=setTimeout(()=>{if(recorder?.state==='recording')recorder.stop()},5*60*1000);
-      }catch(error){if(token===generation){idle();say(error.name==='NotAllowedError'?'Microphone access was denied. Allow it in browser or system settings.':error.message)}}
-    }
-    mic.onclick=()=>{
-      if(phase==='listening'){phase='starting';refresh();try{recognizer?.stop()}catch(_){idle()}return}
-      if(phase==='recording'){phase='transcribing';refresh();if(recorder?.state==='recording')recorder.stop();return}if(phase!=='idle')return;
-      if(prefs.mode!=='provider'&&!useRecorderNext&&speech())return;
-      if(prefs.mode==='browser'){say('Browser dictation is unavailable. Choose Provider transcription in Voice input settings.');return}
-      useRecorderNext=false;record();
-    };
-    cancel.onclick=cancelVoice;
-    input.addEventListener('input',()=>{if(phase==='listening'&&!settingInput){acceptResults=false;recognizer?.stop();say('Dictation stopped so you can edit your draft.')}});
-    form.addEventListener('submit',event=>{if(phase!=='idle'){event.preventDefault();event.stopImmediatePropagation();say('Stop voice input and review your message before sending.')}},true);
-    window.addEventListener('pagehide',()=>{if(phase!=='idle')cancelVoice()});
+    mic.onclick=()=>phase==='idle'?startVoice():stopVoice();cancel.onclick=()=>cancelVoice();
+    input.addEventListener('input',()=>{
+      if(phase!=='idle'&&!settingInput){acceptResults=false;cancelVoice(false);say('Dictation stopped so you can edit your draft.')}
+    });
+    form.addEventListener('submit',event=>{if(phase!=='idle'){event.preventDefault();event.stopImmediatePropagation();say('Stop voice input before sending.')}},true);
+    window.addEventListener('pagehide',()=>{if(phase!=='idle')cancelVoice(false)});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase!=='idle')stopVoice()});
     const settings=document.querySelector('#settings');
     if(settings){
-      const section=make('section','voice-settings');section.innerHTML='<h2>Voice input</h2><p>Browser dictation may use your browser’s speech service. Provider transcription sends the recording to your configured AI provider using your key.</p><label for="voiceMode">Voice mode</label><select id="voiceMode"><option value="auto">Automatic</option><option value="browser">Browser dictation</option><option value="provider">Provider transcription</option></select><label for="voiceLanguage">Dictation language</label><input id="voiceLanguage" placeholder="en-US" maxlength="40"><label for="voiceModel">Provider transcription model</label><input id="voiceModel" placeholder="whisper-1" maxlength="200"><p class="voice-help">The provider must support audio/transcriptions. Choose its transcription model here; this is separate from your chat model. Voice input fills a draft for review and never sends a chat automatically.</p>';
+      const section=make('section','voice-settings');
+      section.innerHTML='<h2>Voice input</h2><p>On-device speech works in both editions without an API key. English speech files download once (about 45 MB) and stay on this device for offline use. Your microphone audio stays on this device.</p><label for="voiceMode">Voice mode</label><select id="voiceMode"><option value="local">On-device speech · English</option><option value="browser">Browser dictation</option></select><label for="voiceLanguage">Browser dictation language</label><input id="voiceLanguage" placeholder="en-US" maxlength="40"><p class="voice-help">Browser dictation supports your browser’s languages and may use its speech service. Click the microphone to start and again to stop. × discards this dictation. Text appears as you speak; send it when ready.</p>';
       const heading=[...settings.querySelectorAll('h2')].find(node=>node.textContent==='AI connection');
       if(heading)heading.before(section);else settings.append(section);
-      const mode=section.querySelector('#voiceMode'),language=section.querySelector('#voiceLanguage'),model=section.querySelector('#voiceModel');
-      mode.value=['auto','browser','provider'].includes(prefs.mode)?prefs.mode:'auto';language.value=prefs.language;model.value=prefs.model;
-      const save=()=>{prefs={mode:mode.value,language:language.value.trim()||navigator.language||'en-US',model:model.value.trim()||'whisper-1'};
-        try{localStorage.setItem(preferenceKey,JSON.stringify(prefs))}catch(_){}useRecorderNext=false};
-      for(const node of [mode,language,model])node.addEventListener('change',save);
+      const mode=section.querySelector('#voiceMode'),language=section.querySelector('#voiceLanguage');
+      mode.value=prefs.mode;language.value=prefs.language;language.disabled=prefs.mode!=='browser';
+      const save=()=>{
+        if(phase!=='idle')stopVoice();prefs={mode:mode.value,language:language.value.trim()||navigator.language||'en-US'};
+        language.disabled=prefs.mode!=='browser';try{localStorage.setItem(preferenceKey,JSON.stringify(prefs))}catch(_){}
+      };
+      mode.addEventListener('change',save);language.addEventListener('change',save);
     }
     refresh();
   }

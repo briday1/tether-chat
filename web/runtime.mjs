@@ -79,24 +79,6 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       }finally{clearTimeout(timeout)}
     }
   }
-  async function transcribe(form,signal){
-    const audio=form?.get?.('file'),model=String(form?.get?.('model')||'whisper-1'),expected=form?.get?.('provider_base');
-    if(!audio || !audio.size || audio.size>20*1024*1024 || !/^audio\/(webm|mp4|ogg|wav|x-wav|mpeg|x-m4a)(?:;|$)/.test(audio.type))
-      throw new Problem('Use a supported audio recording up to 20 MB');
-    if(!/^[A-Za-z0-9_.:/-]{1,200}$/.test(model))throw new Problem('Enter a valid transcription model in Voice input settings');
-    const c=await connection();if(expected && String(expected).replace(/\/+$/,'')!==c.base_url)throw new Problem('Your provider changed during recording. Record again for the new provider.');
-    const controller=new AbortController(),abort=()=>controller.abort(),timeout=setTimeout(abort,90000);
-    if(signal?.aborted)controller.abort();signal?.addEventListener('abort',abort,{once:true});
-    try{
-      const body=new FormData();body.append('file',audio,audio.name||'voice.webm');body.append('model',model);
-      const response=await network(c.base_url+'/audio/transcriptions',{method:'POST',mode:'cors',credentials:'omit',redirect:'error',cache:'no-store',
-        headers:{Authorization:'Bearer '+c.key},body,signal:controller.signal});
-      if(!response.ok)throw new Problem(`Transcription provider returned HTTP ${response.status}. Check its audio/transcriptions support, model, key, and quota.`);
-      const result=await response.json();if(typeof result.text!=='string'||!result.text.trim())throw new Problem('No speech was recognized.');
-      return {text:result.text.trim()};
-    }catch(error){if(error instanceof Problem)throw error;throw new Problem(controller.signal.aborted?'Transcription stopped. The recording was not retried.':'Could not transcribe from this browser. Check the provider’s audio/transcriptions and CORS support. The recording was not retried.')}
-    finally{clearTimeout(timeout);signal?.removeEventListener('abort',abort)}
-  }
   function attentionTarget(model,context){
     const task=model.get(context.task_id);if(task.archived_at)throw new Problem('This task is no longer active');
     const action=context.action_id ? task.entries.find(a=>a.kind==='action' && a.id===context.action_id) : null;
@@ -311,7 +293,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     if(url.origin!==origin || !(url.pathname===prefix || url.pathname.startsWith(prefix+'/')))return network(input,options);
     const method=(options.method||input.method||'GET').toUpperCase();
     try{
-      if(url.pathname===prefix+'/voice/transcribe' && method==='POST')return Response.json(await transcribe(options.body,options.signal));
+      if(url.pathname===prefix+'/voice/transcribe' && method==='POST')throw new Problem('Voice input now runs on this device. Reload tether to update the microphone.',410);
       let body={};if(options.body)body=JSON.parse(options.body);else if(input instanceof Request && !['GET','HEAD'].includes(method))body=await input.clone().json();
       const result=await route(url.pathname.slice(prefix.length),method,body,url.searchParams);
       return Response.json(result,{status:method==='POST' && url.pathname.endsWith('/chat/jobs')?202:200,headers:{'Cache-Control':'no-store'}});
