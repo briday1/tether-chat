@@ -16,16 +16,16 @@ spec.loader.exec_module(builder)
 def test_build_reuses_screens_and_scopes_every_asset(tmp_path,base):
     before={p:p.read_bytes() for p in (ROOT/'tend').glob('*') if p.is_file()}
     output=builder.build(tmp_path/'web',base)
-    manifest=json.loads((output/'manifest.webmanifest').read_text())
+    manifest=json.loads((output/'manifest.webmanifest').read_text(encoding='utf-8'))
     assert manifest['start_url']==manifest['scope']==base
-    config_text=(output/'app-config.js').read_text()
+    config_text=(output/'app-config.js').read_text(encoding='utf-8')
     config=json.loads(config_text.removeprefix('window.TETHER_CONFIG=').rstrip(';\n'))
-    assert config['version']==tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']
+    assert config['version']==tomllib.loads((ROOT/'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     tools,system=builder.shared_ai()
     assert config['tools']==tools and config['system']==system
     assert len(tools)>20
     for page in ('conversation.html','board.html','snapshots.html'):
-        text=(output/page).read_text()
+        text=(output/page).read_text(encoding='utf-8')
         assert base+'bridge.js' in text and base+'app-config.js' in text
         assert 'Database location' not in text and 'Credentials are stored by the local server' not in text
         assert "api('/board')" in text if page!='snapshots.html' else True
@@ -33,11 +33,11 @@ def test_build_reuses_screens_and_scopes_every_asset(tmp_path,base):
             if asset.startswith('https:'):continue
             path=asset.removeprefix(base) if asset.startswith(base) else asset.removeprefix('./')
             assert (output/path).is_file(),(page,asset)
-    worker=(output/'sw.js').read_text()
+    worker=(output/'sw.js').read_text(encoding='utf-8')
     assert 'skipWaiting(' not in worker and "event.request.method!=='GET'" in worker
     assert 'tether-web:'+base in worker
     assert all(p.read_bytes()==value for p,value in before.items())
-    meta=tomllib.loads((ROOT/'pyproject.toml').read_text())['project']
+    meta=tomllib.loads((ROOT/'pyproject.toml').read_text(encoding='utf-8'))['project']
     assert set(meta['scripts'])=={'tether-chat'} and set(meta['gui-scripts'])=={'tether-chat-desktop'}
 
 
