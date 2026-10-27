@@ -110,6 +110,7 @@ async function browseReference(ref){
     content.append(el('h2','',task.title));
     const categories=el('div','reference-meta');for(const name of task.categories||[task.category||'Unsorted']){const a=el('a','',name);a.href=referenceHref({type:'category',id:name});a.onclick=e=>{e.preventDefault();browseReference({type:'category',id:name})};if(categories.childNodes.length)categories.append(' · ');categories.append(a)}content.append(categories);
     if(task.summary)content.append(el('p','',task.summary));
+    window.tetherTaskNotes(content,task);
     const actions=(task.entries||[]).filter(e=>e.kind==='action');content.append(el('h3','',`Action items (${actions.length})`));
     if(!actions.length)content.append(el('p','muted','No action items yet.'));
     for(const a of actions){const details=[a.done?'Completed':'Open',a.due_at?'Due '+new Date(a.due_at).toLocaleDateString():'',a.revisit_at?'Bring to attention '+new Date(a.revisit_at).toLocaleString():''].filter(Boolean).join(' · ');content.append(referenceRow(a.body,details,{type:'action',id:a.id,parent:task.id}))}

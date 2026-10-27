@@ -1,2 +1,2 @@
 """tether-chat: local-first tasks, actions, and context."""
-__version__ = "2026.13"
+__version__ = "2026.14"
