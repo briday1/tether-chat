@@ -2,7 +2,7 @@
 (() => {
  const chat=document.querySelector('#chat');if(!chat)return;
  const journalKey='tether-chat-outbox',draftKey='tether-chat-draft';
- let syncing=false,timer=null,jobs=[],first=true,submitting=false,jobStamp='';
+ let syncing=false,syncAgain=false,timer=null,jobs=[],first=true,submitting=false,jobStamp='';
  let attentionRequest=0,attentionStamp='',attentionTimer=null;
  const nodes=new Map(),pendingNodes=new Map(),sending=new Set(),attentionSending=new Set();
  function readJournal(){try{return JSON.parse(localStorage.getItem(journalKey)||'{}')}catch(_){return {}}}
@@ -60,10 +60,10 @@
   if(bottom||first)scrollChat();first=false;
  }
  async function sync(){
-  if(syncing)return;syncing=true;
+  if(syncing){syncAgain=true;return}syncing=true;
   try{const state=await api('/chat/state');renderState(state);for(const p of Object.values(readJournal()))send(p)}
   catch(error){if(first){chat.replaceChildren(el('p','hint','Could not load conversation: '+error.message))}}
-  finally{syncing=false;clearTimeout(timer);timer=setTimeout(sync,jobs.some(j=>['queued','running'].includes(j.status))||Object.keys(readJournal()).length?800:10000)}
+  finally{syncing=false;clearTimeout(timer);const delay=syncAgain?0:jobs.some(j=>['queued','running'].includes(j.status))||Object.keys(readJournal()).length?800:10000;syncAgain=false;timer=setTimeout(sync,delay)}
  }
  async function send(payload){
   if(sending.has(payload.request_id))return;sending.add(payload.request_id);

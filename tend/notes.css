@@ -8,7 +8,7 @@
 .bubble.assistant a[href],.bubble.assistant a.chat-reference{background:transparent;border-radius:0;padding:0;font-weight:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--accent) 42%,transparent);text-decoration-thickness:1px;text-underline-offset:3px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .bubble.assistant a[href]:hover,.bubble.assistant a.chat-reference:hover{background:transparent;text-decoration-color:currentColor}
 .bubble.assistant:has(.note-table),.bubble.assistant:has(.note-list){width:100%;max-width:100%;box-sizing:border-box}
-.bubble.assistant .note-table-wrap{width:100%;margin:9px 0 17px;overflow-x:auto}
+.bubble.assistant .note-table-wrap{position:relative;width:100%;margin:9px 0 17px;overflow-x:auto}
 .bubble.assistant .note-table-wrap:last-child{margin-bottom:0}
 .bubble.assistant .note-table{border-collapse:collapse;border-spacing:0;width:100%;font-size:14px;background:transparent;color:inherit;line-height:1.55}
 .bubble.assistant .note-table th,.bubble.assistant .note-table td{padding:11px 12px;vertical-align:top;text-align:left;border:0;background:transparent;overflow-wrap:anywhere;min-width:0}
@@ -22,12 +22,12 @@
 .bubble.assistant .note-rows col.note-when{width:100px}
 .bubble.assistant .note-rows td:first-child{width:36%;font-size:15px}
 .bubble.assistant .note-rows .note-when{width:100px;text-align:right;font-size:12px}
-.bubble.assistant .note-rows thead{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.bubble.assistant .note-rows thead{position:absolute;top:0;left:0;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .bubble.assistant .note-facts{table-layout:fixed}
 .bubble.assistant .note-facts col:first-child{width:34%}
 .bubble.assistant .note-facts td:first-child{width:34%;color:var(--muted);font-size:13px}
 .bubble.assistant .note-facts td:nth-child(2){color:var(--text)}
-.bubble.assistant .note-facts thead{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.bubble.assistant .note-facts thead{position:absolute;top:0;left:0;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .bubble.assistant ul.note-list{list-style:none;margin:9px 0 17px;padding:0}
 .bubble.assistant .note-list>li{margin:0;padding:11px 0}
 .bubble.assistant .note-list>li+li{border-top:1px solid color-mix(in srgb,var(--line) 45%,transparent)}
