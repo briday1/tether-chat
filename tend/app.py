@@ -170,7 +170,7 @@ def reflection(data:Ask):
     except ValueError as exc:raise HTTPException(502,str(exc)) from exc
 
 class Message(BaseModel):
-    text:str=Field(min_length=1,max_length=6000)
+    text:str=Field(min_length=1,max_length=50000)
 class Provider(BaseModel):
     base_url:str
     model:str

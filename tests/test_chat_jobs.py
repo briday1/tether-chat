@@ -57,6 +57,17 @@ def test_queue_is_serial_and_future_messages_do_not_leak_into_context(client, mo
     assert not any(r['body']=='Message 2' for _,history in histories for r in history)
     assert any(r['body']=='Reply to Message 1' for r in histories[1][1])
 
+def test_long_message_is_preserved_and_oversize_rejection_does_not_clear_history(client, monkeypatch):
+    monkeypatch.setattr(ai,'chat',lambda message,**kwargs:{'answer':'Notes received.'})
+    text='Meeting notes: '+('x'*(50000-len('Meeting notes: ')))
+    payload={'request_id':'long-notes-request','text':text}
+    assert client.post('/api/chat/jobs',json=payload).status_code==202
+    assert wait(client,payload['request_id'])['status']=='done'
+    before=client.get('/api/chat/state').json()['messages']
+    assert before[0]['body']==text
+    assert client.post('/api/chat/jobs',json={'request_id':'oversize-request','text':text+'x'}).status_code==422
+    assert client.get('/api/chat/state').json()['messages']==before
+
 def test_attention_is_scoped_and_click_does_not_modify_items(client):
     task=store.create('S3 bucket setup',summary='Confirm the contract and access status.',categories=['Projects'])
     action=store.add(task['id'],'action','Contact the review team')

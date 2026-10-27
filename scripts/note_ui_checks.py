@@ -10,6 +10,50 @@ def check_note_replies(page, ui, api_base):
         }''', [api_base+path, method, body])
 
     title='Note [A] | fixture'
+    # Incidental prose must never become a guessed entity link (IT vs "it",
+    # HR vs "hr", May vs "may", or short task/action names).
+    incidental=api('/threads','POST',{'title':'Go','categories':['IT','HR','May']})
+    api('/threads/'+incidental['id']+'/entries','POST',{'kind':'action','body':'Do'})
+    ui.locator('body').evaluate('''()=>{
+      refreshReferences();
+      bubble('assistant','',`<p>Send it tomorrow. Do go when you may; allow 1 hr. IT is mentioned in prose.</p><p>Open <a href="${referenceHref({type:'category',id:'IT'})}">IT</a>.</p>`);
+      refreshReferences();
+    }''')
+    incidental_reply=ui.locator('.bubble.assistant').filter(has_text='Send it tomorrow.')
+    expect(incidental_reply.locator('a')).to_have_count(1)
+    incidental_reply.get_by_role('link',name='IT',exact=True).click()
+    expect(ui.locator('#chatSelection').get_by_role('heading',name='IT',exact=True)).to_be_visible()
+    ui.get_by_role('button',name='Close details',exact=True).click()
+    # Oversized input stays editable, without clearing the conversation or draft.
+    oversized='Meeting notes: '+('x'*50000)
+    ui.get_by_label('Message tether').fill(oversized)
+    ui.get_by_role('button',name='Send',exact=True).click()
+    expect(ui.get_by_role('alert')).to_contain_text('over 50,000 characters')
+    expect(ui.get_by_label('Message tether')).to_have_value(oversized)
+    expect(incidental_reply).to_be_visible()
+    ui.get_by_label('Message tether').fill('')
+    # A server-side validation rejection must also survive later state syncs.
+    ui.locator('body').evaluate('''()=>{
+      const original=window.fetch;
+      const beforeChat=window.tetherBeforeChat;
+      window.tetherBeforeChat=async()=>true;
+      window.fetch=async function(url,options){
+        if(String(url).endsWith('/chat/jobs')&&options?.method==='POST'){
+          window.fetch=original;
+          window.tetherBeforeChat=beforeChat;
+          return Response.json({detail:'Synthetic validation rejection'},{status:422});
+        }
+        return original.apply(this,arguments);
+      };
+    }''')
+    ui.get_by_label('Message tether').fill('Keep this rejected message')
+    ui.get_by_role('button',name='Send',exact=True).click()
+    expect(ui.get_by_label('Message tether')).to_have_value('Keep this rejected message')
+    failure=ui.locator('.chat-pending').filter(has_text='Synthetic validation rejection')
+    expect(failure).to_be_visible()
+    ui.locator('body').evaluate("()=>window.dispatchEvent(new Event('pageshow'))")
+    expect(failure).to_be_visible()
+    ui.get_by_label('Message tether').fill('')
     task=api('/threads','POST',{'title':title,'summary':'Keep the decision context.'})
     api('/threads/'+task['id'],'PATCH',{'due_at':'2020-01-01T12:00:00Z','revisit_at':'2035-01-02T12:00:00Z'})
     action=api('/threads/'+task['id']+'/entries','POST',{'kind':'action','body':'Check | attachment'})
