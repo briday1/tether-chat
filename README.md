@@ -69,6 +69,8 @@ Attention updates automatically after saves, notes, and chat changes. Completed 
 
 **Archive:** Put finished or inactive tasks away without deleting them; restore them from **View archive**.
 
+If a previous server or another program occupies a service port, the launcher selects available local ports and opens the correct address. It remembers the successful ports for the next launch and reuses a compatible running tether. Your database and AI settings keep their existing location. The actual web and MCP addresses are printed in server mode and recorded in `~/.tend/launch-ports.json`.
+
 ## Update
 
 Choose **Exit tether** in the tray before replacing a running installation:

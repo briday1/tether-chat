@@ -9,7 +9,6 @@ from urllib.error import URLError
 from . import store
 from . import storage
 from pathlib import Path
-from . import __version__
 
 def main():
     import argparse
@@ -48,24 +47,13 @@ def main():
     if args.port is not None:os.environ["TEND_WEB_PORT"]=str(args.port)
     if args.mcp_port is not None:os.environ["TEND_MCP_PORT"]=str(args.mcp_port)
     if args.no_browser:os.environ["TEND_NO_BROWSER"]="1"
-    # Reuse a running compatible tether-chat instance instead of attempting a duplicate.
-    import socket, json
-    target_port=int(os.environ.get("TEND_WEB_PORT","8765"))
-    with socket.socket() as probe:
-        probe.settimeout(.5)
-        occupied=probe.connect_ex(("127.0.0.1",target_port))==0
-    if occupied:
-        try:
-            with urlopen(f"http://127.0.0.1:{target_port}/api/health",timeout=1.5) as response:
-                health=json.load(response)
-            if health.get("app")=="tend" and health.get("brand")=="tether-chat" and health.get("version")==__version__ and health.get("streaming_chat") is True:
-                if os.environ.get("TEND_NO_BROWSER")!="1":
-                    webbrowser.open(f"http://127.0.0.1:{target_port}/")
-                print("tether-chat is already running; reused existing web server.",flush=True)
-                return
-        except (OSError,ValueError,URLError):
-            pass
-        raise SystemExit("Port "+str(target_port)+" is occupied by an outdated or different server. Stop the previous tether-chat server to load the new version. See README troubleshooting.")
+    # Recover automatically from a stale server or another program using either port.
+    from . import ports
+    if ports.configure():
+        if os.environ.get("TEND_NO_BROWSER")!="1":
+            webbrowser.open(f"http://127.0.0.1:{ports.web_port()}/")
+        print("tether-chat is already running; reused existing web server.",flush=True)
+        return
     store.init()
     storage.activate_pending()
     store.init()
@@ -110,6 +98,7 @@ def main():
             except (URLError,OSError,TimeoutError):
                 time.sleep(.2)
         if not ready:raise RuntimeError("tether-chat did not become ready on "+url)
+        ports.remember()
         if env.get("TEND_NO_BROWSER")!="1":
             webbrowser.open(url)
         while True:

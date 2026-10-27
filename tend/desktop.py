@@ -1,14 +1,10 @@
 """Windows desktop entry point: start tether-chat only when needed, then open an app window."""
-import json
 import os
 import subprocess
 import sys
 import time
 import webbrowser
 from pathlib import Path
-from . import __version__
-from urllib.request import urlopen
-from urllib.error import URLError
 
 def log(message):
     path=Path.home()/".tend"/"desktop-launch.log"
@@ -16,15 +12,12 @@ def log(message):
     with path.open("a",encoding="utf-8") as f:f.write(message+"\n")
 
 def port():
-    return int(os.environ.get("TEND_WEB_PORT","8765"))
+    from .ports import web_port
+    return web_port()
 
 def healthy():
-    try:
-        with urlopen(f"http://127.0.0.1:{port()}/api/health",timeout=0.75) as response:
-            data=json.load(response)
-            return response.status==200 and data.get("app")=="tend" and data.get("brand")=="tether-chat" and data.get("version")==__version__ and data.get("streaming_chat") is True and data.get("tool_runner")=="unbounded-v2"
-    except (OSError,ValueError,URLError):
-        return False
+    from .ports import compatible
+    return compatible(port())
 
 def open_app():
     url=f"http://127.0.0.1:{port()}/"
@@ -70,14 +63,9 @@ def main():
         ctypes.windll.kernel32.CloseHandle(mutex)
 
 def start_and_open(open_window=True):
-    if not healthy():
-        # Do not silently reuse a server with an incompatible API.
-        import socket
-        with socket.socket() as probe:
-            probe.settimeout(.5)
-            occupied=probe.connect_ex(("127.0.0.1",port()))==0
-        if occupied:
-            raise RuntimeError("An outdated or different server is using tether-chat's port. Stop that process before launching the new tether-chat shortcut.")
+    from . import ports
+    reuse=ports.configure(log=log)
+    if not reuse:
         # Run the console Python interpreter with its console creation suppressed.
         # The supervisor prints progress; pythonw has no stdout and can crash on print().
         py=os.environ.get("TEND_SERVICE_PYTHON",sys.executable)
@@ -100,6 +88,7 @@ def start_and_open(open_window=True):
         else:
             log("tether-chat server failed to become ready; see server.log")
             raise RuntimeError("tether-chat did not start; see ~/.tend/server.log")
+    ports.remember()
     if open_window:open_app()
     return child if 'child' in locals() else None
 
