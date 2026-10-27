@@ -31,9 +31,10 @@ jobs:
         run: python -m pytest -q tests/test_browser_build.py
       - name: Install a browser on the hosted runner
         run: python -m playwright install chromium
-      - name: Browser navigation, storage, provider calls, and offline checks
+      - name: Browser, desktop Attention, voice, and offline checks
         run: |
           python scripts/check_web_ui.py
+          python scripts/check_session_ui.py
           python scripts/check_voice_ui.py
       - name: Build the GitHub Pages edition
         env:

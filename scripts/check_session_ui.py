@@ -53,7 +53,8 @@ def main():
                 except OSError:time.sleep(.1)
             else:raise RuntimeError('Session fixture server did not start')
             with sync_playwright() as pw:
-                browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1440,'height':900});errors=[]
+                browser=pw.chromium.launch();context=browser.new_context(viewport={'width':1440,'height':900})
+                page=context.new_page();errors=[]
                 page.on('pageerror',lambda e:errors.append(str(e)))
                 page.goto(BASE,wait_until='networkidle')
                 page.locator('#message').fill('Keep this reply running while I work.')
