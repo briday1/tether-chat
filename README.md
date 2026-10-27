@@ -6,6 +6,16 @@ A local-first assistant for tasks, action items, and things worth remembering. T
 
 ![tether-chat conversation](https://raw.githubusercontent.com/briday1/tether-chat/main/docs/screenshots/conversation.png)
 
+## Browser app
+
+[Open tether in your browser](https://briday1.github.io/tether-chat/) — including on your phone. On iPhone, open it in Safari and choose **Share → Add to Home Screen**.
+
+The browser edition runs on your device, with no tether server or Python installation. Enter your own API endpoint, model, and key in Settings. Your provider must allow browser requests (CORS). Tasks, action notes, conversations, and calendars stay in this browser; saved tasks work offline after the app has loaded once. AI requests still need internet.
+
+Keys can stay in your browser session or be saved encrypted with an unlock passphrase. Download portable backups from Settings: clearing website data removes browser tasks. Desktop and browser data are independent; they do not sync automatically. Closed-app reminders, the local MCP server, and database folder selection belong to the desktop edition.
+
+Both editions are released from this repository. [Browser setup, backups, and development](docs/BROWSER.md).
+
 ## Install
 
 Requires Python 3.11 or newer. No PyInstaller build or separate Windows `.exe` installer is required.
@@ -41,7 +51,7 @@ For desktop installation with pip, use `pip install "tether-chat[desktop]"`.
 
 ## Set up and use
 
-Open **Settings → AI connection**, enter your provider's HTTPS API base URL, model, and API key, then save and test. The provider must support OpenAI-compatible chat-completions tool calling. Keys use the operating system's credential vault; they are not stored in your task database.
+Open **Settings → AI connection**, enter your provider's HTTPS API base URL, model, and API key, then save and test. The provider must support OpenAI-compatible chat-completions tool calling. Desktop keys use the operating system's credential vault; they are not stored in your task database.
 
 **Conversation:** Describe work to track, ask for an update, or record feedback. You can switch to Tasks while a reply is running. Requests are queued on the local server, and returning to Conversation restores their progress or completed replies. A full server shutdown interrupts in-flight requests rather than automatically repeating potentially mutating operations.
 
@@ -68,6 +78,8 @@ Run `tether-chat desktop install` again to refresh an existing shortcut. Existin
 Main releases use **YYYY.sequence**: `2026.1`, `2026.2`, and so on, restarting at `2027.1` in the next year. `python scripts/bump_version.py` updates both package and runtime versions. Commit that version bump with the main update; a separate manual publish is not required.
 
 The main release workflow validates the version, runs Windows/macOS/Linux tests and isolated installations, checks browser interactions, builds the wheel and source archive, creates the versioned GitHub release, and attempts PyPI publication using `PYPI_API_KEY`. It confirms the uploaded version before reporting PyPI success.
+
+A separate **Browser app and GitHub Pages** workflow builds and tests the standalone browser edition and publishes it to Pages. It uses the same version, interface, AI prompt, and tool declarations as desktop. Browser publication is independent of the PyPI upload.
 
 ## More screenshots
 

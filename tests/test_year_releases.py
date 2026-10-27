@@ -17,7 +17,8 @@ def test_year_sequence_and_bump():
 def test_readme_order_and_desktop_only_gallery():
     text=(ROOT/'README.md').read_text(encoding='utf-8')
     before=text.split('## Install')[0]
-    assert before.count('![')==1
+    # Count the lead application screenshot, independently of package badges.
+    assert len(re.findall(r'^!\[',before,re.M))==1
     assert text.index('## Set up and use')<text.index('## More screenshots')
     assert not re.search(r'(?:!\[.*?\]\([^)]*mobile[^)]*\)|<img[^>]*mobile)',text,re.I)
     assert '2026.1' in text and '2026.2' in text

@@ -1,0 +1,28 @@
+<h2>AI connection</h2>
+<p>Use your own key and a model that supports tool calling. Requests go directly to your provider, which must allow browser access.</p>
+<form id="provider">
+  <label for="base">Provider API base URL</label><input id="base" type="url" required placeholder="https://api.openai.com/v1">
+  <label for="model">Model</label><input id="model" required placeholder="gpt-4.1-mini">
+  <label for="key">API key</label><input id="key" type="password" autocomplete="off" placeholder="Leave blank to keep the unlocked key">
+  <label class="web-checkbox"><input id="rememberKey" type="checkbox"> Save encrypted key on this device</label>
+  <label for="keyPassphrase">Unlock passphrase</label><input id="keyPassphrase" type="password" autocomplete="off" minlength="8" placeholder="For saving or unlocking an encrypted key">
+  <p class="web-note">Without a saved key, your key lasts for this browser session. A saved key needs its passphrase when you reopen tether.</p>
+  <div id="keyStatus" class="status" role="status"></div>
+  <button class="primary" type="submit">Save connection</button>
+  <div class="web-buttons"><button type="button" class="secondary" id="unlockKey">Unlock saved key</button><button type="button" class="secondary" id="lockKey">Lock key</button><button type="button" class="secondary" id="forgetKey">Forget key</button></div>
+  <button type="button" class="secondary" id="testConnection">Test connection</button>
+  <div id="providerStatus" class="status" role="status"></div>
+</form>
+<h2>Data on this device</h2>
+<p>Tasks and conversations stay in this browser. They are separate from the desktop app and do not sync automatically. Clearing website data removes them.</p>
+<div class="web-buttons"><button type="button" class="secondary" id="exportData">Download backup</button><label class="secondary web-file">Import backup<input id="importData" type="file" accept="application/json,.json"></label></div>
+<p class="web-note">Portable JSON backups include tasks, action notes, activity, and conversations. They exclude API keys. Imports merge new records and preserve existing data.</p>
+<button type="button" class="secondary" id="persistData">Protect local storage</button>
+<div id="storageStatus" class="status" role="status"></div>
+<h2>Use as an app</h2>
+<p>On iPhone: open tether in Safari, then Share → Add to Home Screen. After the first visit, saved tasks and calendars work offline. AI chat needs internet.</p>
+<button type="button" class="secondary" id="installApp">Install app</button>
+<p>Reminders update while tether is open. This browser edition does not send reminders while closed.</p>
+<button type="button" class="secondary" id="enableNotifications">Enable notifications while open</button>
+<div id="notificationStatus" class="status" role="status"></div>
+<p class="web-note" id="browserVersion"></p>

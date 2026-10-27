@@ -6,6 +6,9 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 build/
+dist/
+web-dist/
+node_modules/
 uv.lock
 
 # Tend user data and all SQLite variants (including local backups)

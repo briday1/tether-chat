@@ -211,6 +211,14 @@ def backup():
     return FileResponse(file.name,filename="tether-chat-backup.sqlite3",media_type="application/octet-stream",
                         background=BackgroundTask(os.unlink,file.name))
 
+@app.get("/api/portable")
+def portable_backup():
+    from .portable import export_data
+    import json
+    return Response(json.dumps(export_data(),ensure_ascii=False),media_type="application/json",
+                    headers={"Content-Disposition":"attachment; filename=tether-portable-backup.json",
+                             "Cache-Control":"no-store"})
+
 @app.get("/api/conversation/rendered")
 def rendered_history():
     return [{"id":row["id"],"role":row["role"],"body":row["body"],"html":render(row["body"]) if row["role"]=="assistant" else None,"created_at":row["created_at"]} for row in db.conversation()]

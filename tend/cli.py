@@ -24,7 +24,19 @@ def main():
     desktop=sub.add_parser("desktop",help="Install desktop launcher")
     desktop.add_argument("action",choices=["install"])
     desktop.add_argument("--destination",help="Shortcut directory (defaults to Desktop)")
+    export=sub.add_parser("export",help="Export a portable JSON backup for the browser edition")
+    export.add_argument("--output",required=True,help="New JSON file to create (existing files are never overwritten)")
     args=parser.parse_args()
+    if args.command=="export":
+        import json
+        from .portable import export_data
+        destination=Path(args.output).expanduser()
+        data=export_data()
+        with destination.open('x',encoding='utf-8') as output:
+            json.dump(data,output,ensure_ascii=False,indent=2)
+            output.write('\n')
+        print("Portable tether backup:",destination)
+        return
     if args.command=="desktop":
         from .desktop_install import install
         print("tether-chat shortcut:",install(args.destination))
