@@ -37,6 +37,7 @@ def test_occupied_web_and_mcp_select_free_ports_and_remember_for_next_launch(iso
 
 def test_compatible_server_is_reused_without_requiring_its_ports_to_be_free(isolated,monkeypatch):
     monkeypatch.setattr(ports,'compatible',lambda port:port==8765)
+    monkeypatch.setattr(ports,'listening',lambda port:True)
     monkeypatch.setattr(ports,'_choose',lambda *args:pytest.fail('Must reuse the running instance'))
     assert ports.configure() is True
     assert ports.web_port()==8765
@@ -72,15 +73,21 @@ def test_real_launcher_starts_with_both_requested_ports_occupied_and_next_launch
     import sys
     import time
     from urllib.request import urlopen
-    from tend.shutdown import stop_process_tree
+    from tend.shutdown import stop_child
     state=tmp_path/'launch-ports.json';output=tmp_path/'launch.log'
-    program="from pathlib import Path;from tend import ports,cli;ports._state_path=lambda:Path("+repr(str(state))+");cli.main()"
+    from pathlib import Path
+    package_root=str(Path(ports.__file__).resolve().parent.parent)
+    legacy=tmp_path/'old-checkout';(legacy/'tend').mkdir(parents=True)
+    (legacy/'tend/__init__.py').write_text('')
+    (legacy/'tend/app.py').write_text("raise RuntimeError('Wrong old Tend checkout imported')")
+    (legacy/'tend/mcp_server.py').write_text("raise RuntimeError('Wrong old Tend checkout imported')")
+    program="import sys;sys.path.insert(0,"+repr(package_root)+");from pathlib import Path;from tend import ports,cli;ports._state_path=lambda:Path("+repr(str(state))+");cli.main()"
     with listening() as web,listening() as mcp:
         environment=os.environ.copy()
         environment.update(TEND_DB=str(tmp_path/'tasks.sqlite3'),TEND_WEB_PORT=str(web.getsockname()[1]),
                            TEND_MCP_PORT=str(mcp.getsockname()[1]),TEND_NO_BROWSER='1')
         with output.open('wb') as log:
-            child=subprocess.Popen([sys.executable,'-c',program],env=environment,stdout=log,stderr=subprocess.STDOUT)
+            child=subprocess.Popen([sys.executable,'-c',program],env=environment,stdout=log,stderr=subprocess.STDOUT,cwd=legacy)
         try:
             deadline=time.monotonic()+30
             while not state.is_file():
@@ -92,8 +99,48 @@ def test_real_launcher_starts_with_both_requested_ports_occupied_and_next_launch
                 assert json.load(response)['version']==ports.__version__
             with socket.socket() as probe:assert probe.connect_ex(('127.0.0.1',actual['mcp']))==0
             again=environment.copy();again.pop('TEND_WEB_PORT');again.pop('TEND_MCP_PORT')
-            reused=subprocess.run([sys.executable,'-c',program],env=again,capture_output=True,text=True,timeout=10)
+            reused=subprocess.run([sys.executable,'-c',program],env=again,capture_output=True,text=True,timeout=10,cwd=legacy)
             assert reused.returncode==0 and 'reused existing' in reused.stdout,reused.stderr
             assert 'Previous service ports were busy' in output.read_text()
         finally:
-            stop_process_tree(child.pid,log=lambda message:None);child.wait(timeout=10)
+            stop_child(child,log=lambda message:None);child.wait(timeout=10)
+
+
+def test_health_probe_treats_non_http_response_as_a_busy_foreign_port(monkeypatch):
+    from http.client import BadStatusLine
+    def foreign(*args,**kwargs):raise BadStatusLine('not HTTP')
+    monkeypatch.setattr(ports,'urlopen',foreign)
+    assert ports.compatible(8765) is False
+
+
+def test_desktop_supervisor_loads_the_installed_code_and_selected_address(tmp_path,monkeypatch):
+    from tend import desktop
+    from types import SimpleNamespace
+    from pathlib import Path
+    calls=[];opened=[]
+    child=SimpleNamespace(poll=lambda:None)
+    monkeypatch.setattr(ports,'configure',lambda **kwargs:False)
+    monkeypatch.setattr(ports,'remember',lambda:None)
+    monkeypatch.setattr(desktop,'healthy',lambda:True)
+    monkeypatch.setattr(desktop,'open_app',lambda:opened.append(desktop.port()))
+    monkeypatch.setattr(desktop.subprocess,'Popen',lambda command,**kwargs:(calls.append((command,kwargs)) or child))
+    monkeypatch.setattr(Path,'home',lambda:tmp_path)
+    assert desktop.start_and_open() is child
+    assert calls[0][1]['cwd']==str(Path(desktop.__file__).resolve().parent.parent)
+    assert opened==[desktop.port()]
+
+
+def test_failed_desktop_readiness_cleans_up_its_owned_supervisor(tmp_path,monkeypatch):
+    from tend import desktop,shutdown
+    from types import SimpleNamespace
+    from pathlib import Path
+    stopped=[];child=SimpleNamespace(poll=lambda:None)
+    monkeypatch.setattr(ports,'configure',lambda **kwargs:False)
+    monkeypatch.setattr(ports,'remember',lambda:pytest.fail('Failed startup must not save ports'))
+    monkeypatch.setattr(desktop,'healthy',lambda:False)
+    monkeypatch.setattr(desktop.time,'sleep',lambda seconds:None)
+    monkeypatch.setattr(desktop.subprocess,'Popen',lambda *args,**kwargs:child)
+    monkeypatch.setattr(shutdown,'stop_child',lambda process,**kwargs:stopped.append(process))
+    monkeypatch.setattr(Path,'home',lambda:tmp_path)
+    with pytest.raises(RuntimeError,match='did not become ready'):desktop.start_and_open()
+    assert stopped==[child]

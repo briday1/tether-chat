@@ -29,8 +29,9 @@ def test_header_brand_and_shared_drawer_styles():
     assert '.reference-drawer,.action-drawer{position:fixed;' in css
     assert '#board:has(.actions-section){grid-template-columns:' in css
     assert '.bubble.assistant a{color:var(--accent)!important}' in css
+    from tend import __version__
     from tend.native import WINDOW_TITLE
-    assert WINDOW_TITLE=='tether.'
+    assert WINDOW_TITLE=='tether-chat '+__version__
 
 
 def test_icons_have_all_dpi_sizes_and_unclipped_alpha(tmp_path):

@@ -74,31 +74,33 @@ def main():
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
     log_path=Path.home()/".tend"/"services.log"
     log_path.parent.mkdir(parents=True,exist_ok=True)
+    log_offset=log_path.stat().st_size if log_path.exists() else 0
     try:
         for command in commands:
             with log_path.open("ab") as output:
                 children.append(subprocess.Popen(command,env=env,creationflags=flags,
                     stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT,
-                    close_fds=True))
+                    close_fds=True,cwd=str(Path(__file__).resolve().parent.parent)))
         url=f"http://{web_host}:{web_port}"
-        print(f"tether-chat browser: {url}",flush=True)
-        print(f"tether-chat MCP: http://127.0.0.1:{mcp_port}/mcp",flush=True)
-        print(f"Local database: {store.path()}",flush=True)
-        print("Press Ctrl+C to stop tether-chat when running in a terminal.",flush=True)
         # Wait for a valid response instead of opening an unavailable page.
         deadline=time.monotonic()+20
         ready=False
         while time.monotonic()<deadline:
-            if any(child.poll() is not None for child in children):
-                raise RuntimeError("tether-chat failed to start. See server output above.")
+            for index,child in enumerate(children):
+                if child.poll() is not None:
+                    details=log_path.read_bytes()[log_offset:][-2500:].decode('utf-8',errors='replace').strip()
+                    raise RuntimeError(f"tether-chat {service_names[index]} service exited (code {child.returncode}).\n{details or 'No service output was recorded.'}")
             try:
-                with urlopen(url,timeout=0.8) as response:
-                    ready=response.status==200
+                ready=ports.compatible(web_port) and ports.listening(mcp_port)
                 if ready:break
-            except (URLError,OSError,TimeoutError):
-                time.sleep(.2)
+            except (URLError,OSError,TimeoutError):pass
+            if not ready:time.sleep(.2)
         if not ready:raise RuntimeError("tether-chat did not become ready on "+url)
         ports.remember()
+        print(f"tether-chat browser: {url}",flush=True)
+        print(f"tether-chat MCP: http://127.0.0.1:{mcp_port}/mcp",flush=True)
+        print(f"Local database: {store.path()}",flush=True)
+        print("Press Ctrl+C to stop tether-chat when running in a terminal.",flush=True)
         if env.get("TEND_NO_BROWSER")!="1":
             webbrowser.open(url)
         while True:
@@ -117,7 +119,7 @@ def main():
                 with log_path.open("ab") as output:
                     children[index]=subprocess.Popen(commands[index],env=env,creationflags=flags,
                         stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT,
-                        close_fds=True)
+                        close_fds=True,cwd=str(Path(__file__).resolve().parent.parent))
             if storage.load().get("pending"):
                 print("Switching tether-chat database; restarting local services...",flush=True)
                 for child in children:
@@ -139,7 +141,7 @@ def main():
                     with log_path.open("ab") as output:
                         children.append(subprocess.Popen(command,env=env,creationflags=flags,
                             stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT,
-                            close_fds=True))
+                            close_fds=True,cwd=str(Path(__file__).resolve().parent.parent)))
                 deadline=time.monotonic()+20
                 while time.monotonic()<deadline:
                     if any(child.poll() is not None for child in children):
@@ -157,10 +159,10 @@ def main():
     finally:
         # Stop each service's descendants before the direct process. On Windows
         # venv Python may spawn a second base-interpreter process per service.
-        from .shutdown import stop_process_tree
+        from .shutdown import stop_child
         for child in children:
             try:
-                stop_process_tree(child.pid,log=lambda message:print(message,flush=True))
+                stop_child(child,log=lambda message:print(message,flush=True))
             except Exception as exc:
                 print("tether-chat shutdown warning:",str(exc),flush=True)
 

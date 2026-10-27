@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 APP_ID = 'tether-chat.Desktop'
-APP_NAME = 'tether.'
+APP_NAME = 'tether-chat'
 
 
 def icon_path():

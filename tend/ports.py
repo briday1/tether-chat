@@ -4,7 +4,11 @@ import os
 from pathlib import Path
 import socket
 import tempfile
-from urllib.request import urlopen
+from http.client import HTTPException
+from urllib.request import build_opener,ProxyHandler
+
+# A local health probe must never travel through a system/VPN HTTP proxy.
+urlopen=build_opener(ProxyHandler({})).open
 from . import __version__
 
 
@@ -35,7 +39,13 @@ def compatible(port):
             return (response.status==200 and isinstance(data,dict) and data.get('app')=='tend'
                     and data.get('brand')=='tether-chat' and data.get('version')==__version__
                     and data.get('streaming_chat') is True and data.get('tool_runner')=='unbounded-v2')
-    except (OSError,ValueError):return False
+    except (OSError,ValueError,HTTPException):return False
+
+
+def listening(port):
+    with socket.socket() as probe:
+        probe.settimeout(.5)
+        return probe.connect_ex(('127.0.0.1',port))==0
 
 
 def _available(port):
@@ -60,7 +70,7 @@ def configure(log=print):
     web,mcp=web_port(),mcp_port()
     if not _valid(web) or not _valid(mcp):raise ValueError('Service ports must be between 1 and 65535')
     if web==mcp:raise ValueError('Web and MCP ports must differ')
-    if compatible(web):
+    if compatible(web) and listening(mcp):
         os.environ['TEND_WEB_PORT']=str(web);os.environ['TEND_MCP_PORT']=str(mcp)
         return True
     chosen_web=_choose(web,{mcp});chosen_mcp=_choose(mcp,{chosen_web})

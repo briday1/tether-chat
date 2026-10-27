@@ -6,7 +6,10 @@ import sys
 import time
 from pathlib import Path
 
-WINDOW_TITLE='tether.'
+from . import __version__
+from .branding import APP_NAME
+
+WINDOW_TITLE=APP_NAME+' '+__version__
 _ICON_HANDLES={}
 _ICON_RESOURCES=[]
 
@@ -60,9 +63,9 @@ def _apply_windows_window_icon(window,icon_file):
 
 def _stop_owned(server):
     if server is not None and server.poll() is None:
-        from .shutdown import stop_process_tree
+        from .shutdown import stop_child
         from .desktop import log
-        stop_process_tree(server.pid,log=log)
+        stop_child(server,log=log)
 
 
 def _run():
@@ -86,7 +89,7 @@ def _run():
     kernel.CreateMutexW.restype=ctypes.c_void_p
     kernel.CreateMutexW.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_wchar_p]
     kernel.CloseHandle.argtypes=[ctypes.c_void_p]
-    mutex=kernel.CreateMutexW(None,False,'Local\\tether-chatNativeDesktop')
+    mutex=kernel.CreateMutexW(None,False,'Local\\tether-chatNativeDesktop-'+__version__)
     if not mutex:raise RuntimeError('Could not create the tether-chat desktop lock')
     if kernel.GetLastError()==183:
         try:
@@ -141,8 +144,8 @@ def _run():
             nonlocal exiting
             exiting=True;icon.stop();window.destroy()
 
-        tray=pystray.Icon('tether-chat',Image.open(io.BytesIO(raster(256))).convert('RGBA'),'tether.',
-            pystray.Menu(pystray.MenuItem('Open tether',reopen,default=True),pystray.MenuItem('Exit tether',exit_app)))
+        tray=pystray.Icon('tether-chat',Image.open(io.BytesIO(raster(256))).convert('RGBA'),APP_NAME,
+            pystray.Menu(pystray.MenuItem('Open tether-chat',reopen,default=True),pystray.MenuItem('Exit tether-chat',exit_app)))
         tray.run_detached()
         webview.start(gui='edgechromium',debug=False,private_mode=False,storage_path=str(Path.home()/'.tend'/'webview'))
     finally:

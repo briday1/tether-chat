@@ -17,7 +17,7 @@ d=distribution("tether-chat")
 names={e.name for e in d.entry_points if e.group in ("console_scripts","gui_scripts")}
 assert names=={"tether-chat","tether-chat-desktop"},names
 assert d.version==__version__
-assert WINDOW_TITLE=="tether."
+assert WINDOW_TITLE=="tether-chat "+__version__
 assert files("tend").joinpath("chat.js").is_file()
 assert files("tend").joinpath("notes.js").is_file()
 assert files("tend").joinpath("notes.css").is_file()

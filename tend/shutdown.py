@@ -1,5 +1,5 @@
 """Windows-safe shutdown of an owned tether-chat supervisor and all its subprocesses."""
-import time
+import subprocess
 import psutil
 
 def stop_process_tree(pid,log=print):
@@ -37,3 +37,15 @@ def stop_process_tree(pid,log=print):
             if proc.is_running() and proc.status()!=psutil.STATUS_ZOMBIE:
                 log("tether-chat process still running after exit: "+str(proc.pid))
         except psutil.NoSuchProcess:pass
+
+
+def stop_child(child,log=print):
+    """Use the owned Popen handle as a fallback if process inspection is unavailable."""
+    if child is None or child.poll() is not None:return
+    try:stop_process_tree(child.pid,log=log)
+    except psutil.Error as exc:log("Process inspection unavailable: "+str(exc))
+    if child.poll() is None:
+        child.terminate()
+        try:child.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            child.kill();child.wait(timeout=3)
