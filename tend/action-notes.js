@@ -5,7 +5,7 @@ window.tetherActionNotes=function(parent,actionId,initial){
  const list=make('div','action-notes-list'),status=make('p','reference-error');status.setAttribute('role','status');
  const heading=make('h3','','Notes');root.append(heading,list);parent.append(root);let notes=initial||[];
  const endpoint='/api/actions/'+encodeURIComponent(actionId)+'/notes';
- async function request(url,method,data){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});const value=await r.json().catch(()=>({}));if(!r.ok)throw Error(typeof value.detail==='string'?value.detail:'Could not save note');return value}
+ async function request(url,method,data){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});const value=await r.json().catch(()=>({}));if(!r.ok)throw Error(typeof value.detail==='string'?value.detail:'Could not save note');window.tetherDataChanged?.(url,method);return value}
  function draw(){list.replaceChildren();for(const note of notes){
   const item=make('article','action-note');item.dataset.noteId=note.id;
   const body=make('p','action-note-body',note.body),meta=make('small','muted',new Date(note.updated_at).toLocaleString());

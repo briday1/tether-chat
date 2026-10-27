@@ -240,18 +240,25 @@ def chat(message, progress=None, history=None):
 def reflect(question):
     return {"configured":public_config()["has_key"],"answer":chat(question)["answer"]}
 
-# A small in-process cache avoids paying for an AI decision on every page load.
-_attention_cache={"signature":None,"expires":0.0,"items":[]}
+# Curation is explicit. Live refreshes combine current schedules with suggestions
+# whose source task has not changed since the model selected them.
+_attention_cache={"items":[],"revisions":{}}
+def _attention_revision(task):
+    return tuple(task.get(k) for k in ('updated_at','title','summary','state','revisit_at','due_at','next_occurrence'))
+
 def attention(force=False):
-    import time
-    threads=[t for t in store.list_threads() if t["state"]!="settled"]
-    signature=tuple((t["id"],t["updated_at"],t["revisit_at"],t["state"],t.get("next_occurrence")) for t in threads)
-    current=time.monotonic()
-    if not force and _attention_cache["signature"]==signature and current<_attention_cache["expires"]:
-        return {"items":_attention_cache["items"],"source":"cached"}
+    threads=[t for t in store.list_threads() if not t.get('archived_at') and t["state"]!="settled"]
+    due=[t for t in threads if t['due'] or t.get('deadline_due')]
+    fallback=[{"id":t["id"],"title":t["title"],"reason":"Scheduled attention","state":t["state"]} for t in due[:20]]
+    if not force:
+        active={t['id']:t for t in threads}
+        selected=list(fallback);seen={t['id'] for t in selected}
+        for item in _attention_cache['items']:
+            task=active.get(item['id'])
+            if task and task['id'] not in seen and _attention_cache['revisions'].get(task['id'])==_attention_revision(task):
+                selected.append({**item,'title':task['title']});seen.add(task['id'])
+        return {'items':selected[:20],'source':'live'}
     candidates=threads[:80]
-    due=[t for t in candidates if t["due"] or (t.get("recurrence") and t.get("next_occurrence") and t["next_occurrence"]<=store.now())]
-    fallback=[{"id":t["id"],"title":t["title"],"reason":"Scheduled to revisit","state":t["state"]} for t in due[:4]]
     if not candidates:
         selected=[]
     elif not public_config()["has_key"]:
@@ -283,5 +290,5 @@ def attention(force=False):
                                      "state":t["state"]})
         except (KeyError,ValueError,TypeError,IndexError):
             selected=fallback
-    _attention_cache.update(signature=signature,expires=current+600,items=selected)
-    return {"items":selected,"source":"curated" if public_config()["has_key"] else "scheduled"}
+    _attention_cache.update(items=selected,revisions={t['id']:_attention_revision(t) for t in candidates})
+    return attention()

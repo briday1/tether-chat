@@ -17,6 +17,9 @@ def _due(stamp):
 
 def items(force=False):
     from . import ai
+    # Finish an explicit reconsideration before reading the live records: a
+    # task may be completed or rescheduled while the provider is responding.
+    curated=ai.attention(force).get('items', [])
     active = {t['id']: t for t in store.list_threads() if not t.get('archived_at') and t['state'] != 'settled'}
     result = []
     for a in store.query("SELECT * FROM entries WHERE kind='action' AND done=0 ORDER BY created_at"):
@@ -26,7 +29,7 @@ def items(force=False):
                            'title': a['body'], 'task_title': task['title'],
                            'reason': 'Scheduled attention' if _due(a.get('revisit_at')) else 'Action due'})
     # Keep the existing curated task choices, but never let them hide due actions.
-    for item in ai.attention(force).get('items', []):
+    for item in curated:
         if item['id'] in active:
             result.append({**item, 'task_id': item['id'], 'action_id': None,
                            'reason': item.get('reason', 'Needs attention').replace('Scheduled to revisit', 'Scheduled attention')})

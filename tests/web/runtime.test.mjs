@@ -127,6 +127,34 @@ test('network errors explain browser CORS and never retry an ambiguous call',asy
   await waitFor(()=>db.state.jobs[0]?.status==='error');assert.equal(calls,1);assert.match(db.state.jobs[0].error,/CORS/);
   assert.equal(db.state.jobs[0].changes_saved,false);assert.equal((await api('/settings')).data.has_key,true);
 });
+test('live attention drops changed AI suggestions and keeps current due items without another provider call',async t=>{
+  const ids=[];let calls=0;
+  const {api,db}=await setup(t,async()=>{calls++;return provider({role:'assistant',content:JSON.stringify({items:ids.map(id=>({id,reason:'Old reason'}))})})});
+  for(const title of ['First decision','Second decision'])ids.push((await api('/threads','POST',{title})).data.id);
+  await save(api);assert.equal((await api('/attention?force=true')).data.items.length,2);
+  await api('/threads/'+ids[0],'PATCH',{summary:'Decision is updated'});
+  assert.deepEqual((await api('/attention')).data.items.map(item=>item.id),[ids[1]]);
+  await api('/threads/'+ids[0],'PATCH',{title:'Current title',revisit_at:'2020-01-01T12:00:00Z'});
+  let items=(await api('/attention')).data.items;assert.equal(items.length,2);
+  assert.equal(items.find(item=>item.id===ids[0]).title,'Current title');
+  await api('/threads/'+ids[0],'PATCH',{revisit_at:'2035-01-01T12:00:00Z'});
+  assert.deepEqual((await api('/attention')).data.items.map(item=>item.id),[ids[1]]);assert.equal(calls,1);
+});
+test('saved action completion is reflected in attention even if the chat then fails',async t=>{
+  let actionId,calls=0;const {api,db}=await setup(t,async()=>{
+    if(++calls>1)throw TypeError('Failed to fetch');
+    return provider({role:'assistant',content:null,tool_calls:[{id:'finish-action',type:'function',function:{name:'update_action',arguments:JSON.stringify({action_id:actionId,done:true})}}]});
+  });
+  const task=(await api('/threads','POST',{title:'Action parent'})).data;
+  actionId=(await api('/threads/'+task.id+'/entries','POST',{kind:'action',body:'Action to finish'})).data.id;
+  await api('/actions/'+actionId,'PATCH',{revisit_at:'2020-01-01T12:00:00Z'});
+  assert.equal((await api('/attention')).data.items.length,1);
+  const tool={type:'function',function:{name:'update_action',parameters:{type:'object',required:['action_id'],properties:{action_id:{type:'string'},done:{type:'boolean'}}}}};
+  config.tools.push(tool);t.after(()=>config.tools.pop());
+  await save(api);await api('/chat/jobs','POST',{request_id:'attention-failed-001',text:'Complete this action'});
+  await waitFor(()=>db.state.jobs[0]?.status==='error');assert.equal(db.state.jobs[0].changes_saved,true);
+  assert.equal((await api('/attention')).data.items.length,0);
+});
 test('errors only flag saved changes after a task mutation commits',async t=>{
   let calls=0;const {api,db}=await setup(t,async()=>{
     if(++calls>1)throw TypeError('Failed to fetch');
