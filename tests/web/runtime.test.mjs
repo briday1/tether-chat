@@ -16,9 +16,9 @@ const config={base:'/tether-chat/',origin:'https://tether.test',version:'2026.7'
   {type:'function',function:{name:'capture',parameters:{type:'object',required:['title'],properties:{title:{type:'string'}}}}}
 ]};
 const provider=message=>Response.json({choices:[{message}]});
-async function setup(t,network,db=new MemoryDB(),locks=new Locks()){
+async function setup(t,network,db=new MemoryDB(),locks=new Locks(),options={}){
   const values=new Map(),session={getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
-  const runtime=await createRuntime({config,db,locks,session,network:network||(()=>{throw Error('Unexpected provider request')})});t.after(()=>runtime.close());
+  const runtime=await createRuntime({config,db,locks,session,network:network||(()=>{throw Error('Unexpected provider request')}),...options});t.after(()=>runtime.close());
   const api=async(path,method='GET',body)=>{
     const response=await runtime.fetch(config.origin+config.base+'api'+path,{method,body:body===undefined?undefined:JSON.stringify(body)});
     return {status:response.status,data:await response.json()};
@@ -202,4 +202,42 @@ test('retired audio API does not send a recording or require a key',async t=>{
   const result=await runtime.fetch(config.origin+config.base+'api/voice/transcribe',{method:'POST',body});
   assert.equal(result.status,410);assert.match((await result.json()).detail,/this device/);
   assert.equal(calls,0);assert.equal(db.state.messages.length,0);assert.equal(db.state.jobs.length,0);
+});
+test('model discovery uses unsaved fields without saving or sending chat requests',async t=>{
+  const calls=[],{api,db}=await setup(t,async(url,options)=>{
+    calls.push({url,options});return Response.json({data:[{id:'tool-mini'},{id:'tool-mini'},{id:'embedding-model'},{bad:'missing ID'}]});
+  });
+  const result=await api('/settings/models','POST',{base_url:'https://provider.test/v1/',api_key:'  typed-key  '});
+  assert.deepEqual(result.data.models,['embedding-model','tool-mini']);
+  assert.equal(calls[0].url,'https://provider.test/v1/models');assert.equal(calls[0].options.method,'GET');
+  assert.equal(calls[0].options.headers.Authorization,'Bearer typed-key');
+  assert.deepEqual(db.state.settings,{});assert.equal((await api('/settings')).data.has_key,false);
+  await save(api,'saved-key');await api('/settings/models','POST',{});
+  assert.equal(calls[1].options.headers.Authorization,'Bearer saved-key');
+  assert.equal((await api('/settings/models','POST',{base_url:'https://another.test/v1'})).status,401);
+  assert.equal(calls.length,2);assert.equal((await api('/settings')).data.has_key,true);
+});
+test('billing 429 errors explain the specific cause and never retry or discard the key',async t=>{
+  for(const code of ['insufficient_quota','credit_balance_exhausted','project_spend_limit_exceeded','organization_usage_limit_exceeded']){
+    let calls=0;const {api}=await setup(t,async()=>{calls++;return Response.json({error:{code,type:'insufficient_quota'}},{status:429})});
+    await api('/settings','POST',{base_url:'https://api.openai.com/v1',model:'test',api_key:'valid-key'});
+    const result=await api('/settings/test','POST',{});
+    assert.equal(result.status,422);assert.match(result.data.detail,new RegExp(code));assert.match(result.data.detail,/ChatGPT subscriptions do not include API credit/);
+    assert.equal(calls,1);assert.equal((await api('/settings')).data.has_key,true);
+  }
+});
+test('temporary 429 respects Retry-After and retries a rejected request with the current key',async t=>{
+  const pauses=[];let calls=0;
+  const {api}=await setup(t,async(url,options)=>{
+    assert.equal(options.headers.Authorization,'Bearer current-key');
+    assert.ok(!('max_tokens' in JSON.parse(options.body)));
+    return ++calls===1?Response.json({error:{code:'rate_limit_exceeded'}},{status:429,headers:{'Retry-After':'3'}}):provider({content:'OK'});
+  },undefined,undefined,{pause:async ms=>{pauses.push(ms)}});
+  await save(api,'current-key');assert.equal((await api('/settings/test','POST',{})).status,200);
+  assert.equal(calls,2);assert.deepEqual(pauses,[3000]);
+});
+test('long rate limit delays are shown without retrying early',async t=>{
+  let calls=0;const {api}=await setup(t,async()=>{calls++;return Response.json({error:{code:'slow_down'}},{status:429,headers:{'Retry-After':'120'}})});
+  await save(api);const result=await api('/settings/test','POST',{});
+  assert.match(result.data.detail,/temporarily rate limited/);assert.match(result.data.detail,/120 seconds/);assert.equal(calls,1);
 });

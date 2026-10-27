@@ -74,12 +74,14 @@ def main():
                             else:data={'items':[]}
                             request.fulfill(status=200,content_type='application/json',body=json.dumps(data));return
                         file={'/':'index.html','/board':'board.html'}.get(path,path.lstrip('/'))
-                        if file not in {'index.html','board.html','theme.css','theme.js','chat.js','action-notes.js','voice.js','updates.js','notes.js','notes.css','favicon.svg'}:request.fulfill(status=404);return
+                        if file not in {'index.html','board.html','theme.css','theme.js','chat.js','action-notes.js','voice.js','updates.js','notes.js','notes.css','provider-models.js','favicon.svg'}:request.fulfill(status=404);return
                         mime='text/css' if file.endswith('.css') else 'application/javascript' if file.endswith('.js') else 'text/html'
                         request.fulfill(status=200,content_type=mime,body=(ROOT/'tend'/file).read_text(encoding='utf-8'))
                     page.route('**/*',route)
                 else:page.route('**/api/attention*',lambda route:route.fulfill(status=200,content_type='application/json',body='{"items":[]}'))
                 page.goto(base+'/',wait_until='networkidle')
+                from provider_ui_checks import check_provider_settings
+                check_provider_settings(page)
                 expect(page.locator('.brand-word')).to_have_text('tether.')
                 assert page.title()=='tether.'
                 assert page.locator('#chatCategories').count()==0
@@ -104,6 +106,7 @@ def main():
                 assert page.url==base+'/'
                 page.keyboard.press('Escape')
                 page.goto(base+'/board',wait_until='networkidle')
+                check_provider_settings(page)
                 expect(page.locator('.brand-word')).to_have_text('tether.')
                 page.locator('.task-row').filter(has_text='Prepare briefing').click()
                 expect(page.locator('.action-list-row')).to_have_count(2)

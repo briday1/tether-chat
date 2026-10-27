@@ -21,16 +21,18 @@
     status('#keyStatus',c.locked?'Saved key is locked. Enter its passphrase and unlock it.':c.has_key?
       (c.remember?'Key is unlocked. It is saved encrypted for your next visit.':'Key is ready for this session. To keep it after closing the app, save it encrypted with a passphrase.'):
       'Enter your API key, then save or test the connection.');
+    window.tetherProviderConfigured?.(c);
   }
-  let loadingSettings=Promise.resolve();
+  let loadingSettings=Promise.resolve(),pendingProvider=Promise.resolve();
   window.tetherLoadSettings=()=>loadingSettings=(async()=>{
+    await pendingProvider;
     const form=$('#provider'),controls=[...form.querySelectorAll('input,button')];
     form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
     try{configuration(await api('/settings'))}catch(e){status('#providerStatus',e.message)}
     finally{for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
   })();
   window.tetherBeforeChat=async(text,attention)=>{
-    try{await api('/chat/preflight','POST',{text,attention});return true}
+    try{await pendingProvider;await api('/chat/preflight','POST',{text,attention});return true}
     catch(error){
       if(error.status!==401)return true;
       if($('#settings').classList.contains('hidden'))$('#navsettings').click();
@@ -61,18 +63,23 @@
     if(!$('#provider'))return;
     status('#browserVersion','tether. '+config.version+' · Browser edition');
     const form=$('#provider');let providerBusy=false;
-    async function providerAction(action,validate=false){
-      if(providerBusy || validate && !form.reportValidity())return;
-      providerBusy=true;const controls=[...form.querySelectorAll('input,button')];
-      form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
-      try{await action()}catch(e){status('#providerStatus',e.message)}
-      finally{providerBusy=false;for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
+    function providerAction(action,validate=false){
+      if(providerBusy)return pendingProvider;
+      providerBusy=true;
+      return pendingProvider=(async()=>{
+        await loadingSettings;
+        if(validate && !form.reportValidity()){providerBusy=false;return}
+        const controls=[...form.querySelectorAll('input,button')];
+        form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
+        try{await action()}catch(e){status('#providerStatus',e.message)}
+        finally{providerBusy=false;for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
+      })();
     }
     async function saveConnection(){
       const c=await api('/settings','POST',{base_url:$('#base').value.trim(),model:$('#model').value.trim(),api_key:$('#key').value.trim()||null,
         remember:$('#rememberKey').checked,passphrase:$('#keyPassphrase').value});
       configuration(c);$('#keyPassphrase').value='';
-      status('#providerStatus',c.locked?'Connection saved. Unlock your saved key to connect.':c.remember?'Connection saved on this device.':'Connection saved for this session.');
+      status('#providerStatus',c.locked?'Connection saved. Unlock your saved key to connect.':c.remember?'Connection saved on this device and ready to chat.':'Connection saved for this session and ready to chat.');
       return c;
     }
     form.onsubmit=event=>{event.preventDefault();providerAction(saveConnection,true)};
@@ -80,6 +87,7 @@
     $('#lockKey').onclick=()=>providerAction(async()=>{await api('/settings/lock','POST',{});$('#key').value='';$('#keyPassphrase').value='';configuration(await api('/settings'));status('#providerStatus','Key locked.')});
     $('#forgetKey').onclick=()=>providerAction(async()=>{const c=await api('/settings');configuration(await api('/settings','POST',{...c,remember:false,clear_key:true}));$('#keyPassphrase').value='';status('#providerStatus','Saved key removed.')});
     $('#testConnection').onclick=()=>providerAction(async()=>{
+      await window.tetherDiscoverModels?.();
       await saveConnection();status('#providerStatus','Testing provider…');
       const result=await api('/settings/test','POST',{});status('#providerStatus',result.message);
     },true);

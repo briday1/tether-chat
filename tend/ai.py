@@ -1,11 +1,12 @@
 """Local provider settings and bounded OpenAI-compatible tool calling."""
-import json, os, time, random
+import json, os, time
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from . import store
 from . import secrets
+from .provider import normalize_base, failure, retry_delay
 
 def config_path():
     return Path(os.environ.get("TEND_CONFIG",str(Path.home()/".tend"/"provider.json"))).expanduser()
@@ -40,9 +41,7 @@ def public_config():
             "model":os.environ.get("TEND_AI_MODEL") or c.get("model","gpt-4.1-mini"),"has_key":bool(secrets.get())}
 
 def save(base_url,model,key=None,clear_key=False):
-    p=urlparse(base_url.rstrip("/"))
-    if p.scheme!="https" or not p.hostname or p.username or p.password or p.query or p.fragment:
-        raise ValueError("Use an HTTPS provider endpoint")
+    base_url=normalize_base(base_url)
     if not model.strip():raise ValueError("Model is required")
     c=load()
     if clear_key:secrets.delete_key()
@@ -50,6 +49,22 @@ def save(base_url,model,key=None,clear_key=False):
     c.update({"base_url":base_url.rstrip("/"),"model":model.strip()})
     _write_config(c)
     return public_config()
+
+def models(base_url=None,key=None):
+    saved=public_config();base=normalize_base(base_url or saved['base_url'])
+    key=(key or '').strip() or (secrets.get() if base==normalize_base(saved['base_url']) else None)
+    if not key:raise ValueError('Enter your API key for this provider URL to load models.')
+    req=Request(base+'/models',headers={'Authorization':'Bearer '+key,'Accept':'application/json'})
+    try:
+        with urlopen(req,timeout=15) as response:result=json.load(response)
+    except HTTPError as exc:
+        message,_=failure(exc.code,exc.read(16384),key,base)
+        raise ValueError(message) from None
+    except (URLError,TimeoutError):raise ValueError('Could not load models. Check your network and provider URL, or enter a model ID manually.') from None
+    except ValueError:raise ValueError('This provider did not return a model list. You can enter a model ID manually.') from None
+    if not isinstance(result,dict) or not isinstance(result.get('data'),list):
+        raise ValueError('This provider does not expose a compatible model list. You can enter a model ID manually.')
+    return {'models':sorted({item['id'] for item in result['data'] if isinstance(item,dict) and isinstance(item.get('id'),str) and item['id'].strip() and len(item['id'])<=200})}
 
 def dispatch(name,args):
     if name=="list_threads":return store.list_threads(args.get("query",""))[:100]
@@ -145,23 +160,19 @@ def request(messages,tools=True,max_tokens=None,progress=None):
     # Retry only requests that received an explicit transient HTTP error.
     # Network timeouts are ambiguous (the server may have processed the request),
     # so we surface those rather than silently repeating a potentially costly call.
-    retryable={429,500,502,503,504}
     for attempt in range(3):
         try:
             with urlopen(req,timeout=22) as response:
                 return json.load(response)
         except HTTPError as e:
-            if e.code in retryable and attempt<2:
-                delay=min(8.0,1.5*(2**attempt))+random.uniform(0,.3)
-                header=e.headers.get("Retry-After") if e.headers else None
-                if header:
-                    try:delay=min(20.0,max(delay,float(header)))
-                    except ValueError:pass
+            detail,retryable=failure(e.code,e.read(16384),key,base)
+            delay=retry_delay(e.headers.get('Retry-After') if e.headers else None,attempt)
+            if retryable and attempt<2 and delay<=20:
                 if progress:progress(f"Provider returned HTTP {e.code}; retrying ({attempt+1}/2)…")
                 time.sleep(delay)
                 continue
-            detail={401:"API key was rejected (HTTP 401)",403:"Access forbidden; check account/model permissions (HTTP 403)",404:"API endpoint not found; check the base URL (HTTP 404)",429:"Provider rate limit or quota reached (HTTP 429)"}.get(e.code)
-            raise ValueError((detail or "AI provider returned HTTP "+str(e.code))+"; retries exhausted" if e.code in retryable else (detail or "AI provider returned HTTP "+str(e.code))) from e
+            if retryable and delay>20:detail+=f' Try again in {int(delay+.999)} seconds.'
+            raise ValueError(detail) from None
         except TimeoutError as e:
             raise ValueError("AI provider timed out after 22 seconds. Request outcome is unknown; automatic retry skipped.") from e
         except URLError as e:
