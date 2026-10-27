@@ -51,7 +51,6 @@ window.addEventListener('message',event=>{
  // Resizing a calendar must not force the conversation to jump down.
 
 });
-let mentionData={categories:[],tasks:[],actions:[]};
 let referenceRequest=0,referenceReturnFocus=null;
 function referenceHref(ref){return ref.type==='category'?'/board#category/'+encodeURIComponent(ref.id):ref.type==='action'?'/board#action/'+encodeURIComponent(ref.parent)+'/'+encodeURIComponent(ref.id):'/board#task/'+encodeURIComponent(ref.id)}
 function parseReference(href){
@@ -60,33 +59,6 @@ function parseReference(href){
  if((parts[0]==='task'||parts[0]==='category')&&parts.length===2&&parts[1])return {type:parts[0],id:parts[1]};
  if(parts[0]==='action'&&parts.length===3&&parts[1]&&parts[2])return {type:'action',parent:parts[1],id:parts[2]};
  }catch(e){}return null;
-}
-function matchReferences(node){
- const all=[...mentionData.actions.map(a=>({title:a.body,type:'action',id:a.id,parent:a.thread_id})),...mentionData.tasks.map(t=>({title:t.title,type:'task',id:t.id})),...mentionData.categories.map(name=>({title:name,type:'category',id:name}))];
- const counts=new Map();for(const ref of all){const key=ref.title?.toLowerCase();if(key)counts.set(key,(counts.get(key)||0)+1)}
- // Ambiguous same-name entities require explicit ID-based links, not a guessed target.
- const refs=all.filter(r=>r.title?.length>=2&&counts.get(r.title.toLowerCase())===1).sort((a,b)=>b.title.length-a.title.length);
- const walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT),nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
- for(const text of nodes){
-  if(text.parentElement?.closest('a,button,pre,code,textarea,.tend-activity'))continue;
-  const value=text.nodeValue;if(!value?.trim())continue;
-  let rest=value,changed=false,fragment=document.createDocumentFragment();
-  while(rest){
-   let best=null,index=Infinity;
-   for(const ref of refs){let pos=-1;const lower=rest.toLowerCase();
-    while((pos=lower.indexOf(ref.title.toLowerCase(),pos+1))>=0){
-     const before=pos?rest[pos-1]:'',after=rest[pos+ref.title.length]||'';
-     if((before&&/[\p{L}\p{N}_]/u.test(before))||(after&&/[\p{L}\p{N}_]/u.test(after)))continue;
-     if(pos<index){index=pos;best=ref}break;
-    }
-   }
-   if(!best)break;
-   fragment.append(document.createTextNode(rest.slice(0,index)));
-   const link=el('a','chat-reference',rest.slice(index,index+best.title.length));link.href=referenceHref(best);link.dataset.refType=best.type;fragment.append(link);
-   rest=rest.slice(index+best.title.length);changed=true;
-  }
-  if(changed){fragment.append(document.createTextNode(rest));text.replaceWith(fragment)}
- }
 }
 function localInputDate(value){if(!value)return '';const d=new Date(value);if(Number.isNaN(d.getTime()))return '';const adjusted=new Date(d.getTime()-d.getTimezoneOffset()*60000);return adjusted.toISOString().slice(0,16)}
 function closeReference(){referenceRequest++;$('#chatSelection').classList.add('hidden');$('#referenceBackdrop').classList.add('hidden');document.body.classList.remove('drawer-open');referenceReturnFocus?.isConnected&&referenceReturnFocus.focus()}
@@ -137,8 +109,8 @@ document.addEventListener('keydown',event=>{
  if(event.key==='Escape'){event.preventDefault();closeReference();return}
  if(event.key==='Tab'){const controls=[...region.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),textarea,select')].filter(e=>e.getClientRects().length);const first=controls[0],last=controls.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}
 });
-async function refreshReferences(){try{mentionData=await api('/mentions');document.querySelectorAll('.bubble.assistant').forEach(node=>{matchReferences(node);window.TetherNotes?.enhance(node,parseReference)})}catch(e){console.warn('Could not refresh task references',e)}}
-function bubble(role,text,html){let node=el('div','bubble '+(role==='user'?'user':'assistant'),text);if(role==='assistant'&&html){node.innerHTML=html;appendSnapshot(node,html);matchReferences(node);window.TetherNotes?.enhance(node,parseReference)}$('#chat').append(node);scrollChat()}
+function refreshReferences(){document.querySelectorAll('.bubble.assistant').forEach(node=>window.TetherNotes?.enhance(node,parseReference))}
+function bubble(role,text,html){let node=el('div','bubble '+(role==='user'?'user':'assistant'),text);if(role==='assistant'&&html){node.innerHTML=html;appendSnapshot(node,html);window.TetherNotes?.enhance(node,parseReference)}$('#chat').append(node);scrollChat()}
 function show(next){const open=next==='settings';mode=open?'settings':'chat';$('#settings').classList.toggle('hidden',!open);$('#settingsBackdrop').classList.toggle('hidden',!open);$('#navsettings').classList.toggle('active',open);document.body.classList.toggle('settings-open',open);if(open){loadSettings();loadStorage();$('#closeSettings').focus()}else{$('#navsettings').focus()}}
 $('#settingsBackdrop').onclick=()=>show('chat');
 $('#closeSettings').onclick=()=>show('chat');
