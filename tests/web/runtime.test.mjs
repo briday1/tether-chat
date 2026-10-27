@@ -27,6 +27,17 @@ async function setup(t,network,db=new MemoryDB(),locks=new Locks()){
 }
 async function waitFor(check){for(let i=0;i<200;i++){const result=await check();if(result)return result;await new Promise(r=>setTimeout(r,5))}throw Error('Timed out waiting for queue')}
 async function save(api,key='test-user-key'){return api('/settings','POST',{base_url:'https://provider.test/v1',model:'tool-model',api_key:key,remember:false})}
+test('long notes are preserved and oversize rejection keeps previous messages',async t=>{
+  const {api,db}=await setup(t,()=>provider({content:'Notes received.'}));
+  await save(api);
+  const text='x'.repeat(50000);
+  assert.equal((await api('/chat/jobs','POST',{request_id:'long-notes-request',text})).status,202);
+  await waitFor(()=>db.state.jobs[0]?.status==='done');
+  assert.equal(db.state.messages[0].body,text);
+  const before=copy(db.state.messages);
+  assert.equal((await api('/chat/jobs','POST',{request_id:'oversize-request',text:text+'x'})).status,422);
+  assert.deepEqual(db.state.messages,before);
+});
 test('local commands run without a key and submissions are idempotent',async t=>{
   const {api,db}=await setup(t);const body={request_id:'request-local-001',text:'/brief'};
   const first=await api('/chat/jobs','POST',body),repeat=await api('/chat/jobs','POST',body);

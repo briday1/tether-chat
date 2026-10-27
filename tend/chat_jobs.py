@@ -71,8 +71,8 @@ def submit(message, request_id=None, context=None):
     if not isinstance(request_id, str) or not (8 <= len(request_id) <= 100) or not all(c.isalnum() or c in '-_' for c in request_id):
         raise ValueError('Invalid request ID')
     message = message.strip()
-    if not message or len(message) > 6000:
-        raise ValueError('A message of 1 to 6000 characters is required')
+    if not message or len(message) > 50000:
+        raise ValueError('A message of 1 to 50000 characters is required')
     encoded = json.dumps(context or {}, sort_keys=True)
     with _LOCK:
         with connection(path) as db:

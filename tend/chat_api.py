@@ -11,7 +11,7 @@ class AttentionTarget(BaseModel):
     action_id: str | None = Field(default=None, max_length=100)
 
 class SubmitMessage(BaseModel):
-    text: str = Field(default='', max_length=6000)
+    text: str = Field(default='', max_length=50000)
     request_id: str = Field(min_length=8, max_length=100)
     attention: AttentionTarget | None = None
 

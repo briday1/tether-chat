@@ -195,7 +195,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       const context=body.attention?{kind:'attention',task_id:body.attention.task_id,action_id:body.attention.action_id||null}:null;
       let message=String(body.text||'').trim();
       if(context){const t=attentionTarget(m,context);message=`Check in on [${t.title}](${t.path})${t.action?' in '+t.task.title:''}. Give me the relevant context and ask for my update.`;}
-      required(message,'Message',6000);
+      required(message,'Message',50000);
       const existing=s.jobs.find(j=>j.id===id);
       if(existing){if(existing.message!==message||JSON.stringify(existing.context)!==JSON.stringify(context))throw new Problem('This request ID is already in use');return existing}
       const stamp=now(),user={id:uid(),role:'user',body:message,created_at:stamp};s.messages.push(user);

@@ -4,7 +4,8 @@
  const journalKey='tether-chat-outbox',draftKey='tether-chat-draft';
  let syncing=false,syncAgain=false,timer=null,jobs=[],first=true,submitting=false,jobStamp='';
  let attentionRequest=0,attentionStamp='',attentionTimer=null;
- const nodes=new Map(),pendingNodes=new Map(),sending=new Set(),attentionSending=new Set();
+ const nodes=new Map(),pendingNodes=new Map(),sending=new Set(),attentionSending=new Set(),rejected=new Map();
+ const inputError=el('p','voice-status');inputError.setAttribute('role','alert');inputError.hidden=true;document.querySelector('#composer').append(inputError);
  function readJournal(){try{return JSON.parse(localStorage.getItem(journalKey)||'{}')}catch(_){return {}}}
  function writeJournal(value){try{localStorage.setItem(journalKey,JSON.stringify(value))}catch(_){}}
  function remember(payload){const value=readJournal();value[payload.request_id]=payload;writeJournal(value)}
@@ -51,6 +52,10 @@
    desired.push(messageNode({id:'outbox-'+payload.request_id,role:'user',body:payload.text||'Checking this attention item…'}));
    desired.push(pendingNode({id:payload.request_id,status:'queued',progress:['Sending your request…']}));
   }
+  for(const {payload,error} of rejected.values()){
+   desired.push(messageNode({id:'outbox-'+payload.request_id,role:'user',body:payload.text}));
+   desired.push(pendingNode({id:payload.request_id,status:'error',error,changes_saved:false}));
+  }
   if(!desired.length){if(!chat.querySelector('.welcome')){const welcome=el('div','welcome');welcome.append(el('h1','',"What's on your mind?"),el('p','','Put something down, ask what you’re tracking, or pick up where you left off.'));chat.replaceChildren(welcome)}}
   else{
    // Reconcile stable nodes instead of replacing chat and reloading calendars.
@@ -68,8 +73,13 @@
  async function send(payload){
   if(sending.has(payload.request_id))return;sending.add(payload.request_id);
   try{
-   const response=await fetch('/api/chat/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true});
-   if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status>=400&&response.status<500){forget(payload.request_id);throw Error(typeof error.detail==='string'?error.detail:'The message was not accepted.')}throw Error('Could not confirm delivery; reconnecting…')}
+   const response=await fetch('/api/chat/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+   if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status>=400&&response.status<500){
+    const message=typeof error.detail==='string'?error.detail:'The message was not accepted. Your text has been kept; edit it and try again.';
+    rejected.set(payload.request_id,{payload,error:message});forget(payload.request_id);
+    const input=document.querySelector('#message');if(!input.value){input.value=payload.text;try{localStorage.setItem(draftKey,payload.text)}catch(_){}}
+    await sync();return;
+   }throw Error('Could not confirm delivery; reconnecting…')}
    await response.json();forget(payload.request_id);await sync();
   }catch(error){
    // Reposting an unacknowledged UUID is safe: the server never starts it twice.
@@ -77,6 +87,8 @@
   }finally{sending.delete(payload.request_id)}
  }
  async function enqueue(text,attention=null){
+  if(!attention&&text.length>50000){inputError.textContent='This message is over 50,000 characters. Split it into smaller messages. Your text has been kept.';inputError.hidden=false;return null}
+  inputError.hidden=true;
   if(window.tetherBeforeChat && !await window.tetherBeforeChat(text,attention))return null;
   const payload={request_id:newId(),text,...(attention?{attention}:{})};remember(payload);
   if(chat.querySelector('.welcome'))chat.replaceChildren();
