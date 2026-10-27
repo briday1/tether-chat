@@ -6,6 +6,7 @@
    table.classList.add('note-table');table.setAttribute('role','table');
    const rows=/^(tasks?|actions?|items?|categor(?:y|ies))$/i.test(labels[0]||'');
    if(rows)table.classList.add('note-rows');
+   if(/^actions?$/i.test(labels[0]||''))table.classList.add('note-actions');
    if(/^(detail|field)$/i.test(labels[0]||''))table.classList.add('note-facts');
    const columns=document.createElement('colgroup');
    for(const label of labels){const column=document.createElement('col');if(rows && /^(when|due|date|timing|status)$/i.test(label))column.className='note-when';columns.append(column)}

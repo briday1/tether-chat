@@ -49,3 +49,13 @@
 @media(pointer:coarse){
  .bubble.assistant .note-rows td:first-child a,.bubble.assistant .note-list>li>a{display:inline-flex;align-items:center;min-height:44px}
 }
+
+/* Action titles are headings across the message, with their details beneath. */
+.bubble.assistant .note-actions,.bubble.assistant .note-actions tbody{display:block}
+.bubble.assistant .note-actions colgroup{display:none}
+.bubble.assistant .note-actions tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;padding:12px 0}
+.bubble.assistant .note-actions td{display:block;width:auto;padding:0;grid-column:1/-1}
+.bubble.assistant .note-actions td:first-child{grid-column:1/-1;grid-row:1;width:100%;min-width:0}
+.bubble.assistant .note-actions td:first-child a{display:block;width:100%;white-space:normal;overflow-wrap:anywhere}
+.bubble.assistant .note-actions .note-when{grid-column:2;grid-row:2;width:auto;max-width:110px}
+.bubble.assistant .note-actions td:nth-child(2):not(.note-when){grid-column:1;grid-row:2}
