@@ -16,12 +16,12 @@
   };
   const decorate = href => {
     const url = new URL(href, location.href);
-    if (url.origin === location.origin) url.searchParams.set('workspace', workspace);
+    if (/^https?:$/.test(url.protocol) && url.origin === location.origin) url.searchParams.set('workspace', workspace);
     return url.href;
   };
   document.addEventListener('click', event => {
     const link = event.target.closest?.('a[href]');
-    if (link && new URL(link.href).origin === location.origin) link.href = decorate(link.href);
+    if (link) link.href = decorate(link.href);
   }, true);
   document.addEventListener('DOMContentLoaded', () => {
     const header = document.querySelector('header');
