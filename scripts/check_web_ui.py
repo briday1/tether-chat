@@ -76,7 +76,7 @@ def main():
                 expect(frame.locator('#home-product-notice')).to_have_count(0)
                 assert page.evaluate("localStorage.getItem('tether-web-draft:/tether-chat/')")=='Old private draft'
                 assert page.evaluate("async()=>{const r=await (await window.tetherReady).fetch('/tether-chat/api/threads');return (await r.json()).length}")==0
-                expect(frame.locator('#connectionMode')).to_contain_text('Browser connection')
+                expect(frame.locator('#connectionMode')).to_contain_text('Requests go directly to your AI provider')
                 expect(frame.locator('#providerStatus')).to_contain_text('Your message is still in the draft')
                 expect(frame.get_by_label('Message tether')).to_have_value('Keep this draft while I connect.')
                 expect(frame.locator('.bubble.user')).to_have_count(0)
