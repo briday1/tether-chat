@@ -8,8 +8,14 @@ const fetcher=window.fetch.bind(window),apiBase=window.TETHER_CONFIG.base+'api';
 const local=async(method,body)=>{const response=await fetcher(apiBase+'/drive-sync/local',{method,headers:{'Content-Type':'application/json','X-Tether-Workspace':'home'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json();if(!response.ok){const error=Error(result.detail||'Local sync failed');error.status=response.status;throw error}return result};
 const storagePrefix='tether-home-drive:'+apiBase+':';
 let device;try{device=localStorage.getItem(storagePrefix+'device');if(!device){device=uuid();localStorage.setItem(storagePrefix+'device',device)}}catch(_){throw Error('Allow local browser storage before connecting Drive.')}
-const service=host.tetherHomeSync||(host.tetherHomeSync=new HomeSync({local,transport:new DriveSheets(fetcher),actor:device}));
+const service=host.tetherHomeSync||(host.tetherHomeSync=new HomeSync({local,transport:new DriveSheets(fetcher),actor:device,scheduler:host}));
 let busy=false,picker=null,uiGeneration=0;
+const pendingDialogs=new Set();
+function dialogResult(start){return new Promise((resolve,reject)=>{
+  const finish=(fn,value)=>{pendingDialogs.delete(cancel);fn(value)};
+  const cancel=()=>finish(reject,Error('Setup paused. Reopen Settings to continue.'));pendingDialogs.add(cancel);
+  try{start(value=>finish(resolve,value),error=>finish(reject,error))}catch(error){finish(reject,error)}
+})}
 const setup=new HouseholdSetup({transport:service.transport,localStorage,storageKey:storagePrefix+'pending-sheet-setup',activate:activateHousehold});
 host.tetherHomeSetup=setup;
 const sheetURL=id=>'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(id)+'/edit';
@@ -46,12 +52,12 @@ $('connect').onclick=()=>run(async()=>{
   if(!/^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId)||!/^\d+$/.test(project)||!key)throw Error('Complete the public app setup: OAuth client ID, project number and restricted Picker browser key.');
   if(!window.google?.accounts?.oauth2||!window.google?.picker){await libraries();service.status='Google sign-in is ready. Click Connect Google Drive again.';return;}
   for(const field of ['clientId','projectNumber','pickerKey'])localStorage.setItem(storagePrefix+field,$(field).value.trim());
-  await new Promise((resolve,reject)=>{const auth=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:SCOPE,callback:result=>{if(generation!==uiGeneration)return reject(Error('Google connection was paused.'));if(result.error)return reject(Error(result.error));if(!google.accounts.oauth2.hasGrantedAllScopes(result,SCOPE))return reject(Error('The selected-file Drive permission was not granted.'));const grantedToken=result.access_token;service.token=grantedToken;setTimeout(()=>{if(service.token===grantedToken){uiGeneration++;host.tetherHomeSetup?.stop();service.token='';service.stop();service.status='Reconnect Google Drive; your edits are safe.';service.changed(service)}},Math.max(0,(Number(result.expires_in)-30)*1000));resolve()},error_callback:()=>reject(Error('Google sign-in was cancelled or blocked.'))});auth.requestAccessToken({prompt:''})});
+  await dialogResult((resolve,reject)=>{const auth=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:SCOPE,callback:result=>{if(generation!==uiGeneration)return reject(Error('Google connection was paused.'));if(result.error)return reject(Error(result.error));if(!google.accounts.oauth2.hasGrantedAllScopes(result,SCOPE))return reject(Error('The selected-file Drive permission was not granted.'));const grantedToken=result.access_token;service.token=grantedToken;host.setTimeout(()=>{if(service.token===grantedToken){uiGeneration++;host.tetherHomeSetup?.stop();service.token='';service.stop();service.status='Reconnect Google Drive; your edits are safe.';service.changed(service)}},Math.max(0,(Number(result.expires_in)-30)*1000));resolve()},error_callback:()=>reject(Error('Google sign-in was cancelled or blocked.'))});auth.requestAccessToken({prompt:''})});
   const s=await local('GET');service.status='Google connected';if(s.metadata.session)await service.start(service.token)
 });
 function chooseHousehold(){
   if(!service.token)throw Error('Connect Google Drive first.');
-  return new Promise(resolve=>{
+  return dialogResult(resolve=>{
     const view=new google.picker.DocsView(google.picker.ViewId.DOCS).setMode(google.picker.DocsViewMode.LIST).setMimeTypes('application/vnd.google-apps.spreadsheet');
     const builder=new google.picker.PickerBuilder().addView(view).setOAuthToken(service.token).setDeveloperKey($('pickerKey').value.trim()).setAppId($('projectNumber').value.trim()).setOrigin(location.origin).setCallback(data=>{
       if(data.action===google.picker.Action.PICKED){picker?.dispose();picker=null;resolve(data.docs?.[0]||null)}else if(data.action===google.picker.Action.CANCEL){picker?.dispose();picker=null;resolve(null)}
@@ -81,7 +87,7 @@ $('abandonSetup').onclick=()=>run(async()=>{if(confirm('Forget pending setup? Ex
 $('copyInvite').onclick=()=>run(async()=>{const s=await local('GET');if(!s.metadata.session)throw Error('Create or join a household first.');await navigator.clipboard.writeText(sheetURL(s.metadata.session.spreadsheetId));service.status='Household link copied. Grant access with Google’s Share button before sending it.';});
 $('sync').onclick=()=>run(()=>service.sync({force:true}));$('pause').onclick=()=>{uiGeneration++;setup.stop();service.stop();service.status='Paused; local edits are safe';show()};
 $('disconnect').onclick=()=>run(async()=>{if(confirm('Stop syncing this household? Local tasks and the shared Sheet are kept.')){uiGeneration++;setup.stop();await service.disconnect()}});
-const pauseSetup=()=>{uiGeneration++;setup.stop();picker?.dispose();picker=null};
+const pauseSetup=()=>{uiGeneration++;setup.stop();for(const cancel of [...pendingDialogs])cancel();picker?.dispose();picker=null};
 window.addEventListener('pagehide',pauseSetup);
 // Dismissing Settings cancels unfinished sign-in/setup, not an established sync.
 const settings=root.closest('#settings');
