@@ -135,6 +135,16 @@ def main():
                 expect(drawer).to_be_visible();box=drawer.bounding_box();assert box['x']>=-1 and box['width']<=390
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.keyboard.press('Escape')
+                # Reproduce a desktop upgrade with an old script still in the
+                # WebView cache. Its matchReferences hook must remain harmless.
+                legacy=(ROOT/'tests/fixtures/legacy-chat-2026-16.js').read_text()
+                page.route('**/chat.js*',lambda route:route.fulfill(status=200,content_type='application/javascript',body=legacy))
+                page.reload(wait_until='networkidle')
+                expect(page.locator('#chat a[href="/board#task/'+task_id+'"]').first).to_be_visible()
+                if not args.mock_api:
+                    page.locator('#message').fill('/brief')
+                    page.get_by_role('button',name='Send',exact=True).click()
+                    expect(page.locator('.bubble.assistant').filter(has_text='Daily brief')).to_have_count(1,timeout=15000)
                 assert not errors,errors
                 browser.close()
             print('PASS: header, 9 themes, category/task/action drawers, three columns, action-specific saves, deep links, mobile sizing, no JS errors.'+(' FRONTEND FIXTURES ONLY.' if args.mock_api else ' Real API.'))

@@ -1,6 +1,8 @@
 /* Click to dictate into an editable draft; click again to keep it. Never auto-send. */
 (() => {
   const engineURL=new URL('speech.mjs',document.currentScript.src);
+  const release=new URL(document.currentScript.src).searchParams.get('release');
+  if(release)engineURL.searchParams.set('release',release);
   function init(){
     const input=document.querySelector('#message'),form=document.querySelector('#composer');if(!input||!form)return;
     const namespace=window.TETHER_CONFIG?'tether-web:'+window.TETHER_CONFIG.base:'tether-desktop:'+location.port;

@@ -52,6 +52,8 @@ window.addEventListener('message',event=>{
 
 });
 let referenceRequest=0,referenceReturnFocus=null;
+// Older cached chat scripts call this hook. Plain prose must stay unlinked.
+function matchReferences(node){return node}
 function referenceHref(ref){return ref.type==='category'?'/board#category/'+encodeURIComponent(ref.id):ref.type==='action'?'/board#action/'+encodeURIComponent(ref.parent)+'/'+encodeURIComponent(ref.id):'/board#task/'+encodeURIComponent(ref.id)}
 function parseReference(href){
  try{const url=new URL(href,location.origin);if(url.origin!==location.origin||url.pathname!=='/board')return null;

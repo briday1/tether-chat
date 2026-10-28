@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 from datetime import datetime
 from fastapi import FastAPI,HTTPException
-from fastapi.responses import FileResponse,Response
+from fastapi.responses import FileResponse,Response,HTMLResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel,Field
 from typing import Literal
@@ -17,6 +17,22 @@ from .ai import reflect
 app=FastAPI(title="tether-chat")
 app.add_middleware(TrustedHostMiddleware,allowed_hosts=["127.0.0.1","localhost","[::1]"])
 db.init()
+
+@app.middleware('http')
+async def fresh_desktop_assets(request,call_next):
+    response=await call_next(request)
+    if request.url.path.endswith(('.js','.mjs','.css')):
+        response.headers['Cache-Control']='no-store'
+    return response
+
+def desktop_screen(name):
+    """A new desktop release must never reuse an older WebView script URL."""
+    text=Path(__file__).with_name(name).read_text(encoding='utf-8')
+    def versioned(match):
+        query=match[3] or ''
+        return match[1]+match[2]+query+('&' if query else '?')+'release='+__version__+match[4]
+    text=re.sub(r'''((?:src|href)=["'])(/[^"']+\.(?:css|m?js))(\?[^"']*)?(["'])''',versioned,text)
+    return HTMLResponse(text,headers={'Cache-Control':'no-store'})
 class Ask(BaseModel):
     question:str=Field(min_length=1,max_length=1000)
 class Thread(BaseModel):
@@ -75,9 +91,9 @@ def health():return {"app":"tend","brand":"tether-chat","version":__version__,"s
 @app.get("/manifest.webmanifest")
 def manifest():return FileResponse(Path(__file__).with_name("manifest.webmanifest"),media_type="application/manifest+json")
 @app.get("/")
-def home():return FileResponse(Path(__file__).with_name("index.html"),headers={"Cache-Control":"no-store"})
+def home():return desktop_screen('index.html')
 @app.get("/snapshots")
-def snapshots_page():return FileResponse(Path(__file__).with_name("snapshot.html"))
+def snapshots_page():return desktop_screen('snapshot.html')
 @app.get("/api/snapshot")
 def snapshot_api(start:str,end:str,category:str=""):
     from .snapshots import snapshot
@@ -95,7 +111,7 @@ def snapshot_png(start:str,end:str,category:str="",theme:str="sage",scale:int=2)
         raise HTTPException(422,str(exc)) from None
 
 @app.get("/board")
-def board_page():return FileResponse(Path(__file__).with_name("board.html"),headers={"Cache-Control":"no-store"})
+def board_page():return desktop_screen('board.html')
 @app.get("/api/snapshot.svg")
 def snapshot_svg(start:str,end:str,category:str="",theme:str="sage"):
     from .snapshot_export import svg

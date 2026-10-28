@@ -55,12 +55,26 @@ def test_rendered_history(client):
     assert "<strong>formatted</strong>" in result.json()[-1]["html"]
 
 def test_theme_assets(client):
+    from tend import __version__
     css=client.get("/theme.css")
     js=client.get("/theme.js")
     assert css.status_code==200 and "--accent" in css.text
     assert js.status_code==200 and "data-theme-picker" in js.text
-    assert 'href="/theme.css"' in client.get("/").text
-    assert 'href="/theme.css"' in client.get("/board").text
+    assert f'href="/theme.css?release={__version__}"' in client.get("/").text
+    assert f'href="/theme.css?release={__version__}"' in client.get("/board").text
+
+@pytest.mark.parametrize('path',['/','/board','/snapshots'])
+def test_desktop_upgrade_uses_fresh_asset_urls(client,path):
+    import re
+    from tend import __version__
+    page=client.get(path)
+    assert page.headers['cache-control']=='no-store'
+    assets=re.findall(r'(?:src|href)="(/[^" ]+\.(?:css|m?js)\?[^" ]+)"',page.text)
+    assert assets
+    for url in assets:
+        assert 'release='+__version__ in url
+        response=client.get(url)
+        assert response.status_code==200 and response.headers['cache-control']=='no-store'
 
 def test_local_brief_and_command_reference(client):
     from tend import commands,store
