@@ -72,5 +72,5 @@ def test_work_relocation_keeps_existing_home_attached(tmp_path,monkeypatch):
 
 def test_dynamic_conversation_snapshot_has_workspace():
     from pathlib import Path
-    source=(Path(__file__).parents[1]/'tend/index.html').read_text()
+    source=(Path(__file__).parents[1]/'tend/index.html').read_text(encoding='utf-8')
     assert "url.searchParams.set('workspace',window.tetherWorkspace||'work');frame.src=" in source

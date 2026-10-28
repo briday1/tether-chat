@@ -57,7 +57,8 @@ def main():
                 calendar.locator('.today .day-date').click()
                 expect(calendar.locator('#day-dialog')).to_be_visible()
                 calendar.locator('#day-dialog .task').first.click()
-                expect(screen.locator('#panel')).to_be_visible()
+                expect(screen.get_by_role('button',name='Edit task',exact=True)).to_be_visible()
+                expect(screen.get_by_role('button',name='Use as chat context',exact=True)).to_be_visible()
                 # Switching workspaces must preserve this release and never expose Work data.
                 release=page.evaluate('window.TETHER_CONFIG.version')
                 screen.get_by_role('combobox',name='Work or Home').select_option('home')
