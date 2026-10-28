@@ -18,11 +18,11 @@ Setup progress is retained locally without tokens or task contents. **Resume set
 
 ## Data boundaries
 
-Only Home tasks, categories, dates, statuses, task items and action notes sync. Work, conversations, provider settings, API keys, AI instructions, notification claims and activity records are excluded. Earlier browser Work data remains available through explicit Settings recovery/export; it is never silently moved into Home. Importing a Work or unlabelled backup into Home requires separate informed confirmation.
+The task journal includes only Home tasks, categories, dates, statuses, task items and action notes. Work, conversations, provider settings, API keys, AI instructions, notification claims and activity records are excluded from that journal. Optional separately consented encrypted household AI configuration uses its own Sheet tab; see [Household AI](SHARING.md#optional-household-ai-connection-browser). Earlier browser Work storage is neither opened nor exposed in Home settings; this update does not delete it. Importing a Work or unlabelled backup into Home requires separate informed confirmation.
 
 Anyone with access to the Sheet can read its journal, including earlier task contents. Disconnect keeps local data and the Sheet; revoke another person’s access in Google separately. Deletion is a journal tombstone, not permanent erasure of all historical copies. Home/Work product separation does not prevent someone with device access from reading local data.
 
-Google access tokens remain only in memory. They are not stored in localStorage, databases, backups or the journal. Public app configuration, device identity and pending setup references are stored locally. Provider credentials never enter shared records.
+Google access tokens remain only in memory. They are not stored in localStorage, databases, backups or the journal. Public app configuration, device identity and pending setup references are stored locally. Plaintext provider credentials never enter the shared task journal. Optional encrypted household AI settings are separate from task records and backups.
 
 ## Append safety and limits
 

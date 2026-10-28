@@ -151,6 +151,7 @@ def main():
                 frame.get_by_label('Model',exact=True).select_option('test-model')
                 frame.locator('#providerAdvanced').evaluate('(e)=>e.open=true')
                 frame.get_by_label('Save encrypted key on this device').check()
+                frame.locator('#providerAdvanced').evaluate('(e)=>e.open=true')
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 # Test must save the newly entered key and fields, with no prior Save click.
                 frame.locator('#providerActions').evaluate('(e)=>e.open=true')
@@ -180,6 +181,7 @@ def main():
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
                 frame.get_by_role('button',name='Lock key',exact=True).click()
                 expect(frame.locator('#keyStatus')).to_contain_text('Saved key is locked')
+                frame.locator('#providerAdvanced').evaluate('(e)=>e.open=true')
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 frame.get_by_role('button',name='Unlock saved key',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Saved key unlocked')
@@ -191,6 +193,7 @@ def main():
                 frame.get_by_role('link',name='Conversation',exact=True).click()
                 frame.get_by_role('button',name='Settings',exact=True).click()
                 frame.get_by_label('API key',exact=True).fill('rotated-synthetic-key')
+                frame.locator('#providerAdvanced').evaluate('(e)=>e.open=true')
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 frame.locator('#provider').evaluate('(form)=>form.requestSubmit()')
                 frame.get_by_role('button',name='Close settings').click()

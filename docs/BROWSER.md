@@ -106,11 +106,9 @@ On a normal development machine or hosted CI runner, install Playwright and Chro
 The hosted URL remains unchanged for existing installations and Google OAuth.
 
 Earlier browser Work data stays in its original IndexedDB database. It is not
-opened as the Home runtime and old queued requests do not resume. In Settings,
-choose **Earlier browser Work data → Inspect earlier Work storage**, then
-**Download Work backup for tether-chat**. A separate **Download private recovery
-file** preserves retained drafts, outbox text and encrypted connection settings;
-keep it private. Recovery does not move, delete or share the old data.
+opened as the Home runtime and old queued requests do not resume. Home no longer
+shows Work recovery controls or notices. This update does not delete legacy
+storage or affect the installed desktop application's Work database.
 
 Importing a Work or unlabelled backup into Home requires explicit confirmation:
 Home tasks may subsequently be shared through Drive. Import Work backups into the
