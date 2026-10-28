@@ -106,7 +106,7 @@
     $('#exportData').onclick=async()=>{try{const backup=await api('/backup');await window.tetherDownload(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),'tether-backup-'+new Date().toISOString().slice(0,10)+'.json');status('#storageStatus','Backup prepared. Save the downloaded file.')}catch(e){status('#storageStatus',e.message)}};
     $('#importData').onchange=async event=>{const file=event.target.files[0];if(!file)return;
       try{if(file.size>20*1024*1024)throw Error('Choose a JSON backup smaller than 20 MB.');const payload=JSON.parse(await file.text());
-        if(payload.workspace!=='home' && !confirm('This backup is Work or an older unlabelled backup. Copy its tasks into Home? Home tasks may be shared with your Drive collaborators. Cancel to keep Work separate and import this file in tether-chat instead.'))return;
+        if(payload.workspace!=='home' && !confirm('This backup is Work or an older unlabelled backup. Import its tasks and conversations into Home? Home tasks and task notes may be shared with your Drive collaborators; conversations remain local. Cancel to keep Work separate and import this file in tether-chat instead.'))return;
         payload.home_import_confirmed=true;const result=await api('/import','POST',payload);
         status('#storageStatus','Imported '+result.added.tasks+' tasks and '+result.added.messages+' messages. Existing records were retained.');
         if($('#board')){load()}else window.dispatchEvent(new Event('pageshow'));

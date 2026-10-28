@@ -11,7 +11,7 @@ const validId=id=>typeof id==='string'&&idPattern.test(id);
 const integer=value=>Number.isSafeInteger(value)&&value>=0;
 const numeric=value=>typeof value==='number'?value:typeof value==='string'&&/^(0|[1-9][0-9]*)$/.test(value)?Number(value):NaN;
 function checkSession(s){if(!s||s.mode!=='selected-sheet'||!validId(s.spreadsheetId)||s.workspaceId!==s.spreadsheetId||!integer(s.sheetId))throw new SyncError('Select a valid shared Home spreadsheet first');return s}
-function rowsFor(op){const text=stable(op),chunks=[];for(let i=0;i<text.length;i+=CHUNK)chunks.push(text.slice(i,i+CHUNK));const rows=chunks.map((chunk,index)=>[op.id,'1',String(index),String(chunks.length),chunk]);if(new TextEncoder().encode(JSON.stringify({majorDimension:'ROWS',values:rows})).length>MAX_APPEND)throw new SyncError('A Home edit exceeds the 1 MB upload limit. Local changes were kept.');return rows}
+function rowsFor(op){const text=stable(op),chunks=[];for(let i=0;i<text.length;){let end=Math.min(i+CHUNK,text.length);const before=text.charCodeAt(end-1),after=text.charCodeAt(end);if(before>=0xD800&&before<=0xDBFF&&after>=0xDC00&&after<=0xDFFF)end--;chunks.push(text.slice(i,end));i=end;}const rows=chunks.map((chunk,index)=>[op.id,'1',String(index),String(chunks.length),chunk]);if(new TextEncoder().encode(JSON.stringify({majorDimension:'ROWS',values:rows})).length>MAX_APPEND)throw new SyncError('A Home edit exceeds the 1 MB upload limit. Local changes were kept.');return rows}
 export class DriveSheets {
   constructor(fetcher=globalThis.fetch.bind(globalThis)){this.fetcher=typeof fetcher==='function'?fetcher:fetcher.fetcher;this.lastParticipants=[];this.pollDelayMs=30000;this.notBefore=0;this.retryAfterMs=0;this.rateFailures=0}
   async request(token,url,options={},control={}){

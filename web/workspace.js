@@ -26,6 +26,9 @@
     if (link) link.href = decorate(link.href);
   }, true);
   document.addEventListener('DOMContentLoaded', () => {
+    // The browser adds a recovery notice: chat must size its scroller from the
+    // remaining viewport, not the desktop's fixed header-only subtraction.
+    if(document.querySelector('#chat'))document.body.classList.add('home-chat-layout');
     const header = document.querySelector('header');
     if (header) {
       const notice=document.createElement('p');notice.id='home-product-notice';notice.className='web-note';notice.style.cssText='margin:8px 16px;font-size:12px';notice.textContent='tether-home · Home only. Earlier browser Work data is retained: Settings → Earlier browser Work data.';header.after(notice);

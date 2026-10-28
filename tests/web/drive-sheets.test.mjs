@@ -44,3 +44,12 @@ test('aggregate byte capacity checked before append and oversized responses reje
   const s=server();s.transport.pull=async()=>{s.transport.usedRows=1;s.transport.usedBytes=8*1024*1024-1;return []};await assert.rejects(s.transport.push('s',session,[op],actor,[]),/8 MB/);assert.equal(s.calls.length,0);
   const t=new DriveSheets(async()=>response({},200,{'Content-Length':String(9*1024*1024)}));await assert.rejects(t.pull('s',session),/8 MB/);
 });
+test('chunk boundaries preserve emoji surrogate pairs across Sheets cells',async()=>{
+  const rows={'task:task1':{...task,summary:'x'.repeat(20000)},'task:task2':{...task,id:'task2',summary:'😀'}};
+  let operation=makeChanges([],{},rows,actor,'operation_unicode',when);const offset=stable(operation).indexOf('😀');
+  rows['task:task2'].summary='y'.repeat(29999-offset)+'😀';operation=makeChanges([],{},rows,actor,'operation_unicode',when);assert.equal(stable(operation).indexOf('😀'),29999);
+  const s=server();await s.transport.push('s',session,[operation],actor,[]);
+  const chunks=s.state.rows.slice(1).map(row=>row[4]);assert.ok(chunks.length>1);
+  for(const chunk of chunks){assert.ok(chunk.length<=30000);assert.equal(chunk.isWellFormed(),true)}
+  assert.equal(chunks.join(''),stable(operation));assert.deepEqual(await s.transport.pull('s',session),[operation]);
+});
