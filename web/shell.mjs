@@ -27,6 +27,13 @@ window.addEventListener('popstate',()=>{const next=pageURL();if(next!==current){
 window.tetherReady=createRuntime({config});
 try{
   const runtime=await window.tetherReady;window.tetherFetch=runtime.fetch;
+  window.tetherUpdateApp=async()=>{
+    if(navigator.onLine===false)throw Error('Connect to the internet to update tether.');
+    await frame.contentWindow?.tetherPrepareUpdate?.();
+    const response=await runtime.fetch(config.base+'api/chat/state'),state=await response.json();
+    if((state.jobs||[]).some(job=>['running','queued'].includes(job.status)))throw Error('Finish the current chat request, then update the app.');
+    location.assign(config.base+'update.html?check='+Date.now());
+  };
   window.tetherNotify=()=>runtime.notifications();
   current=pageURL();frame.src=current;frame.hidden=false;loading.hidden=true;
   frame.addEventListener('load',()=>{
@@ -40,8 +47,16 @@ try{
       window.tetherSyncRoute(frame.contentWindow.location.href);
     }catch(_){}
   });
-  if('serviceWorker' in navigator)navigator.serviceWorker.register(config.base+'sw.js',{scope:config.base})
-    .catch(()=>{ /* Online use remains available when offline installation is blocked. */ });
+  if('serviceWorker' in navigator)navigator.serviceWorker.register(config.base+'sw.js',{scope:config.base,updateViaCache:'none'})
+    .then(registration=>{
+      const ready=()=>{window.tetherUpdateAvailable=!!registration.waiting;try{frame.contentWindow.dispatchEvent(new Event('tether:update-available'))}catch(_){}};
+      const watch=()=>{registration.installing?.addEventListener('statechange',ready);ready()};
+      registration.addEventListener('updatefound',watch);watch();
+      let checked=Date.now();
+      document.addEventListener('visibilitychange',()=>{
+        if(!document.hidden && Date.now()-checked>60000){checked=Date.now();registration.update().catch(()=>{})}
+      });
+    }).catch(()=>{ /* Online use remains available when offline installation is blocked. */ });
 }catch(error){
   loading.textContent='Could not open local storage. Allow website storage for tether and reload. '+(error.message||'');
   loading.setAttribute('role','alert');
