@@ -28,9 +28,9 @@
     const base=new URL('./',location.href),status=document.querySelector('#status'),retry=document.querySelector('#retry');
     const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
     // Read only. Never create, upgrade, remove, or rewrite the user's database.
-    async function busy(){
+    async function databaseBusy(suffix){
       return new Promise((resolve,reject)=>{
-        let absent=false;const request=indexedDB.open('tether-chat-web:'+base.pathname);
+        let absent=false;const request=indexedDB.open('tether-chat-web:'+base.pathname+suffix);
         request.onupgradeneeded=()=>{absent=true;request.transaction.abort()};
         request.onerror=()=>absent?resolve(false):reject(Error('Could not check saved requests. Return to tether, then try updating again.'));
         request.onsuccess=()=>{
@@ -40,8 +40,22 @@
           read.onsuccess=()=>{active=(read.result?.jobs||[]).some(job=>['running','queued'].includes(job.status) &&
             Date.parse(job.updated_at||job.created_at)>Date.now()-120000)};
           transaction.oncomplete=()=>{db.close();resolve(active)};
-          transaction.onerror=()=>{db.close();reject(Error('Could not check saved requests. Return to tether, then try updating again.'))};
+          transaction.onabort=transaction.onerror=()=>{db.close();reject(Error('Could not check saved requests. Return to tether, then try updating again.'))};
         };
+      });
+    }
+    async function busy(){
+      // Earlier Work tabs and current Home tabs can both still have active jobs.
+      const states=await Promise.all(['',':home'].map(databaseBusy));return states.some(Boolean);
+    }
+    async function withQueueLocks(action){
+      // Stable order avoids deadlocks; hold both barriers through activation.
+      return navigator.locks.request('tether-chat-web-queue:'+base.pathname,{ifAvailable:true},work=>{
+        if(!work)return false;
+        return navigator.locks.request('tether-chat-web-queue:'+base.pathname+':home',{ifAvailable:true},async home=>{
+          if(!home||await busy())return false;
+          await action();return true;
+        });
       });
     }
     const expected=document.querySelector('main').dataset.version;
@@ -111,11 +125,7 @@
         while(true){
           if(await busy()){status.textContent='Waiting for your current chat request to finish before updating…';await sleep(1000);continue}
           if(navigator.locks){
-            const updated=await navigator.locks.request('tether-chat-web-queue:'+base.pathname,{ifAvailable:true},async lock=>{
-              if(!lock)return false;
-              if(await busy())return false;
-              await download();return true;
-            });
+            const updated=await withQueueLocks(download);
             if(updated)return;
             status.textContent='Waiting for your current chat request to finish before updating…';await sleep(1000);
           }else{await download();return}

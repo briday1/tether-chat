@@ -15,7 +15,7 @@ sys.path.insert(0,str(ROOT))
 spec=importlib.util.spec_from_file_location('web_build',ROOT/'scripts/build_web.py')
 builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
 DB="""async action=>{
- const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('tether-chat-web:/tether-chat/');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+ const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('tether-chat-web:/tether-chat/:home');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
  return new Promise((resolve,reject)=>{
   const tx=db.transaction('state',action==='read'?'readonly':'readwrite'),store=tx.objectStore('state'),read=store.get('data');let state;
   read.onsuccess=()=>{state=read.result;
