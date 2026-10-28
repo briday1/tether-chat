@@ -15,10 +15,10 @@ BASE='http://127.0.0.1:18768'
 
 
 def serve_fixture():
-    from tend import ai,store
-    from tend.app import app
+    from tether import ai,store
+    from tether.app import app
     import uvicorn
-    def fake(message,progress=None,history=None):
+    def fake(message,progress=None,history=None,task_context=None):
         if message=='Complete an Attention action before a simulated failure':
             task=next(task for task in store.list_threads() if task['title']=='Partial failure fixture')
             action=next(action for action in store.get(task['id'])['entries'] if action['kind']=='action')
@@ -37,11 +37,12 @@ def main():
     from playwright.sync_api import sync_playwright,expect
     from attention_ui_checks import check_attention_updates
     from note_ui_checks import check_note_replies
-    from tend import store
+    from context_ui_checks import check_task_context
+    from tether import store
     with tempfile.TemporaryDirectory(prefix='tether-chat-session-') as folder:
-        os.environ['TEND_DB']=str(Path(folder)/'session.sqlite3')
-        os.environ['TEND_CONFIG']=str(Path(folder)/'provider.json')
-        os.environ.pop('TEND_AI_API_KEY',None)
+        os.environ['TETHER_DB']=str(Path(folder)/'session.sqlite3')
+        os.environ['TETHER_CONFIG']=str(Path(folder)/'provider.json')
+        os.environ.pop('TETHER_AI_API_KEY',None)
         store.init();task=store.create('Prepare briefing',summary='Confirm the access review before the briefing.',categories=['Projects'])
         action=store.add(task['id'],'action','Contact the review team')
         store.update_action(action['id'],{'revisit_at':'2020-01-01T12:00:00Z'})
@@ -126,6 +127,7 @@ def main():
                 expect(page.locator('.chat-pending').filter(has_text='Synthetic failure after the action was saved')).to_be_visible(timeout=6000)
                 expect(notice).to_have_count(0,timeout=2000)
                 check_note_replies(page,page,'/api')
+                check_task_context(page,page,'Prepare briefing')
                 assert not errors,errors
                 browser.close()
             print('PASS: navigation-safe chat, scoped check-ins and notes, themes, and automatic Attention updates after drawer saves, other-tab edits, outside writes, and partial chat failures.')

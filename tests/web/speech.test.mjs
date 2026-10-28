@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {localSpeech,joinTranscript} from '../../tend/speech.mjs';
+import {localSpeech,joinTranscript} from '../../tether/speech.mjs';
 
 function fixture({permission=false,worklet=false,latePermission=false}={}){
   const state={text:[],status:[],errors:[],trackStopped:0,closed:0,workersStopped:0};

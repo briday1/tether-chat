@@ -3,8 +3,8 @@ from html.parser import HTMLParser
 import json
 from pathlib import Path
 import pytest
-from tend import commands, notes, store
-from tend.rendering import render
+from tether import commands, notes, store
+from tether.rendering import render
 
 FIXTURES = json.loads((Path(__file__).parent/'fixtures/note-replies.json').read_text())
 
@@ -29,7 +29,7 @@ def test_note_examples_keep_rows_and_links_without_executable_html(example):
 
 
 def test_local_rollups_keep_actions_schedules_and_literal_stored_text(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'notes.sqlite3'));store.init()
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'notes.sqlite3'));store.init()
     task=store.create('Review [A] | *draft*','Waiting for [feedback](https://example.invalid) | keep both fields.',['Projects','Writing'])
     store.update(task['id'],{'state':'waiting','due_at':'2020-01-01','revisit_at':'2020-01-02T12:00:00Z'})
     action=store.add(task['id'],'action','Check | attachment')
@@ -65,8 +65,8 @@ def test_note_limits_are_explicit_and_empty_results_stay_plain():
 
 def test_desktop_serves_shared_note_assets(tmp_path,monkeypatch):
     from fastapi.testclient import TestClient
-    from tend.app import app
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'assets.sqlite3'))
+    from tether.app import app
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'assets.sqlite3'))
     with TestClient(app,base_url='http://127.0.0.1') as client:
         page=client.get('/').text
         for path in ('/notes.js','/notes.css'):

@@ -2,11 +2,11 @@ name: Browser app and GitHub Pages
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tether/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
   push:
     branches: [main]
     tags: ['v20*']
-    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tether/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
 permissions:
   contents: read
 concurrency:
@@ -34,6 +34,8 @@ jobs:
       - name: Browser, desktop Attention, voice, and offline checks
         run: |
           python scripts/check_web_ui.py
+          python scripts/check_display_ui.py
+          python scripts/check_drive_sync_ui.py
           python scripts/check_assistant_ui.py
           timeout 180s python -u scripts/check_web_updates.py
           python scripts/check_ui.py
@@ -45,6 +47,11 @@ jobs:
           key: speech-vosk-0.0.8-en-us-0.15
       - name: Real on-device speech and offline dictation
         run: python scripts/check_speech_engine.py
+      - name: Configure approved public Google Picker key for deployment
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v20'))
+        env:
+          TETHER_GOOGLE_PICKER_API_KEY: ${{ secrets.TETHER_GOOGLE_PICKER_API_KEY }}
+        run: python scripts/configure_google_picker.py
       - name: Build the GitHub Pages edition
         env:
           REPO_NAME: ${{ github.event.repository.name }}

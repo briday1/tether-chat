@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths: ['pyproject.toml', 'tend/**', 'tests/**', 'scripts/**', '.github/workflows/package-checks.yml']
+    paths: ['pyproject.toml', 'tether/**', 'tend.py', 'tests/**', 'scripts/**', '.github/workflows/package-checks.yml']
 permissions:
   contents: read
 concurrency:
@@ -23,7 +23,8 @@ jobs:
           path: |
             pyproject.toml
             README.md
-            tend/
+            tether/
+            tend.py
             tests/
             scripts/
             web/
@@ -50,7 +51,7 @@ jobs:
       - name: Check installed commands and core exports
         run: >-
           python -c "from importlib.metadata import distribution;
-          from tend.snapshot_export import png, svg;
+          from tether.snapshot_export import png, svg;
           d=distribution('tether-chat');
           names={e.name for e in d.entry_points if e.group in ('console_scripts','gui_scripts')};
           assert names=={'tether-chat','tether-chat-desktop'}, names;

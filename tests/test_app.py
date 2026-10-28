@@ -1,11 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
-from tend import store
-from tend.app import app
+from tether import store
+from tether.app import app
 
 @pytest.fixture
 def client(tmp_path,monkeypatch):
-    monkeypatch.setenv("TEND_DB",str(tmp_path/"test.sqlite3"))
+    monkeypatch.setenv("TETHER_DB",str(tmp_path/"test.sqlite3"))
     store.init()
     return TestClient(app,base_url="http://127.0.0.1")
 
@@ -39,7 +39,7 @@ def test_board_category_and_manual_edit(client):
     assert client.get("/board").status_code==200
 
 def test_markdown_is_sanitized_and_formatted():
-    from tend.rendering import render
+    from tether.rendering import render
     html = render("**Bold** and *italic*\n\n- one\n- two\n\n<script>alert(1)</script>")
     assert "<strong>Bold</strong>" in html
     assert "<em>italic</em>" in html
@@ -48,14 +48,14 @@ def test_markdown_is_sanitized_and_formatted():
     assert "alert(1)" in html
 
 def test_rendered_history(client):
-    from tend import store
+    from tether import store
     store.remember("assistant","A **formatted** response")
     result = client.get("/api/conversation/rendered")
     assert result.status_code == 200
     assert "<strong>formatted</strong>" in result.json()[-1]["html"]
 
 def test_theme_assets(client):
-    from tend import __version__
+    from tether import __version__
     css=client.get("/theme.css")
     js=client.get("/theme.js")
     assert css.status_code==200 and "--accent" in css.text
@@ -66,7 +66,7 @@ def test_theme_assets(client):
 @pytest.mark.parametrize('path',['/','/board','/snapshots'])
 def test_desktop_upgrade_uses_fresh_asset_urls(client,path):
     import re
-    from tend import __version__
+    from tether import __version__
     page=client.get(path)
     assert page.headers['cache-control']=='no-store'
     assets=re.findall(r'(?:src|href)="(/[^" ]+\.(?:css|m?js)\?[^" ]+)"',page.text)
@@ -77,7 +77,7 @@ def test_desktop_upgrade_uses_fresh_asset_urls(client,path):
         assert response.status_code==200 and response.headers['cache-control']=='no-store'
 
 def test_local_brief_and_command_reference(client):
-    from tend import commands,store
+    from tether import commands,store
     store.create("Important ongoing decision")
     assert "Important ongoing decision" in store.daily_brief()
     assert "**/brief**" in commands.execute("/help")["answer"]
@@ -85,7 +85,7 @@ def test_local_brief_and_command_reference(client):
     assert any(c["name"]=="/brief" for c in client.get("/api/commands").json())
 
 def test_claim_reminder_once(client):
-    from tend import store
+    from tether import store
     t=store.create("Check local reminder")
     from datetime import datetime,timezone,timedelta
     moment=(datetime.now(timezone.utc)-timedelta(minutes=2)).isoformat()
@@ -97,7 +97,7 @@ def test_claim_reminder_once(client):
     assert any(row["id"]==t["id"] for row in store.claim_notifications())
 
 def test_attention_empty_and_commands_without_api_key(client,monkeypatch):
-    from tend import ai
+    from tether import ai
     monkeypatch.setattr(ai,"public_config",lambda:{"has_key":False})
     assert client.get("/api/attention?force=true").json()["items"]==[]
     assert client.get("/api/brief").status_code==200
@@ -116,8 +116,8 @@ def test_activity_reporting_backdated(client):
     assert any(event["body"]=="Worked on a draft" for event in report["events"])
 
 def test_database_folder_move_and_verified_switch(tmp_path,monkeypatch):
-    from tend import storage,store
-    monkeypatch.delenv("TEND_DB",raising=False)
+    from tether import storage,store
+    monkeypatch.delenv("TETHER_DB",raising=False)
     old=tmp_path/"old.sqlite3"
     newdir=tmp_path/"new"
     newdir.mkdir()
@@ -138,7 +138,7 @@ def test_database_folder_move_and_verified_switch(tmp_path,monkeypatch):
 def test_desktop_health_and_webapp_manifest(client):
     response=client.get("/api/health")
     assert response.status_code==200
-    assert response.json()["app"]=="tend"
+    assert response.json()["app"]=="tether"
     manifest=client.get("/manifest.webmanifest")
     assert manifest.status_code==200
     assert manifest.json()["display"]=="standalone"
@@ -148,14 +148,14 @@ def test_desktop_health_and_webapp_manifest(client):
 
 def test_notification_worker_has_no_ai_dependency():
     import inspect
-    from tend import notifications
+    from tether import notifications
     source=inspect.getsource(notifications)
     assert "nudges" not in source
     assert "ai.request" not in source
     assert "claim_notifications" in source
 
 def test_stream_reports_status_and_completion(client,monkeypatch):
-    from tend import ai
+    from tether import ai
     def fake_chat(message,progress=None):
         if progress:
             progress("Connecting to AI provider…")
@@ -172,7 +172,7 @@ def test_stream_reports_status_and_completion(client,monkeypatch):
     assert "<strong>two</strong>" in events[-1]["answer_html"]
 
 def test_linked_weekly_activity_report(client):
-    from tend import store
+    from tether import store
     report_task=store.create("Weekly activity report")
     store.update(report_task["id"],{"category":"Branch Activity"})
     work=store.create("Branch planning")
@@ -190,7 +190,7 @@ def test_linked_weekly_activity_report(client):
     assert store.get(report_task["id"])["action_config"]["period"]=="week"
 
 def test_recurring_due_is_in_overview(client):
-    from tend import store
+    from tether import store
     t=store.create("Weekly activity report")
     store.update(t["id"],{"recurrence":"weekly","next_occurrence":"2020-01-01T00:00:00+00:00"})
     assert any(item["id"]==t["id"] for item in store.overview()["due"])
@@ -210,7 +210,7 @@ def test_task_action_editor_persists_prompt_and_schedule(client):
     assert saved["due_action"]=="activity_report"
 
 def test_archive_restore_preserves_task(client):
-    from tend import store
+    from tether import store
     task=store.create("Old work")
     ident=task["id"]
     store.add(ident,"thought","Original notes")

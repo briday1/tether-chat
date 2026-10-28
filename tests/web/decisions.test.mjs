@@ -40,7 +40,7 @@ test('snapshots include task, action and recurring reminders, combining same-day
  m.update(task.id,{archived_at:now.toISOString()});assert.equal(m.snapshot('2026-11-01','2026-11-07').insights.scheduled_due,0);
 });
 test('tool model catalog and explicit capability flags control discovery',()=>{
- const catalog=JSON.parse(readFileSync(new URL('../../tend/tool-models.json',import.meta.url))),base='https://api.openai.com/v1';
+ const catalog=JSON.parse(readFileSync(new URL('../../tether/tool-models.json',import.meta.url))),base='https://api.openai.com/v1';
  assert.deepEqual(compatibleModels([{id:'gpt-4.1-mini'},{id:'gpt-6-luna'},{id:'gpt-6.1-sol'},{id:'gpt-6.1-terra'},{id:'text-embedding-3-small'},{id:'unknown'},{id:'gpt-4o',capabilities:{tool_calling:false}}],base,catalog),['gpt-4.1-mini','gpt-6-luna']);
  assert.deepEqual(modelOptions(base,'gpt-6-luna',catalog),{reasoning_effort:'none'});
  assert.deepEqual(compatibleModels([{id:'gpt-4.1-mini'},{id:'gpt-4o',supports_tool_calling:false},{id:'unknown'},{id:'tool-model',supported_parameters:['tools']},{id:'disabled',supports_tool_calling:false,supported_parameters:['tools']}],'https://provider.test/v1',catalog),['gpt-4.1-mini','tool-model']);

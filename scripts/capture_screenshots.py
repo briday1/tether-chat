@@ -22,9 +22,9 @@ PORT = 18765
 
 
 def make_demo(db):
-    os.environ["TEND_DB"] = str(db)
-    os.environ["TEND_CONFIG"] = str(db.parent / "empty-provider.json")
-    from tend import store
+    os.environ["TETHER_DB"] = str(db)
+    os.environ["TETHER_CONFIG"] = str(db.parent / "empty-provider.json")
+    from tether import store
     store.init()
     report = store.create("Weekly activity report", "Summarize recent Projects.")
     store.update(report["id"], {
@@ -65,7 +65,7 @@ def make_demo(db):
                                     ("Update documentation",["Product"],0)]:
         task=next(t for t in store.list_threads() if t["title"]==title)
         store.update(task["id"],{"categories":categories,"due_at":(next_monday+timedelta(days=offset)).isoformat()+"T12:00:00Z"})
-    from tend.notes import task_table
+    from tether.notes import task_table
     tasks={t['title']:t for t in store.list_threads()}
     project_tasks=[tasks[title] for title in ('Prepare briefing notes','Review project milestones','Weekly activity report')]
     store.remember("user", "Give me an update on Projects.")
@@ -129,15 +129,15 @@ def main():
     from playwright.sync_api import sync_playwright
 
     OUT.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="tend-screenshots-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="tether-screenshots-") as scratch:
         scratch = Path(scratch)
         task_id = make_demo(scratch / "demo.sqlite3")
         env = os.environ.copy()
-        env["TEND_DB"] = str(scratch / "demo.sqlite3")
-        env["TEND_CONFIG"] = str(scratch / "empty-provider.json")
-        env.pop("TEND_AI_API_KEY", None)
+        env["TETHER_DB"] = str(scratch / "demo.sqlite3")
+        env["TETHER_CONFIG"] = str(scratch / "empty-provider.json")
+        env.pop("TETHER_AI_API_KEY", None)
         server = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "tend.app:app",
+            [sys.executable, "-m", "uvicorn", "tether.app:app",
              "--host", "127.0.0.1", "--port", str(PORT)],
             cwd=str(ROOT), env=env, stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,

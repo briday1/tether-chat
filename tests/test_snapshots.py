@@ -2,12 +2,12 @@
 import io
 from datetime import date, timedelta
 from PIL import Image
-from tend import store
-from tend.snapshots import snapshot
-from tend.snapshot_export import png
+from tether import store
+from tether.snapshots import snapshot
+from tether.snapshot_export import png
 
 def test_snapshot_actual_records(tmp_path,monkeypatch):
-    monkeypatch.setenv("TEND_DB",str(tmp_path/"test.sqlite3"))
+    monkeypatch.setenv("TETHER_DB",str(tmp_path/"test.sqlite3"))
     store.init()
     t=store.create("Finish interactive snapshots")
     store.update(t["id"],{"category":"Product","due_at":"2026-10-24T12:00:00Z"})
@@ -27,7 +27,7 @@ def test_snapshot_actual_records(tmp_path,monkeypatch):
 
 def test_range_validation(tmp_path,monkeypatch):
     import pytest
-    monkeypatch.setenv("TEND_DB",str(tmp_path/"test.sqlite3"))
+    monkeypatch.setenv("TETHER_DB",str(tmp_path/"test.sqlite3"))
     store.init()
     with pytest.raises(ValueError):
         snapshot("2026-11-01","2026-10-01")
@@ -38,8 +38,8 @@ def test_range_validation(tmp_path,monkeypatch):
 
 def test_content_sizing_partial_ranges_and_complete_exports(tmp_path,monkeypatch):
     import xml.etree.ElementTree as ET
-    from tend.snapshot_export import svg
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'test.sqlite3'));store.init()
+    from tether.snapshot_export import svg
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'test.sqlite3'));store.init()
     # A weekend-only empty range still has a complete Monday–Friday row.
     week=Image.open(io.BytesIO(png('2026-10-26','2026-11-01',scale=1)))
     weekend=Image.open(io.BytesIO(png('2026-10-31','2026-11-01',scale=1)))

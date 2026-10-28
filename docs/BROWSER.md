@@ -1,4 +1,4 @@
-# Browser edition
+# tether-home browser edition
 
 Open <https://briday1.github.io/tether-chat/>. No Python, desktop process, or tether backend is required. GitHub Pages serves static files; task operations run on your device, and AI requests go directly to the provider you configure.
 
@@ -98,3 +98,30 @@ python -m pytest -q tests/test_browser_build.py
 The generated `web-dist/` is the Pages artifact; it is not the desktop package or a second copy of the source screens. Local root hosting can use `--base-path /`. Serve the output over HTTPS or localhost; Web Crypto, Web Locks, service workers, and installation require a secure browser context.
 
 On a normal development machine or hosted CI runner, install Playwright and Chromium and run `python scripts/check_web_ui.py` and `python scripts/check_assistant_ui.py`. This checks the real static build at a repository subpath, IndexedDB, desktop imports, scoped action notes, encrypted keys, navigation during AI calls, exports, mobile layout, and fresh offline loads with a synthetic provider. No real API key or user task database is used.
+
+## Separate Home and Work products
+
+**tether** is the brand. **tether-home** is this Home-only browser application;
+**tether-chat** is the installed Work-only application. There is no mode switch.
+The hosted URL remains unchanged for existing installations and Google OAuth.
+
+Earlier browser Work data stays in its original IndexedDB database. It is not
+opened as the Home runtime and old queued requests do not resume. In Settings,
+choose **Earlier browser Work data → Inspect earlier Work storage**, then
+**Download Work backup for tether-chat**. A separate **Download private recovery
+file** preserves retained drafts, outbox text and encrypted connection settings;
+keep it private. Recovery does not move, delete or share the old data.
+
+Importing a Work or unlabelled backup into Home requires explicit confirmation:
+Home tasks may subsequently be shared through Drive. Import Work backups into the
+installed tether-chat application instead when keeping the products separate.
+Existing Home data stays in its Home database. Device access is not prevented by
+this product separation; it is not encryption or a separate user account.
+
+Display provides week/month navigation, fixed calendar cells, scrollable daily
+items and date/task previews. **Use as chat context** pins a task to conversation;
+remove the chip to dismiss it. Pins do not restrict ordinary task tools.
+
+For optional household collaboration, use **Share Home**. Each person connects
+their own Google account; the publisher configures Google once. Read
+[Drive setup and limitations](DRIVE_SYNC.md). Do not sync a live SQLite file.

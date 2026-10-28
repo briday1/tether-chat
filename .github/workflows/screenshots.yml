@@ -8,20 +8,20 @@ on:
     branches: [main]
     paths:
       - README.md
-      - tend/index.html
-      - tend/board.html
-      - tend/theme.css
-      - tend/notes.css
-      - tend/notes.js
-      - tend/notes.py
-      - tend/chat.js
-      - tend/store.py
-      - tend/mcp_server.py
-      - tend/snapshot.html
-      - tend/snapshots.py
-      - tend/snapshot_intent.py
-      - tend/snapshot_export.py
-      - tend/app.py
+      - tether/index.html
+      - tether/board.html
+      - tether/theme.css
+      - tether/notes.css
+      - tether/notes.js
+      - tether/notes.py
+      - tether/chat.js
+      - tether/store.py
+      - tether/mcp_server.py
+      - tether/snapshot.html
+      - tether/snapshots.py
+      - tether/snapshot_intent.py
+      - tether/snapshot_export.py
+      - tether/app.py
       - scripts/capture_screenshots.py
       - .github/workflows/screenshots.yml
 
@@ -45,7 +45,7 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify Python syntax and tests
         run: |
-          python -m compileall -q tend scripts tests
+          python -m compileall -q tether scripts tests
           python -m pytest -q
       - name: Capture representative screens
         run: python scripts/capture_screenshots.py

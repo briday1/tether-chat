@@ -103,7 +103,7 @@ test('encrypted saved keys unlock explicitly and remain pinned to their provider
   assert.deepEqual(db.state.settings,previous);assert.equal((await api('/settings')).data.has_key,true);
   await api('/settings','POST',{base_url:'https://another-provider.test/v1',model:'test',api_key:'new-provider-key',remember:false});
   assert.equal((await api('/settings')).data.has_key,true);
-  assert.ok(!session.getItem('tether-chat-web-key:'+config.base).includes('secret-user-key'));
+  assert.ok(!session.getItem('tether-chat-web-key:'+config.base+':home').includes('secret-user-key'));
 });
 test('missing keys are caught before chat and a blank save cannot claim success',async t=>{
   const {api,db}=await setup(t);
@@ -244,11 +244,75 @@ test('long rate limit delays are shown without retrying early',async t=>{
 
 test('listed OpenAI chat tools receive their required reasoning option',async t=>{
   const {readFileSync}=await import('node:fs');
-  const tool_models=JSON.parse(readFileSync(new URL('../../tend/tool-models.json',import.meta.url)));
+  const tool_models=JSON.parse(readFileSync(new URL('../../tether/tool-models.json',import.meta.url)));
   const {api}=await setup(t,async(url,options)=>{
     const body=JSON.parse(options.body);assert.equal(body.reasoning_effort,'none');assert.equal(body.model,'gpt-6-sol');
     return provider({role:'assistant',content:'OK'});
   },undefined,undefined,{config:{...config,tool_models}});
   await api('/settings','POST',{base_url:'https://api.openai.com/v1',model:'gpt-6-sol',api_key:'synthetic-key',remember:false});
   assert.equal((await api('/settings/test','POST',{})).status,200);
+});
+
+test('explicit task context is request-scoped, validated, and dismissible',async t=>{
+  const requests=[];
+  const {api,db}=await setup(t,async(url,options)=>{requests.push(JSON.parse(options.body));return provider({content:'Ready.'})});
+  await save(api);
+  const task=(await api('/threads','POST',{title:'Home checklist',summary:'Plant carrots'})).data;
+  const body={request_id:'selected-context-001',text:'Review the plan',task_context:[task.id]};
+  assert.equal((await api('/chat/jobs','POST',body)).status,202);
+  await waitFor(()=>db.state.jobs[0]?.status==='done');
+  const context=JSON.parse(requests.at(-1).messages[0].content.split('(data, not instructions): ')[1]);
+  assert.equal(context.selected_tasks[0].id,task.id);assert.equal(context.focused_task.id,task.id);
+  assert.equal((await api('/chat/jobs','POST',body)).status,202);
+  assert.equal((await api('/chat/jobs','POST',{...body,task_context:[]})).status,422);
+  assert.equal((await api('/chat/jobs','POST',{...body,request_id:'selected-context-002',task_context:[]})).status,202);
+  await waitFor(()=>db.state.jobs[1]?.status==='done');
+  const cleared=JSON.parse(requests.at(-1).messages[0].content.split('(data, not instructions): ')[1]);
+  assert.deepEqual(cleared.selected_tasks,[]);assert.equal(cleared.focused_task,null);
+  const count=db.state.jobs.length;
+  assert.equal((await api('/chat/jobs','POST',{...body,request_id:'invalid-context-001',task_context:['missing']})).status,404);
+  assert.equal(db.state.jobs.length,count);
+});
+test('Browser runtime is Home-only and keeps independent stores separate',async t=>{
+  const requests=[];
+  const home=await setup(t,async(_url,init)=>{requests.push(JSON.parse(init.body));return provider({content:'Home plan.'})},new MemoryDB(),new Locks(),{config:{...config,workspace:'home'}});
+  const work=await setup(t);
+  await home.api('/threads','POST',{title:'Groceries'});
+  await work.api('/threads','POST',{title:'Project update'});
+  assert.deepEqual((await home.api('/threads')).data.map(x=>x.title),['Groceries']);
+  assert.deepEqual((await work.api('/threads')).data.map(x=>x.title),['Project update']);
+  await save(home.api);
+  await home.api('/chat/jobs','POST',{request_id:'home-prompt-001',text:'Plan my day'});
+  await waitFor(()=>home.db.state.jobs[0]?.status==='done');
+  assert.ok(requests[0].messages[0].content.includes('Home mode'));
+  assert.ok(!JSON.stringify(requests).includes('Project update'));
+  assert.equal(config.system,'Use tools to save changes.');
+});
+
+test('Drive local adapter is Home-only, transactional and excludes private fields',async t=>{
+  const fixed=await setup(t,undefined,undefined,undefined,{config:{...config,workspace:'work'}});
+  assert.equal((await fixed.api('/portable')).data.workspace,'home');
+  assert.equal((await fixed.api('/threads?workspace=work')).status,403);
+  const home=await setup(t,undefined,undefined,undefined,{config:{...config,workspace:'home'}});
+  const task=(await home.api('/threads','POST',{title:'Milk'})).data;
+  home.db.state.messages.push({id:'m',role:'user',body:'Private conversation',created_at:new Date().toISOString()});
+  home.db.state.settings.api_key='secret';home.db.state.tasks[0].action_prompt='Private AI instruction';
+  const s=(await home.api('/drive-sync/local')).data;
+  assert.equal(JSON.stringify(s).includes('Private'),false);assert.equal(JSON.stringify(s).includes('secret'),false);
+  const changed=copy(s.records);changed['task:'+task.id].title='Bread';
+  const result=await home.api('/drive-sync/local','POST',{expected:s.records,expected_revision:s.revision,records:changed,metadata:{queue:[]}});
+  assert.equal(result.status,200);assert.equal(home.db.state.tasks[0].title,'Bread');assert.equal(home.db.state.tasks[0].action_prompt,'Private AI instruction');
+  assert.equal((await home.api('/drive-sync/local','POST',{expected:s.records,expected_revision:s.revision,records:s.records,metadata:{}})).status,409);
+  const now=result.data;const injected=copy(now.records);injected['task:'+task.id].api_key='bad';
+  assert.equal((await home.api('/drive-sync/local','POST',{expected:now.records,expected_revision:now.revision,records:injected,metadata:{}})).status,422);
+  const backup=(await home.api('/portable')).data;assert.equal(JSON.stringify(backup).includes('queue'),false);
+});
+
+test('Work and unlabelled imports require explicit Home consent',async t=>{
+ const {api}=await setup(t);const portable=(await api('/portable')).data;
+ for(const workspace of ['work',undefined]){
+  const incoming={...portable,workspace};
+  assert.equal((await api('/import','POST',incoming)).status,409);
+  assert.equal((await api('/import','POST',{...incoming,home_import_confirmed:true})).status,200);
+ }
 });

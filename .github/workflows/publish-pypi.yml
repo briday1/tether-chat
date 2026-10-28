@@ -98,7 +98,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(python -c "from tend import __version__; print(__version__)")
+          VERSION=$(python -c "from tether import __version__; print(__version__)")
           TAG="v$VERSION"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "GitHub release $TAG already exists; existing assets are retained."

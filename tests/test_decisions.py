@@ -1,16 +1,16 @@
 from datetime import datetime,timezone
 import json
 import pytest
-from tend import store,ai
-from tend.decisions import DEFAULT_PREFERENCES,resolve_reminder,reminder_intent,task_key
-from tend.snapshots import snapshot
-from tend.snapshot_export import svg
-from tend.portable import export_data
-from tend.tool_models import compatible_models,options
+from tether import store,ai
+from tether.decisions import DEFAULT_PREFERENCES,resolve_reminder,reminder_intent,task_key
+from tether.snapshots import snapshot
+from tether.snapshot_export import svg
+from tether.portable import export_data
+from tether.tool_models import compatible_models,options
 
 @pytest.fixture
 def database(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'tasks.sqlite3'));store.init()
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'tasks.sqlite3'));store.init()
 
 
 def test_default_choices_and_explicit_time():

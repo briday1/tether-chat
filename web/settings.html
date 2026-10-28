@@ -25,6 +25,12 @@
 <p class="web-note">Portable JSON backups include tasks, action notes, activity, and conversations. They exclude API keys. Imports merge new records and preserve existing data.</p>
 <button type="button" class="secondary" id="persistData">Protect local storage</button>
 <div id="storageStatus" class="status" role="status"></div>
+<h2>Earlier browser Work data</h2>
+<p>tether-home now contains Home only. Earlier browser Work data, drafts and saved connection settings are retained on this device, but never opened as a chat runtime or shared automatically. Recover a Work backup for tether-chat, or explicitly import it into Home using Import backup above. Keep Work private unless you deliberately choose otherwise.</p>
+<button type="button" class="secondary" id="inspectLegacy">Inspect earlier Work storage</button>
+<div id="legacyStatus" class="status" role="status"></div>
+<div class="web-buttons"><button type="button" class="secondary" id="exportLegacy" hidden>Download Work backup for tether-chat</button><button type="button" class="secondary" id="exportLegacyPrivate" hidden>Download private recovery file</button></div>
+<p class="web-note">The private recovery file also preserves your old draft, pending outbox and encrypted connection settings. It does not contain session API keys and is not imported or synced into Home. Keep it private. Re-enter your provider connection in Home Settings; the original Work settings remain untouched.</p>
 <h2>Use as an app</h2>
 <p>On iPhone: open tether in Safari, then Share → Add to Home Screen. After the first visit, saved tasks and calendars work offline. AI chat needs internet.</p>
 <button type="button" class="secondary" id="installApp">Install app</button>

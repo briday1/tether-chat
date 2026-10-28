@@ -20,9 +20,9 @@ THEMES=['light','dark','solarized-light','solarized-dark','sepia','sage','rose',
 
 
 def seed(folder):
-    os.environ['TEND_DB']=str(folder/'ui.sqlite3')
-    os.environ['TEND_CONFIG']=str(folder/'provider.json')
-    from tend import store
+    os.environ['TETHER_DB']=str(folder/'ui.sqlite3')
+    os.environ['TETHER_CONFIG']=str(folder/'provider.json')
+    from tether import store
     store.init()
     task=store.create('Prepare briefing',summary='Keep the supporting documents together.',categories=['Projects'])
     first=store.add(task['id'],'action','Contact the review team')
@@ -42,10 +42,10 @@ def main():
     out=ROOT/'docs'/'screenshots';out.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='tether-chat-ui-') as temp:
         folder=Path(temp);task_id,action_id,sibling_id=seed(folder)
-        from tend import store
+        from tether import store
         server=None;base='http://127.0.0.1:18767'
         if not args.mock_api:
-            server=subprocess.Popen([sys.executable,'-m','uvicorn','tend.app:app','--host','127.0.0.1','--port','18767'],cwd=ROOT,env=os.environ.copy(),stdout=subprocess.DEVNULL)
+            server=subprocess.Popen([sys.executable,'-m','uvicorn','tether.app:app','--host','127.0.0.1','--port','18767'],cwd=ROOT,env=os.environ.copy(),stdout=subprocess.DEVNULL)
             for _ in range(100):
                 try:
                     with urlopen(base+'/api/health',timeout=1) as r:
@@ -76,14 +76,14 @@ def main():
                         file={'/':'index.html','/board':'board.html'}.get(path,path.lstrip('/'))
                         if file not in {'index.html','board.html','theme.css','theme.js','chat.js','action-notes.js','voice.js','updates.js','notes.js','notes.css','provider-models.js','preferences.js','locations.js','favicon.svg'}:request.fulfill(status=404);return
                         mime='text/css' if file.endswith('.css') else 'application/javascript' if file.endswith('.js') else 'text/html'
-                        request.fulfill(status=200,content_type=mime,body=(ROOT/'tend'/file).read_text(encoding='utf-8'))
+                        request.fulfill(status=200,content_type=mime,body=(ROOT/'tether'/file).read_text(encoding='utf-8'))
                     page.route('**/*',route)
                 else:page.route('**/api/attention*',lambda route:route.fulfill(status=200,content_type='application/json',body='{"items":[]}'))
                 page.goto(base+'/',wait_until='networkidle')
                 from provider_ui_checks import check_provider_settings
                 check_provider_settings(page)
                 expect(page.locator('.brand-word')).to_have_text('tether.')
-                assert page.title()=='tether.'
+                assert page.title()=='tether-chat'
                 assert page.locator('#chatCategories').count()==0
                 category=page.locator('#chat a[href="/board#category/Projects"]')
                 expect(category).to_have_count(1)

@@ -2,14 +2,14 @@
 import sqlite3
 import pytest
 from fastapi.testclient import TestClient
-from tend import store
-from tend.app import app
-from tend.snapshots import snapshot
+from tether import store
+from tether.app import app
+from tether.snapshots import snapshot
 
 @pytest.fixture
 def database(tmp_path,monkeypatch):
     path=tmp_path/'tasks.sqlite3'
-    monkeypatch.setenv('TEND_DB',str(path));store.init()
+    monkeypatch.setenv('TETHER_DB',str(path));store.init()
     return path
 
 def test_existing_database_migrates_without_losing_memberships(database):
@@ -44,7 +44,7 @@ def test_shared_task_stays_one_record_with_distinct_category_counts(database):
     assert store.query('SELECT name FROM thread_categories')==[{'name':'Product'}]
 
 def test_category_add_remove_report_filter_and_archive(database):
-    from tend import ai,mcp_server
+    from tether import ai,mcp_server
     task=store.create('Shared work',categories=['Projects'])
     result=mcp_server.set_task_categories(task['id'],['Product'],'add')
     assert result['categories']==['Projects','Product']

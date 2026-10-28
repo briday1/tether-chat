@@ -16,7 +16,7 @@
   <nav aria-label="Site"><a href="./">← Back to tether.</a> · <a href="./terms.html">Terms of service</a></nav>
   <h1>Privacy policy</h1>
   <p class="date">Updated October 28, 2026</p>
-  <p class="note">Google Drive Home sharing is in development and is not enabled in the current public release. The sections about it describe how the optional feature is designed to work when available.</p>
+  <p class="note">Google Drive Home sharing is an optional experimental integration in tether-home, the Home-only browser edition. It requires publisher configuration and your explicit connection. The installed tether-chat edition is Work-only and does not include Drive sharing.</p>
   <div class="summary">
     <p>tether is a local-first task assistant. Your tasks and conversations are stored on your device. Optional AI requests go to the provider you configure. Optional Home sharing sends selected types of task data to Google Drive.</p>
     <p>Home sharing does not use a hosted tether database server. Your device communicates directly with Google Drive.</p>
@@ -39,7 +39,7 @@
     <li>Record identifiers, device writer identifiers, timestamps, change history, and conflict-resolution records needed to synchronize those items.</li>
   </ul>
   <p>Work data, conversations, provider settings, API keys, AI instructions, notification history, and activity records are not included in Drive sharing.</p>
-  <p>Each device writes its own sync file. These files contain readable JSON change records, not a live SQLite database. Anyone with access to a shared file may read its contents. You manage the folder and file permissions in Google Drive; tether does not change those sharing permissions for you.</p>
+  <p>Devices append readable JSON change records to a dedicated Journal tab in one shared Google Sheet, not a live SQLite database. Anyone with access to the Sheet may read its contents and earlier history. You manage its permissions in Google Drive; tether does not change those sharing permissions for you.</p>
   <p>This integration shares tether task data through Google Drive. It does not connect to Google Calendar or read or write Google Calendar events.</p>
 
   <h2>Google authorization and local setup</h2>

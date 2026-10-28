@@ -15,17 +15,18 @@ sys.path.insert(0,str(ROOT))
 
 def main():
     from playwright.sync_api import sync_playwright,expect
-    from tend import store
-    from tend.portable import export_data
+    from tether import store
+    from tether.portable import export_data
     from voice_ui_checks import MOCKS,check_dictation,check_recording
     from attention_ui_checks import check_attention_updates
     from note_ui_checks import check_note_replies
     from provider_ui_checks import check_settings_appearance
+    from context_ui_checks import check_task_context
     spec=importlib.util.spec_from_file_location('build_web',ROOT/'scripts/build_web.py')
     builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
     with tempfile.TemporaryDirectory(prefix='tether-web-ui-') as temp:
         folder=Path(temp);builder.build(folder/'tether-chat','/tether-chat/')
-        os.environ['TEND_DB']=str(folder/'fixture.sqlite3');store.init()
+        os.environ['TETHER_DB']=str(folder/'fixture.sqlite3');store.init()
         task=store.create('Prepare briefing','Keep the supporting documents together.',['Projects','Writing'])
         first=store.add(task['id'],'action','Contact the review team')
         second=store.add(task['id'],'action','Check the draft attachment')
@@ -49,11 +50,21 @@ def main():
                     }return response};""")
                 page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
                 page.goto(base);frame=page.frame_locator('#app-frame')
+                page.wait_for_function('!!window.tetherFetch')
+                page.evaluate("""async()=>{const {Database,Model}=await import('./store.mjs');const db=await new Database('tether-chat-web:/tether-chat/').open();await db.write(s=>{new Model(s).create('Private legacy Work');s.settings={base_url:'https://old.example',model:'old',encrypted_key:{ciphertext:'retained'}};s.jobs=[{id:'old-pending',status:'queued'}]});db.db.close();localStorage.setItem('tether-web-draft:/tether-chat/','Old private draft')}""")
                 check_dictation(page,frame)
                 frame.get_by_label('Message tether').fill('Keep this draft while I connect.')
                 frame.get_by_role('button',name='Send',exact=True).click()
                 expect(frame.get_by_role('dialog',name='Settings',exact=True)).to_be_visible()
                 check_settings_appearance(frame)
+                frame.get_by_role('button',name='Inspect earlier Work storage').click()
+                expect(frame.locator('#legacyStatus')).to_contain_text('1 tasks')
+                with page.expect_download() as recovered:
+                    frame.get_by_role('button',name='Download Work backup for tether-chat').click()
+                recovery=json.loads(Path(recovered.value.path()).read_text(encoding='utf-8'))
+                assert recovery['workspace']=='work' and recovery['data']['tasks'][0]['title']=='Private legacy Work'
+                assert page.evaluate("localStorage.getItem('tether-web-draft:/tether-chat/')")=='Old private draft'
+                assert page.evaluate("async()=>{const r=await (await window.tetherReady).fetch('/tether-chat/api/threads');return (await r.json()).length}")==0
                 expect(frame.locator('#connectionMode')).to_contain_text('Browser connection')
                 expect(frame.locator('#providerStatus')).to_contain_text('Your message is still in the draft')
                 expect(frame.get_by_label('Message tether')).to_have_value('Keep this draft while I connect.')
@@ -64,6 +75,7 @@ def main():
                 frame.get_by_label('Message tether').fill('/brief');frame.get_by_role('button',name='Send',exact=True).click()
                 expect(frame.get_by_role('heading',name='Daily brief')).to_be_visible(timeout=15000)
                 frame.get_by_role('button',name='Settings',exact=True).click()
+                page.once('dialog',lambda dialog:dialog.accept())
                 frame.locator('#importData').set_input_files(backup)
                 expect(frame.locator('#storageStatus')).to_contain_text('Imported 1 tasks')
                 frame.get_by_role('button',name='Close settings').click()
@@ -82,6 +94,9 @@ def main():
                 expect(frame.get_by_label('Completed',exact=True)).not_to_be_checked()
                 expect(frame.locator('#actionDrawer')).not_to_contain_text('A browser update under this action.')
                 frame.get_by_role('button',name='Close action item').click()
+
+                check_task_context(page,frame,'Prepare briefing')
+                frame.get_by_role('link',name='Tasks',exact=True).click()
 
                 # Fake only the remote paid provider; the UI, IndexedDB and tool runner are real.
                 requests=[];model_requests=[];provider_error=None

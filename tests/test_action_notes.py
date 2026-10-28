@@ -1,12 +1,12 @@
 """An action owns its notes independently of task notes and sibling actions."""
 import pytest
 from fastapi.testclient import TestClient
-from tend import store, ai
-from tend.app import app
+from tether import store, ai
+from tether.app import app
 
 @pytest.fixture
 def fixture(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'notes.sqlite3'))
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'notes.sqlite3'))
     store.init()
     task=store.create('Prepare briefing',categories=['Projects'])
     first=store.add(task['id'],'action','Confirm access')
@@ -47,7 +47,7 @@ def test_validation_cascade_and_migration(fixture):
     assert store.query('SELECT * FROM action_notes')==[]
 
 def test_ai_and_attention_use_action_notes_only(fixture,monkeypatch):
-    from tend import attention
+    from tether import attention
     client,task,first,other=fixture
     result=ai.dispatch('add_action_note',{'action_id':first['id'],'text':'The request was sent on Monday.'})
     ai.dispatch('add_action_note',{'action_id':other['id'],'text':'This sibling detail must not leak.'})

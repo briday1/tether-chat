@@ -16,26 +16,26 @@ def test_exact_public_commands_and_core_pillow():
     assert set(project['gui-scripts'])=={'tether-chat-desktop'}
     assert any(s.lower().startswith('pillow') and ';' not in s for s in project['dependencies'])
     assert not any(s.lower().startswith(('pystray','pywebview')) for s in project['dependencies'])
-    from tend import __version__
+    from tether import __version__
     assert project['version']==__version__
 
 
 def test_header_brand_and_shared_drawer_styles():
     for name in ('index.html','board.html'):
-        page=(ROOT/'tend'/name).read_text(encoding='utf-8')
+        page=(ROOT/'tether'/name).read_text(encoding='utf-8')
         assert '<span class="brand-word">tether<span>.</span></span>' in page
         assert '<span class="brand-word">tend' not in page
-    css=(ROOT/'tend/theme.css').read_text(encoding='utf-8')
+    css=(ROOT/'tether/theme.css').read_text(encoding='utf-8')
     assert '.reference-drawer,.action-drawer{position:fixed;' in css
     assert '#board:has(.actions-section){grid-template-columns:' in css
     assert '.bubble.assistant a{color:var(--accent)!important}' in css
-    from tend import __version__
-    from tend.native import WINDOW_TITLE
+    from tether import __version__
+    from tether.native import WINDOW_TITLE
     assert WINDOW_TITLE=='tether-chat '+__version__
 
 
 def test_icons_have_all_dpi_sizes_and_unclipped_alpha(tmp_path):
-    from tend.windows_icon import create_icon,raster,ICON_SIZES
+    from tether.windows_icon import create_icon,raster,ICON_SIZES
     ico=Image.open(create_icon(tmp_path/'mark.ico'))
     assert ico.ico.sizes()=={(size,size) for size in ICON_SIZES}
     for size in ICON_SIZES:
@@ -48,8 +48,8 @@ def test_icons_have_all_dpi_sizes_and_unclipped_alpha(tmp_path):
 
 
 def test_action_dates_and_completion_do_not_modify_parent_or_siblings(tmp_path,monkeypatch):
-    from tend import store
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'db.sqlite3'));store.init()
+    from tether import store
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'db.sqlite3'));store.init()
     task=store.create('Briefing',categories=['Projects'])
     first=store.add(task['id'],'action','Contact review team')
     second=store.add(task['id'],'action','Check the attachment')
@@ -65,8 +65,8 @@ def test_action_dates_and_completion_do_not_modify_parent_or_siblings(tmp_path,m
 def test_windows_assigns_icons_to_actual_window_handle(tmp_path):
     import ctypes
     from types import SimpleNamespace
-    from tend import native
-    from tend.windows_icon import create_icon
+    from tether import native
+    from tether.windows_icon import create_icon
     api=native._user32()
     api.CreateWindowExW.argtypes=[ctypes.c_ulong,ctypes.c_wchar_p,ctypes.c_wchar_p,ctypes.c_ulong,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p]
     api.CreateWindowExW.restype=ctypes.c_void_p
