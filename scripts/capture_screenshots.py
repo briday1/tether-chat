@@ -167,7 +167,7 @@ def main():
                 assert page.locator(".summary, .stat, .eyebrow").count() == 0, "Snapshot must not include summary cards"
                 assert page.locator('input,select').count()==0, "Calendars must be read-only"
                 assert page.locator('.day').count()==5
-                assert page.locator('.task').filter(has_text='Plan monthly review').locator('.task-category').all_text_contents()==['Operations','Projects']
+                assert page.locator('.day-items .task').filter(has_text='Plan monthly review').locator('.task-categories').inner_text()=='Operations · Projects'
                 assert page.locator('.day').first.locator('.task').count()==3, 'Show multiple tasks in one day'
                 month_start=week_start.replace(day=1)
                 following=(month_start.replace(year=month_start.year+1,month=1)
@@ -175,20 +175,17 @@ def main():
                 month_end=following-timedelta(days=1)
                 page.goto(base + "/snapshots?start="+month_start.isoformat()+"&end="+month_end.isoformat(), wait_until="networkidle")
                 page.locator(".day").first.wait_for()
-                assert page.locator("#weekdays span").all_text_contents() == ["Mon", "Tue", "Wed", "Thu", "Fri"]
+                assert page.locator("#weekdays span").all_text_contents() == ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                assert page.locator(".task-marker").count()>0
+                assert page.locator("#png, #svg, #details, #day-dialog").count()==0
                 month_height=page.locator('.shell').bounding_box()['height']
                 page.goto(base + "/snapshots?start="+week_start.isoformat()+"&end="+week_end.isoformat(), wait_until="networkidle")
-                with page.expect_download() as download_info:
-                    page.locator("#png").click()
-                assert download_info.value.suggested_filename.endswith(".png")
                 assert page.locator('.shell').bounding_box()['height']<month_height, "Week and month must size independently"
-                with page.expect_download() as svg_download:
-                    page.locator('#svg').click()
-                assert svg_download.value.suggested_filename.endswith('.svg')
-                page.locator('.task').first.click()
-                page.locator('#details:not([hidden])').wait_for()
-                assert page.locator('#details input,#details textarea').count()==0
-                page.keyboard.press('Escape')
+                assert page.locator('#png, #svg, #details, #day-dialog').count()==0
+                page.locator('.day-items .task').first.click()
+                assert page.locator('#date-panel').get_attribute('data-date')==week_start.isoformat()
+                assert page.locator('#date-panel-items .task').count()==3
+                assert page.locator('#date-panel input,#date-panel textarea').count()==0
                 page.goto(base + '/', wait_until='networkidle')
                 request_snapshot(page, f'/snapshot {month_start.isoformat()} to {month_end.isoformat()}')
                 verify_snapshot_layers(page)
