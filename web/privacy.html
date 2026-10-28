@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How tether stores local data and uses optional AI and Google Drive connections.">
+  <title>Privacy · tether.</title>
+  <style>
+    :root{font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#24382a;background:#f6f7f3;color-scheme:light dark}
+    *{box-sizing:border-box}body{margin:0}main{max-width:780px;margin:0 auto;padding:34px 22px 64px}nav{margin-bottom:34px}a{color:#28613b;text-underline-offset:3px}h1{font-size:2.2rem;line-height:1.2;letter-spacing:-.05em;margin:0 0 12px}h2{font-size:1.2rem;line-height:1.35;margin:32px 0 10px}p,ul{margin:0 0 16px}ul{padding-left:24px}li{margin:7px 0}.date,.note{color:#59695e}.summary{padding:18px 20px;border:1px solid #ccd6cb;border-radius:12px;margin:24px 0}.summary p:last-child{margin-bottom:0}footer{margin-top:36px;padding-top:20px;border-top:1px solid #ccd6cb}
+    @media(prefers-color-scheme:dark){:root{color:#e4e9e2;background:#202620}a{color:#a5d4ae}.date,.note{color:#b5c1b6}.summary,footer{border-color:#465346}}
+  </style>
+</head>
+<body>
+<main>
+  <nav aria-label="Site"><a href="./">← Back to tether.</a> · <a href="./terms.html">Terms of service</a></nav>
+  <h1>Privacy policy</h1>
+  <p class="date">Updated October 28, 2026</p>
+  <p class="note">Google Drive Home sharing is in development and is not enabled in the current public release. The sections about it describe how the optional feature is designed to work when available.</p>
+  <div class="summary">
+    <p>tether is a local-first task assistant. Your tasks and conversations are stored on your device. Optional AI requests go to the provider you configure. Optional Home sharing sends selected types of task data to Google Drive.</p>
+    <p>Home sharing does not use a hosted tether database server. Your device communicates directly with Google Drive.</p>
+  </div>
+
+  <h2>Data on your device</h2>
+  <p>The desktop edition stores tasks and conversations in a local SQLite database. The browser edition stores them in browser storage. In versions with Work and Home modes, the modes use separate local datasets. Drafts, preferences, and other app state may also be stored locally.</p>
+  <p>Data stays available until you remove it or the device or browser removes its storage. Exported backups are separate copies that you control. Home/Work separation does not encrypt the task data or prevent someone with access to your device from reading it.</p>
+
+  <h2>Optional AI connections</h2>
+  <p>You choose the AI provider, model, and connection settings. When you use an AI feature, tether sends your request and relevant conversation or task context to that provider. This can include task details, recent context, and results of task tools. This can include Home task information received through Drive sync if it becomes relevant to a request. Syncing alone does not send that information to an AI provider. The provider handles AI requests under its own terms and privacy practices; review them before sending private or shared information.</p>
+  <p>Desktop provider keys are stored in the operating system’s credential vault, or supplied through an environment variable. In the browser edition, an unlocked key is available to the current session. If you choose to remember it, the saved copy is encrypted using your passphrase. Provider keys and connection settings are excluded from Home’s Google Drive sync.</p>
+
+  <h2>Optional Google Drive sharing</h2>
+  <p>Connecting Drive is optional. Each person signs in with their own Google account. tether requests access to files you explicitly select through Google Picker or that the app creates, using Google’s <code>drive.file</code> permission. It does not request permission to read your entire Drive.</p>
+  <p>Before enabling sharing, you confirm that Home task data will be shared with people who can access the selected folder and files. The shared data includes:</p>
+  <ul>
+    <li>Home task titles, descriptions, categories, status, and scheduling dates.</li>
+    <li>Task items, their completion state and dates, and action notes.</li>
+    <li>Record identifiers, device writer identifiers, timestamps, change history, and conflict-resolution records needed to synchronize those items.</li>
+  </ul>
+  <p>Work data, conversations, provider settings, API keys, AI instructions, notification history, and activity records are not included in Drive sharing.</p>
+  <p>Each device writes its own sync file. These files contain readable JSON change records, not a live SQLite database. Anyone with access to a shared file may read its contents. You manage the folder and file permissions in Google Drive; tether does not change those sharing permissions for you.</p>
+  <p>This integration shares tether task data through Google Drive. It does not connect to Google Calendar or read or write Google Calendar events.</p>
+
+  <h2>Google authorization and local setup</h2>
+  <p>Google Drive access tokens are held in memory and expire. They are not saved in task databases, backups, browser localStorage, or shared sync files. When authorization expires, reconnect to resume syncing. Local editing can continue while offline or disconnected.</p>
+  <p>The browser may retain public app configuration, selected file references, and this device’s writer binding. These identify the connection and sync files; they are not your Google password. On desktop, Google sign-in happens in your normal browser rather than the app’s embedded window.</p>
+
+  <h2>Disconnecting, deleting, and retaining history</h2>
+  <p>Disconnecting stops future sync from that connection but keeps local tasks and existing Drive files. It does not remove another person’s access. To change who can read the files, change their sharing permissions in Google Drive. You can also revoke tether’s Google authorization through your Google account settings.</p>
+  <p>Deleting a shared task records a deletion in the sync history. Earlier contents can remain in journal history, backups, and copies held by other devices or people. Removing a task is not a permanent erasure of every copy. Manage local data, backups, and Drive files separately when you want to remove those copies.</p>
+
+  <h2>Use of Google data</h2>
+  <p>Tether uses information received through Google APIs to provide the Home sharing features described here. Tether does not sell that information, use it for advertising, or operate a model-training service. If you use AI features with shared Home information, that information may be included in context sent to your chosen provider. That provider may retain requests or use them under its own account settings and policies; this page does not promise that every provider excludes training. Choose a provider and settings appropriate for the information, and do not submit shared information without permission. Tether’s use and transfer of information received from Google APIs will follow the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements. Do not send shared information to an AI provider unless you are authorized to do so and that use is consistent with these requirements.</p>
+
+  <h2>Other services</h2>
+  <p>Loading the web app, Google sign-in, or Google Picker makes requests to their respective hosting services. Those services receive ordinary connection information such as an IP address and browser information. Optional features that use external services, such as address lookup or browser-provided dictation, may send information to those services when used. On-device dictation processes speech locally after its speech files are downloaded.</p>
+
+  <h2>Changes and questions</h2>
+  <p>This page may be updated when Tether’s data practices change. The date above identifies the latest revision. Review new connection and sharing prompts before enabling optional features.</p>
+  <footer>
+    <p>For privacy questions or implementation details, see the <a href="https://github.com/briday1/tether-chat">tether project</a>. Public issues are visible to others. Do not post private task contents, API keys, access tokens, or other sensitive information there.</p>
+  </footer>
+</main>
+</body>
+</html>

@@ -13,15 +13,17 @@
   <title>tether.</title>
   <style>
     :root{font:16px system-ui,-apple-system,sans-serif;background:#f6f7f3;color:#263d30;color-scheme:light dark}
-    *{box-sizing:border-box}body{margin:0}#app-frame{position:fixed;left:0;top:env(safe-area-inset-top);width:100%;height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));border:0;background:transparent}
+    *{box-sizing:border-box}body{margin:0}#app-frame{position:fixed;left:0;top:env(safe-area-inset-top);width:100%;height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 30px);border:0;background:transparent}
     #loading{max-width:420px;margin:20vh auto;padding:24px;line-height:1.6}#loading[hidden]{display:none}
+  #legal{position:fixed;bottom:env(safe-area-inset-bottom);left:0;right:0;height:30px;display:flex;justify-content:center;align-items:center;gap:12px;font-size:12px;background:#f6f7f3;color:#263d30}#legal a{color:inherit}
   </style>
   <script src="./app-config.js"></script>
   <script type="module" src="./shell.mjs"></script>
 </head>
 <body>
-  <div id="loading" role="status">Opening tether…</div>
+  <div id="loading" role="status">Opening tether, your local-first task assistant…</div>
   <iframe id="app-frame" title="tether application" allow="microphone" hidden></iframe>
   <noscript>Enable JavaScript to use tether. Your data is stored on this device.</noscript>
+<footer id="legal"><a href="./privacy.html">Privacy policy</a><a href="./terms.html">Terms of service</a></footer>
 </body>
 </html>

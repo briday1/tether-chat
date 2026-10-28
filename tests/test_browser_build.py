@@ -68,3 +68,15 @@ def test_desktop_portable_export_contains_data_and_excludes_credentials(tmp_path
     assert len(data['data']['messages'])==1
     assert 'settings' not in data['data'] and 'jobs' not in data['data']
     assert data['data']['tasks'][0]['created_at'].endswith('Z')
+
+
+def test_public_policy_pages_are_static_and_linked(tmp_path):
+    output=builder.build(tmp_path/'web','/tether-chat/')
+    index=(output/'index.html').read_text()
+    for name in ('privacy.html','terms.html'):
+        page=(output/name).read_text()
+        assert '<script' not in page
+        assert 'October 28, 2026' in page
+        assert 'href="./'+name+'"' in index
+        assert 'not enabled in the current public release' in page
+    assert 'drive.file' in (output/'privacy.html').read_text()

@@ -95,7 +95,7 @@ def build(output, base='/'):
     # release; only a new launch should switch an already-open older app.
     (output / 'app-config.js').write_text('window.TETHER_CONFIG = ' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
     for source in (ROOT / 'web').iterdir():
-        if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
+        if source.suffix in {'.js', '.mjs', '.css'} or source.name in {'index.html', 'privacy.html', 'terms.html'}:
             shutil.copy2(source, output / source.name)
     # Keep recovery independent of cached scripts, styles and app configuration.
     (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
