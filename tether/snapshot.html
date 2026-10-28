@@ -5,7 +5,7 @@
 <title>tether calendar</title>
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
-<script>document.documentElement.toggleAttribute('data-embedded',new URLSearchParams(location.search).get('embed')==='1');</script>
+<script>document.documentElement.toggleAttribute('data-embedded',new URLSearchParams(location.search).get('embed')==='1');document.documentElement.toggleAttribute('data-dashboard',new URLSearchParams(location.search).get('layout')==='display');document.documentElement.dataset.density=new URLSearchParams(location.search).get('density')==='comfortable'?'comfortable':'compact';</script>
 <style>
 *{box-sizing:border-box}:root{--calendar-task-base:var(--paper);background:transparent!important}:root:not([data-embedded]){background:var(--paper)!important}body{margin:0;font:13px system-ui,-apple-system,sans-serif;color:var(--text);background:transparent!important}
 .shell{max-width:1100px;margin:0 auto;padding:0}.shell,.sheet,.calendar-head,.weekdays,.grid{background:transparent!important}
@@ -19,6 +19,27 @@
 /* Stable calendar geometry: content scrolls inside each date instead of moving other rows. */
 .day{height:136px;min-height:0;display:flex;flex-direction:column;overflow:hidden}.day-items{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;flex:1}.day-number{flex:none}.day-date{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}.grid.week .day{height:248px}.grid.single .day{height:248px;min-height:0}.calendar-preview{position:fixed;z-index:20;max-width:min(360px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;padding:12px;border:1px solid var(--accent);border-radius:6px;background:var(--paper);color:var(--text);font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:none}.calendar-preview[hidden]{display:none}.calendar-preview strong{font-size:14px}.calendar-preview p{margin:4px 0 0}.calendar-day-dialog{position:fixed;inset:8px;max-width:600px;max-height:calc(100vh - 16px);margin:auto;overflow:auto;padding:18px;background:var(--paper);color:var(--text);border:1px solid var(--line);border-radius:7px;z-index:30}.calendar-day-dialog::backdrop{background:#0004}.calendar-day-dialog h2{font-size:15px;margin:0 30px 14px 0}.calendar-day-dialog .task{font-size:13px}.calendar-day-dialog .task-title{display:block;-webkit-line-clamp:unset}.calendar-day-dialog .task-category{font-size:11px}
 @media(max-width:500px){.grid.week{grid-template-columns:repeat(var(--cols,5),minmax(0,1fr))}.weekdays.week{display:grid}.grid.week .day{display:flex;position:static;height:200px;min-height:0;padding:5px 3px}.grid.week .day-number{position:static;margin:0 2px 7px}.grid.week .date-name{display:none}.grid.week .task-title{display:-webkit-box;-webkit-line-clamp:3}.day{height:116px;min-height:0}.grid.week .task{font-size:10px}.grid.week .task-category{font-size:8px}}
+/* Only the docked Display fills its viewport; chat/export snapshots keep their geometry. */
+:root[data-dashboard],:root[data-dashboard] body{height:100%;overflow:hidden}
+:root[data-dashboard] .shell{height:100%;max-width:none}
+:root[data-dashboard] .sheet{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:0}
+:root[data-dashboard] .calendar-head{display:none}
+:root[data-dashboard] .grid{min-height:0;grid-template-rows:repeat(var(--rows,1),minmax(0,1fr));gap:5px}
+:root[data-dashboard] .day,:root[data-dashboard] .grid.week .day{height:auto;min-height:0;padding:5px;display:flex;position:static}
+:root[data-dashboard] .day-number{margin:0 0 3px;font-size:13px}
+:root[data-dashboard] .day-date{min-width:28px;min-height:28px}
+:root[data-dashboard] .day-items{overflow:hidden}
+:root[data-dashboard] .task{font-size:12px;padding:4px;margin-bottom:3px}
+:root[data-dashboard] .task-title{-webkit-line-clamp:2}
+:root[data-dashboard] .task-categories{display:none}
+:root[data-dashboard] .day-more{flex:none;text-align:left;background:none;border:0;color:var(--muted);font:11px system-ui;min-height:24px;padding:2px;cursor:pointer}
+:root[data-dashboard] .day-more:hover{text-decoration:underline}
+:root[data-dashboard] .day-more[hidden]{display:none}
+:root[data-dashboard][data-density="comfortable"] .task{font-size:14px;padding:6px}
+:root[data-dashboard] .calendar-day-dialog .task{font-size:14px}
+:root[data-dashboard] .calendar-day-dialog .task-categories{display:flex}
+:root[data-dashboard] .calendar-day-dialog .task-title{-webkit-line-clamp:unset}
+@media(max-width:600px){:root[data-dashboard] .grid{gap:3px}:root[data-dashboard] .day,:root[data-dashboard] .grid.week .day{padding:2px}:root[data-dashboard] .task{font-size:10px;padding:3px}:root[data-dashboard] .task-title{-webkit-line-clamp:2}:root[data-dashboard] .weekdays span{font-size:9px;padding:0 2px 4px}:root[data-dashboard] .day-number{font-size:11px}:root[data-dashboard] .day-more{font-size:9px}}
 </style>
 <aside id="calendar-preview" class="calendar-preview" role="tooltip" hidden></aside>
 <dialog id="day-dialog" class="calendar-day-dialog" aria-labelledby="day-dialog-title"><button id="day-dialog-close" class="close" aria-label="Close date details">✕</button><h2 id="day-dialog-title"></h2><div id="day-dialog-items"></div></dialog>
@@ -78,7 +99,8 @@ function taskButton(t,activity=false){const button=document.createElement('butto
 function render(data){
  const signature=JSON.stringify(data)+dateOnly(new Date());if(signature===lastSignature)return;lastSignature=signature;last=data;hidePreview();const all=data.days||[],single=all.length===1;
  const weekends=all.some(d=>new Date(d.date+'T12:00:00').getDay()%6===0&&((d.tasks||[]).length||(d.activity||[]).length));
- const cols=single?1:weekends?7:5,weekStart=data.week_start??1;const order=Array.from({length:7},(_,i)=>(weekStart+i)%7).filter(d=>cols===7||d>0&&d<6);
+ const dashboard=params.get('layout')==='display';
+ const cols=single?1:(dashboard||weekends)?7:5,weekStart=data.week_start??1;const order=Array.from({length:7},(_,i)=>(weekStart+i)%7).filter(d=>cols===7||d>0&&d<6);
  const first=new Date(data.start+'T12:00:00'),end=new Date(data.end+'T12:00:00');
  const format=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
  $('#range').textContent=single?first.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'}):format(first)+' – '+format(end)+', '+end.getFullYear();
@@ -92,8 +114,10 @@ function render(data){
   const iso=dateOnly(date),d=lookup.get(iso),cell=document.createElement('div');cell.className='day'+(d?'':' outside')+(iso===dateOnly(new Date())?' today':'');cell.dataset.date=iso;
   const number=document.createElement('div');number.className='day-number';const dateButton=document.createElement('button');dateButton.className='day-date';dateButton.textContent=date.getDate();dateButton.setAttribute('aria-label',date.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'}));dateButton.onclick=()=>showDate(iso,d);attachPreview(dateButton,dateButton.getAttribute('aria-label'),[...(d?.tasks||[]).map(t=>t.title),...(d?.activity||[]).map(t=>t.body)].join('\n')||'No scheduled items.');number.append(dateButton);const dayName=document.createElement('span');dayName.className='date-name';dayName.textContent=date.toLocaleDateString(undefined,{weekday:'short'});number.prepend(dayName);cell.append(number);
   const items=document.createElement('div');items.className='day-items';if(d){for(const task of d.tasks||[])items.append(taskButton(task));for(const activity of d.activity||[])items.append(taskButton(activity,true))}cell.append(items)
+  if(dashboard){const count=(d?.tasks||[]).length+(d?.activity||[]).length;if(count){const more=document.createElement('button');more.className='day-more';more.textContent=count+' '+(count===1?'item':'items');more.setAttribute('aria-label','Show all '+count+' items on '+dateButton.getAttribute('aria-label'));more.onclick=()=>showDate(iso,d);cell.append(more)}}
   grid.append(cell);
  }
+ $('.sheet').style.setProperty('--rows',Math.max(1,Math.ceil(grid.childElementCount/cols)));
  notifyHeight();
 }
 async function load(){const request=++loadRevision;try{const prefs=await fetch('/api/preferences').then(r=>r.ok?r.json():({week_start:1}));const monday=new Date();monday.setDate(monday.getDate()-(monday.getDay()-(prefs.week_start??1)+7)%7);const sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);const query=new URLSearchParams({start:params.get('start')||dateOnly(monday),end:params.get('end')||dateOnly(sunday)});if(params.get('category'))query.set('category',params.get('category'));const response=await fetch('/api/snapshot?'+query);if(!response.ok)throw Error('Could not load this calendar');const data=await response.json();if(request!==loadRevision)return;render(data);$('#error').textContent=''}catch(e){if(request===loadRevision)$('#error').textContent=e.message}}

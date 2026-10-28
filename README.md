@@ -131,8 +131,8 @@ appointments, classes and grocery lists. There is no mode switch between them.
 Both have Conversation, Tasks and a persistent Display calendar.
 
 Existing installed Work data stays in its original database. The browser keeps
-Home data local and offers explicit recovery/export for older browser Work data;
-it never silently includes that Work data in household sharing. See
+Home data local. Older browser Work storage is not opened or shared, and is not
+exposed through Home settings. This update does not delete that legacy storage. See
 [browser details](docs/BROWSER.md) and [sharing details](docs/DRIVE_SYNC.md).
 
 ### Optional household sharing

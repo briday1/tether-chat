@@ -106,11 +106,9 @@ On a normal development machine or hosted CI runner, install Playwright and Chro
 The hosted URL remains unchanged for existing installations and Google OAuth.
 
 Earlier browser Work data stays in its original IndexedDB database. It is not
-opened as the Home runtime and old queued requests do not resume. In Settings,
-choose **Earlier browser Work data → Inspect earlier Work storage**, then
-**Download Work backup for tether-chat**. A separate **Download private recovery
-file** preserves retained drafts, outbox text and encrypted connection settings;
-keep it private. Recovery does not move, delete or share the old data.
+opened as the Home runtime and old queued requests do not resume. Home no longer
+shows Work recovery controls or notices. This update does not delete legacy
+storage or affect the installed desktop application's Work database.
 
 Importing a Work or unlabelled backup into Home requires explicit confirmation:
 Home tasks may subsequently be shared through Drive. Import Work backups into the
@@ -122,6 +120,18 @@ Display provides week/month navigation, fixed calendar cells, scrollable daily
 items and date/task previews. **Use as chat context** pins a task to conversation;
 remove the chip to dismiss it. Pins do not restrict ordinary task tools.
 
-For optional household collaboration, use **Share Home**. Each person connects
+For optional household collaboration, use **Settings → Share Home**. Each person connects
 their own Google account; the publisher configures Google once. Read
 [Drive setup and limitations](DRIVE_SYNC.md). Do not sync a live SQLite file.
+
+### Tablet Display
+
+Display opens a viewport-fitted month calendar suitable for a landscape household
+ tablet. The menu button opens view/date/text/theme controls and links back to
+Conversation and Tasks. A day’s item count opens the full list on touchscreens;
+long lists do not expand the month beyond the viewport. Portrait remains supported.
+The calendar rereads local data every minute while visible and follows the current
+date unless another date is selected. This does not call an AI provider or reload
+software. Shared updates still depend on an open, connected household session;
+Display shows offline, paused, reconnect, conflict, or stale-sync warnings rather
+than treating a refreshed local calendar as proof of a recent remote sync.

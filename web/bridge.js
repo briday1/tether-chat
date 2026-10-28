@@ -5,7 +5,7 @@
   try{shell=window.top.location.origin===location.origin && window.top.tetherReady ? window.top : null}catch(_){}
   if(!shell){
     const query=new URLSearchParams(location.search),page=location.pathname.split('/').at(-1);
-    if(page==='drive-sharing.html')query.set('view','sharing');if(page==='display.html')query.set('view','display');if(page==='board.html')query.set('view','board');if(page==='snapshots.html')query.set('view','snapshots');
+    if(page==='drive-sharing.html'){query.delete('view');query.set('settings','sharing');}if(page==='display.html')query.set('view','display');if(page==='board.html')query.set('view','board');if(page==='snapshots.html')query.set('view','snapshots');
     location.replace(config.base+(query.size?'?'+query:'')+location.hash);return;
   }
   const screenRuntime=shell.tetherReady;
@@ -19,10 +19,12 @@
   function configuration(c){
     $('#base').value=c.base_url;$('#model').value=c.model;$('#key').value='';$('#rememberKey').checked=c.remember;
     $('#unlockKey').hidden=!c.has_saved_key;$('#lockKey').hidden=!c.has_key;
-    status('#keyStatus',c.locked?'Saved key is locked. Enter its passphrase and unlock it.':c.has_key?
+    status('#keyStatus',c.household_active?'Using household AI for this session. Your personal settings are unchanged.':c.locked?'Saved key is locked. Enter its passphrase and unlock it.':c.has_key?
       (c.remember?'Key is unlocked. It is saved encrypted for your next visit.':'Key is ready for this session. To keep it after closing the app, save it encrypted with a passphrase.'):
       'Enter your API key, then save or test the connection.');
-    window.tetherProviderConfigured?.(c);
+    if(!c.household_active)window.tetherProviderConfigured?.(c);
+    window.dispatchEvent(new CustomEvent('tether-provider-changed'));
+    if($('#householdPersonalProvider'))$('#householdPersonalProvider').hidden=!!c.household_active;
   }
   let loadingSettings=Promise.resolve(),pendingProvider=Promise.resolve();
   window.tetherPrepareUpdate=async()=>{
@@ -47,7 +49,7 @@
       if($('#settings').classList.contains('hidden'))$('#navsettings').click();
       await loadingSettings;
       status('#providerStatus','Your message is still in the draft. '+error.message);
-      const target=$('#unlockKey').hidden?$('#key'):$('#keyPassphrase');target.focus();target.scrollIntoView({block:'center'});
+      const target=$('#unlockKey').hidden?$('#key'):$('#keyPassphrase');for(let ancestor=target.parentElement;ancestor;ancestor=ancestor.parentElement)if(ancestor.tagName==='DETAILS')ancestor.open=true;target.focus();target.scrollIntoView({block:'center'});
       return false;
     }
   };
@@ -70,7 +72,6 @@
   };
   document.addEventListener('DOMContentLoaded',()=>{
     if(!$('#provider'))return;
-    import('./legacy-recovery.mjs').then(module=>module.bindRecovery({base:config.base,document,download:window.tetherDownload}));
     status('#browserVersion','tether-home · '+config.version+' · tether');
     const form=$('#provider');let providerBusy=false;
     function providerAction(action,validate=false){

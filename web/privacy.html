@@ -18,7 +18,7 @@
   <p class="date">Updated October 28, 2026</p>
   <p class="note">Google Drive Home sharing is an optional experimental integration in tether-home, the Home-only browser edition. It requires publisher configuration and your explicit connection. The installed tether-chat edition is Work-only and does not include Drive sharing.</p>
   <div class="summary">
-    <p>tether is a local-first task assistant. Your tasks and conversations are stored on your device. Optional AI requests go to the provider you configure. Optional Home sharing sends selected types of task data to Google Drive.</p>
+    <p>tether is a local-first task assistant. Your tasks and conversations are stored on your device. Optional AI requests go to the provider you configure. Optional Home sharing sends selected types of task data to Google Drive and, only with separate confirmation, encrypted household AI settings.</p>
     <p>Home sharing does not use a hosted tether database server. Your device communicates directly with Google Drive.</p>
   </div>
 
@@ -28,7 +28,9 @@
 
   <h2>Optional AI connections</h2>
   <p>You choose the AI provider, model, and connection settings. When you use an AI feature, tether sends your request and relevant conversation or task context to that provider. This can include task details, recent context, and results of task tools. This can include Home task information received through Drive sync if it becomes relevant to a request. Syncing alone does not send that information to an AI provider. The provider handles AI requests under its own terms and privacy practices; review them before sending private or shared information.</p>
-  <p>Desktop provider keys are stored in the operating system’s credential vault, or supplied through an environment variable. In the browser edition, an unlocked key is available to the current session. If you choose to remember it, the saved copy is encrypted using your passphrase. Provider keys and connection settings are excluded from Home’s Google Drive sync.</p>
+  <p>Desktop provider keys are stored in the operating system’s credential vault, or supplied through an environment variable. In the browser edition, an unlocked key is available to the current session. If you choose to remember it, the saved copy is encrypted using your passphrase.</p>
+
+  <p>If you choose Share AI connection, tether encrypts your API key, provider address and model with the household passphrase before storing the encrypted bundle in your selected Google Sheet. It does not upload the plaintext key. Members with the Sheet and passphrase can decrypt, use and extract the key. Decrypted keys stay in memory for the current session, and the provider address requires confirmation. Old encrypted versions may remain in Sheet history. Revoking access requires rotating or revoking the provider key; changing the passphrase alone does not revoke copies.</p>
 
   <h2>Optional Google Drive sharing</h2>
   <p>Connecting Drive is optional. Each person signs in with their own Google account. tether requests access to files you explicitly select through Google Picker or that the app creates, using Google’s <code>drive.file</code> permission. It does not request permission to read your entire Drive.</p>
@@ -38,7 +40,7 @@
     <li>Task items, their completion state and dates, and action notes.</li>
     <li>Record identifiers, device writer identifiers, timestamps, change history, and conflict-resolution records needed to synchronize those items.</li>
   </ul>
-  <p>Work data, conversations, provider settings, API keys, AI instructions, notification history, and activity records are not included in Drive sharing.</p>
+  <p>Work data, conversations, provider settings, API keys, AI instructions, notification history, and activity records are not included in the task Journal. Optional encrypted household AI settings described above are stored separately in the same selected Sheet.</p>
   <p>Devices append readable JSON change records to a dedicated Journal tab in one shared Google Sheet, not a live SQLite database. Anyone with access to the Sheet may read its contents and earlier history. You manage its permissions in Google Drive; tether does not change those sharing permissions for you.</p>
   <p>This integration shares tether task data through Google Drive. It does not connect to Google Calendar or read or write Google Calendar events.</p>
 

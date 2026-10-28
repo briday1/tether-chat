@@ -134,3 +134,13 @@ test('disconnect preserves selected Sheet references for explicit reconnect',asy
 test('partial append batch remains visibly queued rather than claiming full sync',async()=>{
  const f=fixture();await configure(f);f.transport.push=async()=>[];await f.service.sync();assert.match(f.service.status,/queued/);assert.equal(f.store.read().metadata.uploaded.length,0);
 });
+
+
+test('automatic sync uses the persistent shell scheduler and stops cleanly',async()=>{
+  const f=fixture();let callback,delay,cleared;
+  const scheduler={setInterval(fn,ms){callback=fn;delay=ms;return 42},clearInterval(id){cleared=id}};
+  f.service.scheduler=scheduler;await configure(f);await f.service.start('token');assert.equal(delay,30000);
+  f.store.edit(rows=>rows['task:task1'].title='Automatic change');await callback();
+  assert.equal(f.remote.some(op=>op.changes.some(change=>change.value==='Automatic change')),true);
+  f.service.stop();assert.equal(cleared,42);
+});

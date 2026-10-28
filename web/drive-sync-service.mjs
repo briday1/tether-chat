@@ -11,7 +11,7 @@ function detachedHistory(metadata){
   return {detached:kept};
 }
 export class HomeSync {
-  constructor({local,transport,actor=uuid(),changed=()=>{},locks=globalThis.navigator?.locks}){this.local=local;this.transport=transport;this.actor=actor;this.changed=changed;this.locks=locks;this.running=false;this.generation=0;this.token='';this.timer=null;this.status='Disconnected';}
+  constructor({local,transport,actor=uuid(),changed=()=>{},locks=globalThis.navigator?.locks,scheduler=globalThis}){this.scheduler=scheduler;this.local=local;this.transport=transport;this.actor=actor;this.changed=changed;this.locks=locks;this.running=false;this.generation=0;this.token='';this.expiryTimer=null;this.timer=null;this.status='Disconnected';}
   async state(){return this.local('GET')}
   async commit(s,records,metadata){return this.local('POST',{expected:s.records,records,metadata,expected_revision:s.revision})}
   async configure(settings,{publishExisting=false}={}){
@@ -34,8 +34,12 @@ export class HomeSync {
     }
     this.status='Disconnected; local Home data was kept';this.changed(this);
   }
-  start(token){this.stop();this.token=token;this.timer=setInterval(()=>this.sync().catch(()=>{}),30000);return this.sync({force:true})}
-  stop(){clearInterval(this.timer);this.timer=null;this.generation++}
+  authorize(token,expiresIn){
+    this.token=token;this.scheduler.clearTimeout(this.expiryTimer);
+    this.expiryTimer=this.scheduler.setTimeout(()=>{if(this.token===token){this.token='';this.stop();this.status='Reconnect Google Drive; your edits are safe.';this.changed(this)}},Math.max(0,(expiresIn-30)*1000));
+  }
+  start(token){this.stop();this.token=token;this.timer=this.scheduler.setInterval(()=>this.sync().catch(()=>{}),30000);return this.sync({force:true})}
+  stop(){this.scheduler.clearInterval(this.timer);this.timer=null;this.generation++}
   async sync({force=false}={}){
     if(Date.now()<(this.transport.notBefore||0)&&(!force||this.transport.retryAfterMs))return;
     if(this.running)return;this.running=true;

@@ -6,7 +6,7 @@ Each browser keeps its own local database. One explicitly selected Google Sheet 
 
 ## Set up a household
 
-1. Open **Share Home → Connect Google Drive** using your own Google account. No separate tether account is needed.
+1. Open **Settings → Share Home → Connect Google Drive** using your own Google account. No separate tether account is needed.
 2. Confirm sharing your existing Home tasks and notes, then choose **Create shared household** and give it a name. A clearly named Sheet is created with a dedicated Journal tab.
 3. Choose **Share household in Google Drive**. In the Sheet, click **Share**, enter your partner’s email as an **Editor**, and send Google’s invitation. Copy household link is optional; a link alone does not grant access.
 4. Your partner connects their own Google account, chooses **Join shared household**, and selects that same Sheet in Google Picker. Existing local Home records are merged, not silently replaced. Each additional device joins the same way.
@@ -18,11 +18,11 @@ Setup progress is retained locally without tokens or task contents. **Resume set
 
 ## Data boundaries
 
-Only Home tasks, categories, dates, statuses, task items and action notes sync. Work, conversations, provider settings, API keys, AI instructions, notification claims and activity records are excluded. Earlier browser Work data remains available through explicit Settings recovery/export; it is never silently moved into Home. Importing a Work or unlabelled backup into Home requires separate informed confirmation.
+The task journal includes only Home tasks, categories, dates, statuses, task items and action notes. Work, conversations, provider settings, API keys, AI instructions, notification claims and activity records are excluded from that journal. Optional separately consented encrypted household AI configuration uses its own Sheet tab; see [Household AI](SHARING.md#optional-household-ai-connection-browser). Earlier browser Work storage is neither opened nor exposed in Home settings; this update does not delete it. Importing a Work or unlabelled backup into Home requires separate informed confirmation.
 
 Anyone with access to the Sheet can read its journal, including earlier task contents. Disconnect keeps local data and the Sheet; revoke another person’s access in Google separately. Deletion is a journal tombstone, not permanent erasure of all historical copies. Home/Work product separation does not prevent someone with device access from reading local data.
 
-Google access tokens remain only in memory. They are not stored in localStorage, databases, backups or the journal. Public app configuration, device identity and pending setup references are stored locally. Provider credentials never enter shared records.
+Google access tokens remain only in memory. They are not stored in localStorage, databases, backups or the journal. Public app configuration, device identity and pending setup references are stored locally. Plaintext provider credentials never enter the shared task journal. Optional encrypted household AI settings are separate from task records and backups.
 
 ## Append safety and limits
 

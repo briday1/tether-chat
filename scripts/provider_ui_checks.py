@@ -5,7 +5,7 @@ def check_settings_appearance(ui):
     controls=ui.locator('#settings button:not(#closeSettings)').evaluate_all('''buttons=>buttons.filter(b=>b.getClientRects().length).map(b=>{
       const s=getComputedStyle(b);return {text:b.textContent,height:b.getBoundingClientRect().height,font:s.fontSize,radius:s.borderRadius,border:s.borderTopWidth,padding:s.padding};
     })''')
-    assert len(controls)>=3,controls
+    assert len(controls)>=(2 if ui.locator("#householdSettings").count() else 3),controls
     for control in controls:
         assert control['height']>=40 and control['font']=='13px' and control['radius']=='8px' and control['border']=='1px',control
     assert len({control['padding'] for control in controls})==1,controls

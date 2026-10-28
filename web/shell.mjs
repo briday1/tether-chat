@@ -1,4 +1,8 @@
 import {createRuntime} from './runtime.mjs';
+import {HomeSync,uuid} from './drive-sync-service.mjs';
+import {DriveSheets} from './drive-sheets.mjs';
+import {HouseholdAI} from './household-ai-service.mjs';
+import {parseHouseholdInvite} from './household-invite.mjs';
 import {prepareLaunch} from './launch.mjs';
 const config=window.TETHER_CONFIG,frame=document.querySelector('#app-frame'),loading=document.querySelector('#loading');
 let current='',installPrompt=null;
@@ -9,22 +13,34 @@ let homeRuntime;
 function runtimeFor(){return homeRuntime ||= createRuntime({config:{...config,workspace:'home'}});}
 // Pin this document and all of its screens to one installed bundle.
 const sessionURL=new URL(location.href);sessionURL.searchParams.set('release',config.version);sessionURL.searchParams.set('workspace','home');
+if(sessionURL.searchParams.get('view')==='sharing'){sessionURL.searchParams.delete('view');sessionURL.searchParams.set('settings','sharing');}
+const inviteKey='tether-home-invite:'+config.base;
+try{
+  const incoming=parseHouseholdInvite(sessionURL);
+  window.tetherHouseholdInvite=incoming||parseHouseholdInvite(sessionStorage.getItem(inviteKey)||sessionURL);
+  if(incoming)sessionStorage.setItem(inviteKey,sessionURL.href);
+}catch(error){window.tetherHouseholdInvite=null;window.tetherInviteError=error.message;try{sessionStorage.removeItem(inviteKey)}catch(_){}}
+if(window.tetherHouseholdInvite||window.tetherInviteError)sessionURL.searchParams.set('settings','sharing');
+window.tetherDismissInvite=()=>{window.tetherHouseholdInvite=null;window.tetherInviteError=null;sessionStorage.removeItem(inviteKey);const url=new URL(location.href);url.hash='';history.replaceState({},'',url);};
 history.replaceState({},'',sessionURL.pathname+sessionURL.search+sessionURL.hash);
+// A new invite pasted into an already-open tab is a new explicit navigation.
+window.addEventListener('hashchange',()=>{if(new URLSearchParams(location.hash.slice(1)).has('tetherInvite'))location.reload()});
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event});
 window.tetherInstall=async()=>{if(!installPrompt)return false;await installPrompt.prompt();installPrompt=null;return true};
 function pageURL(){
   const query=new URLSearchParams(location.search),view=query.get('view')||'conversation';query.delete('view');query.set('release',config.version);query.set('workspace',workspace);
-  const page={sharing:'drive-sharing.html',board:'board.html',snapshots:'snapshots.html',display:'display.html',conversation:'conversation.html'}[view]||'conversation.html';
+  const page={sharing:'conversation.html',board:'board.html',snapshots:'snapshots.html',display:'display.html',conversation:'conversation.html'}[view]||'conversation.html';
   return config.base+page+(query.size?'?'+query:'')+location.hash;
 }
 function shellURL(url){
   const page=url.pathname.slice(config.base.length),query=new URLSearchParams(url.search);query.set('release',config.version);query.set('workspace',workspace);
-  if(page==='drive-sharing.html')query.set('view','sharing');else if(page==='display.html')query.set('view','display');else if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');
+  if(page==='drive-sharing.html'){query.delete('view');query.set('settings','sharing');}else if(page==='display.html')query.set('view','display');else if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');
   return config.base+(query.size?'?'+query:'')+url.hash;
 }
 window.tetherNavigate=(href,{replace=false}={})=>{
   const url=new URL(href,location.origin);
   if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html','drive-sharing.html'].some(page=>url.pathname===config.base+page))return;
+  if(url.pathname===config.base+'drive-sharing.html'){url.pathname=config.base+'conversation.html';url.searchParams.set('settings','sharing');}
   url.searchParams.set('release',config.version);url.searchParams.set('workspace',workspace);
   const next=url.pathname+url.search+url.hash;if(current===next)return;
   history[replace?'replaceState':'pushState']({},'',shellURL(url));current=next;navigateFrame(next);
@@ -32,12 +48,23 @@ window.tetherNavigate=(href,{replace=false}={})=>{
 window.tetherSyncRoute=href=>{
   const url=new URL(href,location.origin);
   if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html','drive-sharing.html'].some(page=>url.pathname===config.base+page))return;
+  if(url.pathname===config.base+'drive-sharing.html'){url.pathname=config.base+'conversation.html';url.searchParams.set('settings','sharing');}
   url.searchParams.set('release',config.version);url.searchParams.set('workspace',workspace);
   const next=url.pathname+url.search+url.hash;
   if(current!==next){current=next;history.replaceState({},'',shellURL(url))}
 };
 window.addEventListener('popstate',()=>{const url=new URL(location.href);url.searchParams.set('workspace','home');history.replaceState({},'',url);const next=pageURL();if(next!==current){current=next;navigateFrame(next)}});
 window.tetherReady=prepareLaunch(config).then(open=>open?runtimeFor(workspace):new Promise(()=>{}));
+// Own sync in the persistent shell realm: child-screen timers/fetches disappear on navigation.
+window.tetherHomeSyncReady=window.tetherReady.then(runtime=>{
+  const apiBase=config.base+'api',prefix='tether-home-drive:'+apiBase+':';
+  let actor=localStorage.getItem(prefix+'device');if(!actor){actor=uuid();localStorage.setItem(prefix+'device',actor)}
+  const local=async(method,body)=>{const response=await runtime.fetch(apiBase+'/drive-sync/local',{method,headers:{'Content-Type':'application/json','X-Tether-Workspace':'home'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json();if(!response.ok){const error=Error(result.detail||'Local sync failed');error.status=response.status;throw error}return result};
+  return window.tetherHomeSync=new HomeSync({local,transport:new DriveSheets(window.fetch.bind(window)),actor,scheduler:window});
+});
+
+window.tetherHouseholdAIReady=Promise.all([window.tetherReady,window.tetherHomeSyncReady]).then(([runtime,sync])=>new HouseholdAI({runtime,sync}));
+
 try{
   const runtime=await window.tetherReady;window.tetherFetch=runtime.fetch;
   window.tetherNotify=()=>runtime.notifications();

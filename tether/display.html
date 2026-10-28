@@ -10,19 +10,24 @@
 <script src="/theme.js"></script>
 <script src="/workspace.js"></script>
 </head>
-<body>
-<header class="topnav"><div class="brand">tether<span>.</span></div><a href="/">Conversation</a><a href="/board">Tasks</a><a href="/display" data-display-nav class="active" aria-current="page">Display</a><div class="grow"></div><select class="theme-picker" data-theme-picker aria-label="Color theme"></select></header>
+<body class="display-dashboard">
+<div class="display-bar"><button id="display-menu" aria-label="View settings and navigation" aria-controls="display-sidebar" aria-expanded="false">☰</button><h1 id="display-title">Calendar</h1><time id="display-clock"></time></div>
+<button id="display-backdrop" aria-label="Close view settings" hidden></button>
+<aside id="display-sidebar" role="dialog" aria-modal="true" aria-label="Display settings" hidden>
+ <div class="sidebar-heading"><strong>Display</strong><button id="display-close" aria-label="Close view settings">✕</button></div>
+ <div class="display-period" role="group" aria-label="Calendar period"><button id="view-week" aria-pressed="false">Week</button><button id="view-month" aria-pressed="true">Month</button></div>
+ <div class="display-navigation"><button id="previous" aria-label="Previous period">‹</button><button id="today">Today</button><button id="next" aria-label="Next period">›</button></div>
+ <label>Go to date <input id="display-date" type="date"></label>
+ <label>Calendar text <select id="display-density"><option value="compact">Compact</option><option value="comfortable">Comfortable</option></select></label>
+ <label>Theme <select class="theme-picker" data-theme-picker aria-label="Color theme"></select></label>
+ <p id="display-status" role="status">Calendar refreshes every minute while open.</p>
+ <p class="display-hint">Choose a date to see all its items. Calendar refresh does not use AI.</p>
+ <nav aria-label="App navigation"><a href="/">Conversation</a><a href="/board">Tasks</a><a href="/display" data-display-nav aria-current="page">Display</a></nav>
+</aside>
 <main class="display-main">
- <div class="display-heading"><h1>Display</h1><p id="display-status" role="status">Your calendar stays up to date while this view is open.</p></div>
- <div class="display-toolbar" aria-label="Calendar controls">
-  <div class="display-period" role="group" aria-label="Calendar period"><button id="view-week" aria-pressed="true">Week</button><button id="view-month" aria-pressed="false">Month</button></div>
-  <div class="display-navigation"><button id="previous" aria-label="Previous period">‹</button><button id="today">Today</button><button id="next" aria-label="Next period">›</button></div>
-  <label class="display-date">Go to date <input id="display-date" type="date"></label>
- </div>
- <div class="display-quick" id="display-quick" aria-live="polite"></div>
  <section class="display-calendar" aria-label="Task calendar"><iframe id="display-calendar" title="Week and month calendar"></iframe></section>
- <p class="display-hint">Choose a task to open it. Hover or focus a date or task for a closer look.</p>
- <p id="display-error" role="alert"></p>
+ <footer class="display-footer"><div class="display-quick" id="display-quick"></div><span id="display-sync" role="status"></span></footer>
+ <p id="display-error" role="alert" hidden></p>
 </main>
 <script src="/display.js"></script>
 </body>
