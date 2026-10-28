@@ -15,7 +15,6 @@
 <button id="display-backdrop" aria-label="Close view settings" hidden></button>
 <aside id="display-sidebar" role="dialog" aria-modal="true" aria-label="Display settings" hidden>
  <div class="sidebar-heading"><strong>Display</strong><button id="display-close" aria-label="Close view settings">✕</button></div>
- <div class="display-period" role="group" aria-label="Calendar period"><button id="view-week" aria-pressed="false">Week</button><button id="view-month" aria-pressed="true">Month</button></div>
  <div class="display-navigation"><button id="previous" aria-label="Previous period">‹</button><button id="today">Today</button><button id="next" aria-label="Next period">›</button></div>
  <label>Go to date <input id="display-date" type="date"></label>
  <label>Calendar text <select id="display-density"><option value="compact">Compact</option><option value="comfortable">Comfortable</option></select></label>
@@ -25,7 +24,7 @@
  <nav aria-label="App navigation"><a href="/">Conversation</a><a href="/board">Tasks</a><a href="/display" data-display-nav aria-current="page">Display</a></nav>
 </aside>
 <main class="display-main">
- <section class="display-calendar" aria-label="Task calendar"><iframe id="display-calendar" title="Week and month calendar"></iframe></section>
+ <section class="display-calendar" aria-label="Task calendar"><iframe id="display-calendar" title="Month calendar and date details"></iframe></section>
  <footer class="display-footer"><div class="display-quick" id="display-quick"></div><span id="display-sync" role="status"></span></footer>
  <p id="display-error" role="alert" hidden></p>
 </main>

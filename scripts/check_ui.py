@@ -135,6 +135,33 @@ def main():
                 expect(drawer).to_be_visible();box=drawer.bounding_box();assert box['x']>=-1 and box['width']<=390
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.keyboard.press('Escape')
+                if not args.mock_api:
+                    # Real installed Work chat uses the same inline date panel as Home.
+                    page.set_viewport_size({'width':1280,'height':900})
+                    page.locator('#message').fill('/snapshot 2030-10-01 to 2030-10-31')
+                    page.get_by_role('button',name='Send',exact=True).click()
+                    calendar=page.frame_locator('.snapshot-frame').last
+                    expect(calendar.locator('.day[data-date="2030-10-28"] .task-marker')).to_have_count(1)
+                    calendar.locator('.day[data-date="2030-10-28"] .day-date').click()
+                    expect(calendar.locator('#date-panel')).to_have_attribute('data-date','2030-10-28')
+                    expect(calendar.locator('#date-panel-items')).to_contain_text('Contact the review team')
+                    expect(drawer).to_be_hidden()
+                    expect(calendar.locator('#png, #svg, #details, #day-dialog')).to_have_count(0)
+                    page.locator('#message').fill('/snapshot 2030-10-28 to 2030-11-03')
+                    page.get_by_role('button',name='Send',exact=True).click()
+                    calendar=page.frame_locator('.snapshot-frame').last
+                    expect(calendar.locator('.day-items .task').filter(has_text='Check the draft attachment')).to_have_count(1)
+                    expect(calendar.locator('.task-marker')).to_have_count(0)
+                    calendar.locator('.day-items .task').filter(has_text='Check the draft attachment').click()
+                    expect(calendar.locator('#date-panel-items')).to_contain_text('Check the draft attachment')
+                    # A weekend task includes weekend columns, not a hidden sixth item.
+                    expect(calendar.locator('#weekdays span')).to_have_count(7)
+                    page.goto(base+'/display?workspace=work',wait_until='networkidle')
+                    calendar=page.frame_locator('#display-calendar')
+                    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                    expect(page.locator('#view-week, #view-month')).to_have_count(0)
+                    assert calendar.locator('body').evaluate('()=>new URL(location.href).searchParams.get("workspace")')=='work'
+                    page.goto(base+'/',wait_until='networkidle')
                 # Reproduce a desktop upgrade with an old script still in the
                 # WebView cache. Its matchReferences hook must remain harmless.
                 legacy=(ROOT/'tests/fixtures/legacy-chat-2026-16.js').read_text()

@@ -67,7 +67,7 @@ Replies use the same Note style in desktop and browser: natural update paragraph
 
 Attention updates automatically after saves, notes, and chat changes. Completed or rescheduled items reflect their current state; other-tab and outside changes appear within a few seconds while Conversation is visible. Automatic refresh reads saved records; the ↻ button asks AI to reconsider. Updating a task clears any stale AI suggestion for it while retaining reminders that are still due.
 
-**Calendars:** Ask “give me my next week snapshot” or use `/snapshot last month`. The calendar appears inside chat, with transparent day cells and category-colored task blocks. Monday–Friday remain visible; weekends appear when they contain work. PNG and SVG buttons export the calendar.
+**Calendars:** Ask “give me my next week snapshot” or use `/snapshot last month`. The calendar appears inside chat with transparent cells and category colors. Week snapshots keep expanded task cards: Monday–Friday remain visible, with weekends added when they contain items. Months show up to three compact markers per date plus an overflow count. Hover, tap or keyboard-focus a date to read every item in the adjacent date panel; it returns to Today after 15 seconds of inactivity. Scrolling or interacting with the panel gives you another 15 seconds. Display uses the same month layout, fitted to the screen. Calendars refresh local data automatically without calling an AI model.
 
 **Archive:** Put finished or inactive tasks away without deleting them; restore them from **View archive**.
 

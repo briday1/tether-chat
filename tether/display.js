@@ -6,7 +6,7 @@
   const iso=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
   const validDate=value=>typeof value==='string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value+'T12:00:00').valueOf());
   let view='month',anchor=iso(new Date()),followingToday=true,weekStart=1,density='compact',revision=0,lastRange='',busy=false;
-  try{const saved=JSON.parse(localStorage.getItem(storageKey())||'{}');if(['week','month'].includes(saved.view))view=saved.view;if(['compact','comfortable'].includes(saved.density))density=saved.density;if(saved.followingToday===false && validDate(saved.anchor)){anchor=saved.anchor;followingToday=false}}catch(_){}
+  try{const saved=JSON.parse(localStorage.getItem(storageKey())||'{}');if(['compact','comfortable'].includes(saved.density))density=saved.density;if(saved.followingToday===false && validDate(saved.anchor)){anchor=saved.anchor;followingToday=false}}catch(_){}
   function persist(){try{localStorage.setItem(storageKey(),JSON.stringify({view,anchor,followingToday,density}))}catch(_){}}
   function sidebar(open){$('.display-main').inert=open;$('#display-sidebar').hidden=!open;$('#display-backdrop').hidden=!open;$('#display-menu').setAttribute('aria-expanded',String(open));if(open)$('#display-close').focus();else $('#display-menu').focus()}
   $('#display-menu').onclick=()=>sidebar($('#display-sidebar').hidden);
@@ -63,7 +63,6 @@
       const date=new Date(anchor+'T12:00:00');$('#display-title').textContent=view==='month'?date.toLocaleDateString(undefined,{month:'long',year:'numeric'}):new Date(start+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})+' – '+new Date(end+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
       $('#display-density').value=density;clock();syncStatus();
       $('#display-date').value=anchor;
-      $('#view-week').setAttribute('aria-pressed',String(view==='week'));$('#view-month').setAttribute('aria-pressed',String(view==='month'));
       if(key!==lastRange){lastRange=key;frame.contentWindow.location.replace('/snapshots?'+new URLSearchParams({start,end,embed:'1',layout:'display',density,workspace:mode()}));}
       else frame.contentWindow?.postMessage({type:'tether:snapshot-refresh'},location.origin);
       const response=await fetch('/api/snapshot?'+new URLSearchParams({start,end}));
@@ -76,7 +75,6 @@
   function step(direction){const date=new Date(anchor+'T12:00:00');if(view==='month'){date.setDate(1);date.setMonth(date.getMonth()+direction)}else date.setDate(date.getDate()+7*direction);anchor=iso(date);followingToday=false;refresh(true)}
   $('#previous').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
   $('#today').onclick=()=>{followingToday=true;refresh(true)};
-  for(const period of ['week','month'])$('#view-'+period).onclick=()=>{view=period;refresh(true)};
   $('#display-date').onchange=event=>{if(validDate(event.target.value)){anchor=event.target.value;followingToday=false;refresh(true)}};
   $('#display-density').onchange=event=>{density=event.target.value;refresh(true)};
   frame.addEventListener('load',theme);
