@@ -43,7 +43,7 @@ Configure one dedicated project for all household users:
 3. Create an OAuth **Web application** client for exact JavaScript origins, including `https://briday1.github.io`. For local browser development, configure `http://localhost` and the exact development port. No client secret or token-exchange backend is used.
 4. Configure the public client ID and project number in `web/drive-config.json`.
 5. Create a website-restricted Picker browser API key with the required app referrers and Google’s documented `https://docs.google.com/*` referrer. Restrict its API use to Picker. Sheets requests use the user’s OAuth bearer token, not this key.
-6. Save that key once as repository Actions secret **TETHER_GOOGLE_PICKER_API_KEY**. The Pages publication workflow injects it immediately before building. The resulting browser key is necessarily public, so publication requires approval and appropriate restrictions. The desktop package never receives it. Never put client secrets or tokens in frontend configuration.
+6. Save that key once as repository Actions secret **TETHER_GOOGLE_PICKER_API_KEY** (the existing **TETHER_GOOGLE_API_KEY** name is also accepted). The Pages publication workflow injects it immediately before building. The resulting browser key is necessarily public, so publication requires approval and appropriate restrictions. The desktop package never receives it. Never put client secrets or tokens in frontend configuration.
 
 PR tests never receive the publisher key. Missing configuration stops browser publication. Household members use the configured app and do not create Cloud projects or type keys; App setup is a development fallback.
 

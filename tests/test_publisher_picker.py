@@ -48,3 +48,9 @@ def test_desktop_release_never_receives_picker_key():
 def test_publisher_default_targets_browser_only():
     text=(ROOT/'scripts/configure_google_picker.py').read_text()
     assert "ROOT/'web/drive-config.json'" in text
+
+
+def test_browser_publisher_accepts_existing_secret_alias_without_desktop_exposure():
+    text=(ROOT/'.github/workflows/web-pages.yml').read_text()
+    assert '${{ secrets.TETHER_GOOGLE_PICKER_API_KEY || secrets.TETHER_GOOGLE_API_KEY }}' in text
+    assert 'TETHER_GOOGLE_API_KEY' not in (ROOT/'.github/workflows/publish-pypi.yml').read_text()
