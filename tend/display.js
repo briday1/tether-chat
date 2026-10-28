@@ -32,6 +32,7 @@
     busy=true;const request=++revision;
     try{
       if(followingToday)anchor=iso(new Date());
+      persist(); // Save the user's view before any asynchronous refresh/navigation.
       const {start,end}=range(),key=`${start}:${end}`;
       $('#display-date').value=anchor;
       $('#view-week').setAttribute('aria-pressed',String(view==='week'));$('#view-month').setAttribute('aria-pressed',String(view==='month'));
