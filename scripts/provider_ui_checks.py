@@ -24,20 +24,22 @@ def check_provider_settings(page):
         page.get_by_role('button',name='Settings',exact=True).click()
         page.get_by_label('Provider API base URL').fill('https://provider.example/v1')
         page.get_by_label('API key',exact=True).fill('desktop-synthetic-key')
-        expect(page.locator('#modelStatus')).to_contain_text('2 tool-calling models found')
+        expect(page.locator('#modelStatus')).to_contain_text('2 tool-calling models available')
         expect(page.get_by_label('Model',exact=True)).to_have_value('fixture-mini')
         assert saves==[] and tests==[] and discovered[-1]['api_key']=='desktop-synthetic-key'
         page.get_by_role('button',name='Test connection',exact=True).click()
         expect(page.locator('#providerStatus')).to_have_text('Connection successful')
         assert len(saves)==len(tests)==1 and tests[0]['model']=='fixture-mini'
         expect(page.get_by_label('API key',exact=True)).to_have_value('')
-        page.get_by_label('Model',exact=True).fill('manual-model')
+        page.get_by_label('Model',exact=True).select_option('fixture-model')
+        page.get_by_role('button',name='Refresh models',exact=True).click()
+        expect(page.get_by_label('Model',exact=True)).to_have_value('fixture-model')
         page.locator('#provider').evaluate('(form)=>{form.requestSubmit();form.requestSubmit()}')
         page.get_by_role('button',name='Close settings',exact=True).click()
         assert page.evaluate('window.tetherBeforeChat()') is True
-        assert len(saves)==2 and saves[-1]['model']=='manual-model' and saves[-1]['api_key'] is None
+        assert len(saves)==2 and saves[-1]['model']=='fixture-model' and saves[-1]['api_key'] is None
         page.get_by_role('button',name='Settings',exact=True).click()
         expect(page.locator('#keyStatus')).to_contain_text('API key configured and ready')
-        expect(page.get_by_label('Model',exact=True)).to_have_value('manual-model')
+        expect(page.get_by_label('Model',exact=True)).to_have_value('fixture-model')
         page.get_by_role('button',name='Close settings',exact=True).click()
     finally:page.unroute('**/api/settings**',settings)

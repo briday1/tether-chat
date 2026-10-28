@@ -21,7 +21,20 @@
     },
     "gpt-6-sol": {
       "reasoning_effort": "none"
-    }
+    },
+    "gpt-5.4-mini": {
+      "reasoning_effort": "none"
+    },
+    "gpt-5.4-nano": {
+      "reasoning_effort": "none"
+    },
+    "gpt-5.5": {
+      "reasoning_effort": "none"
+    },
+    "gpt-5.6-sol": {
+      "reasoning_effort": "none"
+    },
+    "o3": {}
   },
   "sources": [
     "https://developers.openai.com/api/docs/models/gpt-4.1-mini",
@@ -36,6 +49,11 @@
     "https://developers.openai.com/api/docs/models/gpt-5.2",
     "https://developers.openai.com/api/docs/models/gpt-5.4",
     "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
-    "https://developers.openai.com/api/docs/models/gpt-6-sol"
+    "https://developers.openai.com/api/docs/models/gpt-6-sol",
+    "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+    "https://developers.openai.com/api/docs/models/gpt-5.4-nano",
+    "https://developers.openai.com/api/docs/models/gpt-5.5",
+    "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+    "https://developers.openai.com/api/docs/models/o3"
   ]
 }

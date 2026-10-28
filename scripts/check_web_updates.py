@@ -42,19 +42,20 @@ def main():
         folder=Path(temporary);release=builder.build(folder/'release','/tether-chat/')
         config=json.loads((release/'app-config.js').read_text().removeprefix('window.TETHER_CONFIG=').rstrip(';\n'))
         version=config['version'];served=folder/'site'/'tether-chat';shutil.copytree(release,served)
-        legacy={**config,'version':'2026.7'}
+        legacy={**config,'version':'2026.18'}
         (served/'app-config.js').write_text('window.TETHER_CONFIG='+json.dumps(legacy)+';\n')
         (served/'shell.mjs').write_bytes((ROOT/'tests/fixtures/legacy-web-shell.mjs').read_bytes())
         # This snapshots the old worker without an activation message handler.
         assets=[config['base']+str(file.relative_to(served)) for file in served.rglob('*') if file.is_file() and file.name not in {'sw.js','update.html'} and not file.name.startswith('.')]
         worker=(ROOT/'tests/fixtures/legacy-web-sw.js.in').read_text()
-        for key,value in {'__CACHE__':'tether-web:/tether-chat/:2026.7:fixture','__PREFIX__':'tether-web:/tether-chat/:','__ASSETS__':assets,'__BASE__':'/tether-chat/'}.items():worker=worker.replace(key,json.dumps(value))
+        for key,value in {'__CACHE__':'tether-web:/tether-chat/:2026.18:fixture','__PREFIX__':'tether-web:/tether-chat/:','__ASSETS__':assets,'__BASE__':'/tether-chat/'}.items():worker=worker.replace(key,json.dumps(value))
         (served/'sw.js').write_text(worker)
         # The actual old release has no update page on its server or in its cache.
         (served/'update.html').unlink()
         server=ThreadingHTTPServer(('127.0.0.1',0),partial(FreshHandler,directory=str(folder/'site')))
         threading.Thread(target=server.serve_forever,daemon=True).start()
         base=f'http://127.0.0.1:{server.server_port}/tether-chat/'
+        (folder/'site'/'unrelated.html').write_text('<title>Another app</title><p>Keep this page.</p>')
         try:
             with sync_playwright() as pw:
                 executable=os.environ.get('TETHER_TEST_CHROMIUM')
@@ -71,11 +72,12 @@ def main():
                 }""")
                 frame=page.frame_locator('#app-frame');frame.get_by_label('Message tether').fill('Keep this unsent phone draft.')
                 before=page.evaluate(DB,'read')
+                unrelated=context.new_page();unrelated.goto(base.replace('/tether-chat/','/unrelated.html'));unrelated.evaluate("window.keepThisTab='untouched'")
                 other=context.new_page();other.goto(base)
-                expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text('2026.7')
+                expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text('2026.18')
                 shutil.copytree(release,served,dirs_exist_ok=True)
                 page.reload();page.wait_for_function("async()=>!!(await navigator.serviceWorker.getRegistration()).waiting")
-                expect(page.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text('2026.7')
+                expect(page.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text('2026.18')
                 # A normal app page cannot force a replacement while other work is open.
                 page.evaluate("""async()=>{
                   window.legacyController=navigator.serviceWorker.controller;
@@ -93,10 +95,14 @@ def main():
                 expect(update.locator('#status')).to_contain_text('Waiting for your current chat request')
                 assert update.url.endswith('/update.html')
                 assert update.evaluate('document.documentElement.scrollWidth<=innerWidth')
-                update.screenshot(path=str(ROOT/'docs/screenshots/browser-update-2026-19.jpg'),type='jpeg',quality=90)
+                update.screenshot(path=str(folder/'update-waiting.jpg'),type='jpeg',quality=90)
                 # The second tab stays open throughout recovery; no all-tabs-closed workaround.
                 other.evaluate(DB,'idle')
                 update.wait_for_url(base,timeout=90000)
+                expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text(version)
+                expect(page.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text(version)
+                assert unrelated.evaluate('window.keepThisTab')=='untouched'
+                assert page.evaluate("async()=>{const r=await tetherReady;return (await (await r.fetch('/tether-chat/api/settings')).json()).has_key}")
                 updated=update.frame_locator('#app-frame')
                 expect(updated.locator('#browserVersion')).to_contain_text(version)
                 expect(updated.get_by_label('Message tether')).to_have_value('Keep this unsent phone draft.')
@@ -111,14 +117,31 @@ def main():
                 expect(updated.locator('#appUpdateStatus')).to_contain_text('Finish the current chat request')
                 assert update.url==base
                 update.evaluate(DB,'idle')
-                updated.get_by_role('button',name='Update app',exact=True).click()
+                # A mixed/stale installed config must produce a concrete version error,
+                # never silently open an older build and claim the update succeeded.
+                cached_config=update.evaluate('''async()=>{
+                  const key=(await caches.keys()).find(k=>k.startsWith('tether-web:/tether-chat/:'));
+                  const cache=await caches.open(key),path='/tether-chat/app-config.js';
+                  const text=await (await cache.match(path)).text();
+                  const config=JSON.parse(text.slice('window.TETHER_CONFIG='.length).trim().replace(/;$/,''));
+                  config.version='2026.18';await cache.put(path,new Response('window.TETHER_CONFIG='+JSON.stringify(config)+';'));
+                  return {key,path,text};
+                }''')
+                with update.expect_navigation(url='**/update.html?*',wait_until='domcontentloaded'):
+                    updated.get_by_role('button',name='Update app',exact=True).click()
+                expect(update.locator('#status')).to_contain_text('This tab is still using 2026.18.')
+                assert '/update.html' in update.url
+                if os.environ.get('TETHER_UPDATE_SCREENSHOT'):update.screenshot(path=os.environ['TETHER_UPDATE_SCREENSHOT'])
+                update.evaluate('''async saved=>{const cache=await caches.open(saved.key);await cache.put(saved.path,new Response(saved.text))}''',cached_config)
+                update.get_by_role('button',name='Try again',exact=True).click()
                 update.wait_for_url(base,timeout=90000)
                 expect(update.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text(version)
                 assert update.evaluate("async()=>{const r=await tetherReady;return (await (await r.fetch('/tether-chat/api/settings')).json()).has_key}")
-                other.reload();expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text(version)
+                expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text(version,timeout=3000)
+                expect(page.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text(version,timeout=3000)
                 assert update.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 browser.close()
-                print('PASS: phone recovery from cached 2026.7, open tabs, pending chats, encrypted connection, tasks, notes, conversation and unsent draft preserved.')
+                print('PASS: cached 2026.18 recovery refreshes original tabs; stale config is detected; pending chats, keys, data, drafts and unrelated tabs are preserved.')
         finally:server.shutdown();server.server_close()
 
 

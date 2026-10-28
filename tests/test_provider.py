@@ -98,7 +98,7 @@ def test_model_discovery_route_and_connection_test_use_the_current_fields(connec
     assert len(calls)==2
 
 
-@pytest.mark.parametrize('model',['gpt-5.4','gpt-6-sol','gpt-6-luna'])
+@pytest.mark.parametrize('model',['gpt-5.4','gpt-5.4-mini','gpt-5.5','gpt-5.6-sol','gpt-6-sol','gpt-6-luna'])
 def test_compatible_chat_models_send_required_reasoning_option(connection,monkeypatch,model):
     ai.save('https://api.openai.com/v1',model,'synthetic-key')
     def network(req,timeout):

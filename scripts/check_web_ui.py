@@ -115,10 +115,10 @@ def main():
                 frame.get_by_role('button',name='Settings',exact=True).click()
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1')
                 frame.get_by_label('API key',exact=True).fill('synthetic-test-key')
-                expect(frame.locator('#modelStatus')).to_contain_text('3 tool-calling models found')
+                expect(frame.locator('#modelStatus')).to_contain_text('3 tool-calling models available')
                 expect(frame.get_by_label('Model',exact=True)).to_have_value('test-mini')
                 assert model_requests==['Bearer synthetic-test-key'] and requests==[]
-                frame.get_by_label('Model',exact=True).fill('test-model')
+                frame.get_by_label('Model',exact=True).select_option('test-model')
                 frame.get_by_label('Save encrypted key on this device').check()
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 # Test must save the newly entered key and fields, with no prior Save click.
@@ -136,10 +136,11 @@ def main():
                 provider_error=None
                 expect(frame.get_by_label('Provider API base URL')).to_have_value('https://provider.example/v1')
                 frame.get_by_label('Provider API base URL').fill('https://wrong-provider.example/v1')
+                assert frame.locator('#model option').evaluate_all('(options)=>options.map(o=>o.value)')==['']
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Re-enter your API key')
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1')
-                frame.get_by_label('Model',exact=True).fill('changed-test-model')
+                frame.get_by_label('Model',exact=True).select_option('changed-test-model')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
                 frame.get_by_role('button',name='Lock key',exact=True).click()

@@ -27,7 +27,7 @@
   window.tetherPrepareUpdate=()=>pendingProvider;
   window.tetherLoadSettings=()=>loadingSettings=(async()=>{
     await pendingProvider;
-    const form=$('#provider'),controls=[...form.querySelectorAll('input,button')];
+    const form=$('#provider'),controls=[...form.querySelectorAll('input,select,button')];
     form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
     try{configuration(await api('/settings'));await window.tetherLoadPreferences?.()}catch(e){status('#providerStatus',e.message)}
     finally{for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
@@ -75,10 +75,12 @@
       providerBusy=true;
       return pendingProvider=(async()=>{
         await loadingSettings;
-        if(validate && !form.reportValidity()){providerBusy=false;return}
-        const controls=[...form.querySelectorAll('input,button')];
-        form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
-        try{await action()}catch(e){status('#providerStatus',e.message)}
+        const controls=[...form.querySelectorAll('input,select,button')];
+        try{
+          if(validate){await window.tetherRequireModel?.();if(!form.reportValidity())return}
+          form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
+          await action();
+        }catch(e){status('#providerStatus',e.message)}
         finally{providerBusy=false;for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
       })();
     }

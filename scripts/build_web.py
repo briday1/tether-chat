@@ -117,7 +117,7 @@ def build(output, base='/'):
     digest = hashlib.sha256(b''.join(file.read_bytes() for file in sorted(output.rglob('*')) if file.is_file())).hexdigest()[:16]
     worker = (ROOT / 'web/sw.js.in').read_text(encoding='utf-8')
     worker = worker.replace('__CACHE__', json.dumps(f'tether-web:{base}:{version}:{digest}')).replace('__PREFIX__', json.dumps('tether-web:' + base + ':'))
-    worker = worker.replace('__ASSETS__', json.dumps(assets)).replace('__BASE__', json.dumps(base))
+    worker = worker.replace('__ASSETS__', json.dumps(assets)).replace('__BASE__', json.dumps(base)).replace('__VERSION__', json.dumps(version))
     (output / 'sw.js').write_text(worker, encoding='utf-8')
     print(f'Built tether. {version} browser edition at {output} (base {base})')
     return output

@@ -1,45 +1,56 @@
-/* Model discovery reads the typed connection, without saving or testing a paid call. */
+/* A native model picker lists only verified tool models from this connection. */
 (() => {
-  const $=selector=>document.querySelector(selector);
-  let revision=0,timer=null,configured=null,manualModel=false,lastConnection='';
-  function invalidate(){revision++;clearTimeout(timer);lastConnection='';$('#modelOptions')?.replaceChildren()}
-  function signature(){return JSON.stringify([$('#base').value.trim(),$('#key').value.trim()])}
-  function canLoad(){return $('#key').value.trim() || configured?.has_key && $('#base').value.trim().replace(/\/+$/,'')===configured.base_url.replace(/\/+$/,'')}
+  const $=selector=>document.querySelector(selector),choices=new Map();
+  let revision=0,timer=null,configured=null,lastConnection='',pending=null,lastError='';
+  const base=()=>$('#base').value.trim().replace(/\/+$/,'');
+  const signature=()=>JSON.stringify([base(),$('#key').value.trim()]);
+  const canLoad=()=>$('#key').value.trim() || configured?.has_key && base()===configured.base_url.replace(/\/+$/,'');
+  function placeholder(text){const option=new Option(text,'',true,true);option.disabled=true;$('#model').replaceChildren(option)}
+  function invalidate(){revision++;clearTimeout(timer);lastConnection='';lastError='';pending=null;placeholder('Connect to load tool-calling models')}
   async function discover(force=false){
     if(!$('#provider') || !canLoad())return;
-    const connection=signature();if(!force && connection===lastConnection)return;
-    const current=++revision,selected=$('#model').value;
-    $('#modelStatus').textContent='Loading available models…';
-    try{
-      const response=await fetch('/api/settings/models',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({base_url:$('#base').value.trim(),api_key:$('#key').value.trim()||null})});
-      const result=await response.json();
-      if(current!==revision || connection!==signature())return;
-      if(!response.ok)throw Error(result.detail||'Could not load models. Enter a model ID manually.');
-      const ids=result.models||[],options=ids.map(id=>{const option=document.createElement('option');option.value=id;return option});
-      $('#modelOptions').replaceChildren(...options);lastConnection=connection;
-      // Keep a deliberate manual choice. Prefer a small chat model for a new connection.
-      if(!manualModel && selected===$('#model').value && !ids.includes(selected)){
-        const candidates=ids.filter(id=>!/(embed|whisper|tts|audio|realtime|transcrib|moderation|dall-e|image|video|sora|babbage|davinci|search|codex|computer-use|(?:^|-)pro(?:-|$))/i.test(id));
-        const preferred=candidates.find(id=>/(mini|flash|haiku|luna|lite)/i.test(id) && !/\d{4}-\d{2}-\d{2}/.test(id))||candidates[0];
-        if(preferred)$('#model').value=preferred;
-      }
-      $('#modelStatus').textContent=ids.length?`${ids.length} tool-calling models found. Choose a compatible model.`:
-        'No verified tool-calling models were reported. Enter an ID only if you know it supports chat tools.';
-    }catch(error){if(current===revision && connection===signature())$('#modelStatus').textContent=error.message}
+    const connection=signature();
+    if(pending?.connection===connection)return pending.promise;
+    if(!force && connection===lastConnection)return;
+    const current=++revision,selected=choices.get(base()) || (configured?.base_url.replace(/\/+$/,'')===base()?configured.model:'');
+    $('#modelStatus').textContent='Loading available tool-calling models…';
+    const promise=(async()=>{
+      try{
+        const response=await fetch('/api/settings/models',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({base_url:base(),api_key:$('#key').value.trim()||null})});
+        const result=await response.json();
+        if(current!==revision || connection!==signature())return;
+        if(!response.ok)throw Error(result.detail||'Could not load models. Check this connection and refresh the list.');
+        const ids=Array.isArray(result.models)?result.models:[];
+        if(!ids.length){placeholder('No compatible tool-calling models found');lastError='This provider reported no verified tool-calling chat models. Check the URL/key or the provider’s model capabilities.'}
+        else{
+          $('#model').replaceChildren(...ids.map(id=>new Option(id,id)));
+          const preferred=ids.find(id=>/(mini|flash|haiku|luna|lite)/i.test(id)&&!/\d{4}-\d{2}-\d{2}/.test(id))||ids[0];
+          $('#model').value=ids.includes(selected)?selected:preferred;choices.set(base(),$('#model').value);lastError='';
+        }
+        lastConnection=connection;
+        $('#modelStatus').textContent=ids.length?`${ids.length} tool-calling ${ids.length===1?'model':'models'} available. Select a model from the list.`:lastError;
+      }catch(error){if(current===revision && connection===signature()){lastError=error.message;placeholder('Could not load models');$('#modelStatus').textContent=lastError}}
+    })();
+    pending={connection,promise};try{await promise}finally{if(pending?.promise===promise)pending=null}
   }
   window.tetherProviderConfigured=c=>{
-    configured=c;invalidate();manualModel=!!(c.has_key||c.has_saved_key);
+    configured=c;choices.set(c.base_url.replace(/\/+$/,''),c.model);invalidate();
     if(c.has_key)discover();
-    else if($('#modelStatus'))$('#modelStatus').textContent=c.locked?'Unlock your saved key to load available models.':'Models load automatically after you enter a provider URL and key.';
+    else $('#modelStatus').textContent=c.locked?'Unlock your saved key to load the model list.':'Enter your provider URL and API key to load the model list.';
   };
   window.tetherDiscoverModels=()=>discover();
+  window.tetherRequireModel=async()=>{
+    if(!canLoad())throw Error(configured && base()!==configured.base_url.replace(/\/+$/,'')?'Re-enter your API key for this provider URL to load models.':configured?.locked?'Unlock your saved key to choose a model.':'Enter your API key for this provider URL to load models.');
+    await discover();
+    if(!$('#model').value)throw Error(lastError||'Select a tool-calling model from the list.');
+  };
   document.addEventListener('DOMContentLoaded',()=>{
     if(!$('#provider'))return;
-    $('#model').addEventListener('input',()=>{manualModel=true});
+    $('#provider').noValidate=true;
+    $('#model').addEventListener('change',()=>choices.set(base(),$('#model').value));
     for(const selector of ['#base','#key'])$(selector).addEventListener('input',()=>{
-      invalidate();$('#modelStatus').textContent='Models load automatically from this URL and key.';
-      timer=setTimeout(()=>discover(),700);
+      invalidate();$('#modelStatus').textContent='The model list loads automatically from this URL and key.';timer=setTimeout(()=>discover(),700);
     });
     $('#refreshModels').onclick=()=>{
       if(!canLoad()){$('#modelStatus').textContent=configured?.locked?'Unlock your saved key to load models.':'Enter your API key for this provider URL to load models.';return}
