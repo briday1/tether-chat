@@ -3,3 +3,5 @@
 .display-bar{min-height:50px;flex-wrap:wrap}.display-month-navigation{display:flex;align-items:center;gap:4px;min-width:0}.display-month-navigation button{flex:none}#display-today{font-size:13px;border:1px solid var(--line);border-radius:6px;padding:0 9px;margin-left:6px}.display-bar time{font-variant-numeric:tabular-nums}@media(max-width:760px){.display-bar{column-gap:4px;row-gap:0}.display-bar time{flex-basis:100%;text-align:right;padding:0 4px 5px}.display-month-navigation{flex:1}.display-month-navigation h1{flex:1}.display-bar h1{font-size:18px}body.display-dashboard{grid-template-rows:auto minmax(0,1fr)}}
 @media(max-width:400px){.display-month-navigation{gap:2px}.display-bar h1{font-size:16px}#display-today{margin-left:2px;padding:0 6px}}
 @media(max-width:400px){.display-month-navigation{order:3;flex-basis:100%}.display-bar time{flex-basis:auto;padding-bottom:0;margin-left:auto}}
+/* Empty-month guidance must wrap rather than widen the dock on narrow screens. */
+.display-main{min-width:0}.display-quick{flex-wrap:wrap}.display-quick span{white-space:normal;overflow-wrap:anywhere}
