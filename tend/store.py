@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS relations(a TEXT NOT NULL REFERENCES threads(id) ON D
 CREATE TABLE IF NOT EXISTS conversation(id TEXT PRIMARY KEY,role TEXT NOT NULL,body TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS activity(id TEXT PRIMARY KEY,thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,kind TEXT NOT NULL,body TEXT NOT NULL,occurred_at TEXT NOT NULL,recorded_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS thread_categories(thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,name TEXT NOT NULL,position INTEGER NOT NULL,PRIMARY KEY(thread_id,name));
+CREATE TABLE IF NOT EXISTS user_preferences(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS assistant_context(id INTEGER PRIMARY KEY CHECK(id=1),task_id TEXT);
 """)
+        from .decisions import DEFAULT_PREFERENCES
+        c.execute('INSERT OR IGNORE INTO user_preferences(id,value) VALUES(1,?)',(json.dumps(DEFAULT_PREFERENCES),))
         entry_columns={row[1] for row in c.execute("PRAGMA table_info(entries)")}
         for name in ("due_at","revisit_at","notified_for"):
             if name not in entry_columns:c.execute(f"ALTER TABLE entries ADD COLUMN {name} TEXT")
@@ -93,6 +97,69 @@ def create(title,summary="",categories=None):
         c.execute("INSERT INTO threads(id,title,summary,category,created_at,updated_at) VALUES(?,?,?,?,?,?)",(id,title.strip(),summary,names[0],t,t))
         c.executemany("INSERT INTO thread_categories(thread_id,name,position) VALUES(?,?,?)",[(id,name,i) for i,name in enumerate(names)])
     return get(id)
+
+def preferences():
+    from .decisions import preferences as normalize
+    rows=query('SELECT value FROM user_preferences WHERE id=1')
+    return normalize(json.loads(rows[0]['value']) if rows else {})
+
+def set_preferences(fields):
+    from .decisions import preferences as normalize
+    with conn() as c:
+        c.execute('BEGIN IMMEDIATE');row=c.execute('SELECT value FROM user_preferences WHERE id=1').fetchone()
+        value=normalize({**(json.loads(row['value']) if row else {}),**fields})
+        c.execute('INSERT OR REPLACE INTO user_preferences(id,value) VALUES(1,?)',(json.dumps(value),))
+    return value
+
+def category_list():return sorted({row['name'] for row in query('SELECT DISTINCT name FROM thread_categories') if row['name'].casefold()!='unsorted'})
+
+def focus(id=None):
+    from .decisions import task_key
+    if id and get(id):
+        with conn() as c:c.execute('INSERT OR REPLACE INTO assistant_context(id,task_id) VALUES(1,?)',(id,))
+    rows=query('SELECT task_id FROM assistant_context WHERE id=1');task=get(rows[0]['task_id']) if rows else None
+    if task and not task.get('archived_at') and task['state']!='settled':return task
+    import re
+    for message in reversed(conversation(10)):
+        if message['role']!='assistant':continue
+        ids=set(re.findall(r'#task/([A-Za-z0-9_-]+)',message['body']))
+        if len(ids)==1:
+            task=get(next(iter(ids)))
+            if task and not task.get('archived_at') and task['state']!='settled':return task
+    active=[task for task in list_threads() if not task.get('archived_at') and task['state']!='settled']
+    return get(active[0]['id']) if active and len({task_key(t['title']) for t in active})==1 else None
+
+def assistant_context():
+    from .decisions import resolve_reminder
+    p=preferences();focused=focus()
+    return {'preferences':p,'available_categories':category_list(),'focused_task':({key:focused[key] for key in ('id','title','categories','revisit_at','due_at')}|{'summary':focused['summary'][:300]}) if focused else None,
+      'recent_tasks':[{key:task[key] for key in ('id','title','categories','revisit_at')}|{'summary':task['summary'][:200]} for task in list_threads() if not task.get('archived_at') and task['state']!='settled'][:12],
+      'default_reminder_choices':{period:resolve_reminder(period,p) for period in ('tomorrow','next week','next month','next year')}}
+
+def capture(title,summary='',categories=None,remind_at=None,existing_id=None):
+    from .decisions import task_key,choose_categories,resolve_reminder
+    if not isinstance(title,str) or not title.strip():raise ValueError('Title required')
+    if categories is not None and not isinstance(categories,list):raise ValueError('Use a list of categories')
+    reminder=resolve_reminder(remind_at,preferences()) if remind_at else None
+    key=task_key(title);stamp=now()
+    with conn() as c:
+        c.execute('BEGIN IMMEDIATE')
+        rows=[dict(row) for row in c.execute("SELECT * FROM threads WHERE archived_at IS NULL AND state!='settled' ORDER BY created_at,id")]
+        existing=next((row for row in rows if row['id']==existing_id),None) if existing_id else next((row for row in rows if key and task_key(row['title'])==key),None)
+        if existing_id and existing is None:raise ValueError('Find an active existing task before changing it')
+        available=[r['name'] for r in c.execute('SELECT DISTINCT name FROM thread_categories')]
+        names=normalize_categories(choose_categories(title,summary,available,categories))
+        id=existing['id'] if existing else uuid4().hex
+        if existing:
+            current=[r['name'] for r in c.execute('SELECT name FROM thread_categories WHERE thread_id=? ORDER BY position',(id,))]
+            if any(name.casefold()!='unsorted' for name in current):names=current
+            c.execute('UPDATE threads SET summary=?,revisit_at=?,notified_for=?,category=?,updated_at=? WHERE id=?',
+              (existing['summary'] or summary,reminder or existing['revisit_at'],None if reminder else existing['notified_for'],names[0],stamp,id))
+        else:c.execute('INSERT INTO threads(id,title,summary,category,revisit_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',(id,title.strip(),summary,names[0],reminder,stamp,stamp))
+        c.execute('DELETE FROM thread_categories WHERE thread_id=?',(id,))
+        c.executemany('INSERT INTO thread_categories(thread_id,name,position) VALUES(?,?,?)',[(id,name,i) for i,name in enumerate(names)])
+        c.execute('INSERT OR REPLACE INTO assistant_context(id,task_id) VALUES(1,?)',(id,))
+    return {**get(id),'reused':existing is not None}
 def update(id,fields):
     allowed={"archived_at","title","summary","state","revisit_at","due_at","category","categories","recurrence","next_occurrence","due_action","action_config","action_prompt"}
     fields={k:v for k,v in fields.items() if k in allowed}

@@ -15,22 +15,23 @@ function wrap(text,width,context){
   if(line)lines.push(line);return lines;
 }
 export function calendarSVG(data,theme={}){
+  const weekStart=data.week_start??1,order=Array.from({length:7},(_,i)=>(weekStart+i)%7);
   const days=data.days,byDate=new Map(days.map(d=>[d.date,d])),single=days.length===1;
   const weekends=days.some(d=>[0,6].includes(new Date(d.date+'T12:00:00Z').getUTCDay()) && (d.tasks.length||d.activity.length));
   const columns=single?1:weekends?7:5,width=1100,gap=8,cellWidth=(width-gap*(columns-1))/columns;
   const start=new Date(data.start+'T00:00:00Z'),end=new Date(data.end+'T00:00:00Z');
-  if(!single){start.setUTCDate(start.getUTCDate()-(start.getUTCDay()+6)%7);end.setUTCDate(end.getUTCDate()+6-(end.getUTCDay()+6)%7)}
+  if(!single){start.setUTCDate(start.getUTCDate()-(start.getUTCDay()-weekStart+7)%7);end.setUTCDate(end.getUTCDate()+6-(end.getUTCDay()-weekStart+7)%7)}
   const canvas=document.createElement('canvas'),context=canvas.getContext('2d');context.font='13px sans-serif';
   const cells=[];for(let d=new Date(start);d<=end;d.setUTCDate(d.getUTCDate()+1)){
     if(!weekends&&!single&&[0,6].includes(d.getUTCDay()))continue;
-    const record=byDate.get(iso(d)),items=record?[...record.tasks.map(t=>({text:t.title,names:t.categories||[t.category||'Unsorted']})),
+    const record=byDate.get(iso(d)),items=record?[...record.tasks.map(t=>({text:(t.schedule_label?t.schedule_label+': ':'')+t.title,names:t.categories||[t.category||'Unsorted']})),
       ...record.activity.map(a=>({text:a.kind+': '+a.body,names:a.categories||[a.category||'Unsorted']}))]:[];
     const cards=items.map(item=>({...item,lines:wrap(item.text,cellWidth-24,context),labels:wrap(item.names.join(' · '),cellWidth-24,context)}));
     cells.push({number:d.getUTCDate(),outside:!record,cards,height:Math.max(95,35+cards.reduce((n,c)=>n+12+(c.lines.length+c.labels.length)*17+7,0))});
   }
   const text=theme.text||'#263d30',muted=theme.muted||'#708372',line=theme.line||'#d7e1d5',paper=theme.paper||'#ffffff';
   const parts=[`<text x="0" y="18" fill="${escapeHTML(muted)}" font-size="14">${data.start} — ${data.end}</text>`];
-  if(!single)for(const [i,name] of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].slice(0,columns).entries())
+  if(!single)for(const [i,name] of order.filter(d=>columns===7||d>0&&d<6).map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).entries())
     parts.push(`<text x="${i*(cellWidth+gap)+8}" y="43" fill="${escapeHTML(muted)}" font-size="12">${name}</text>`);
   let top=single?33:55;
   for(let offset=0;offset<cells.length;offset+=columns){

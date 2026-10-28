@@ -44,28 +44,29 @@ let last=null,activeButton=null,detailRequest=0;
 function notifyHeight(){if(parent!==window)parent.postMessage({type:'tend:snapshot-size',height:Math.ceil($('.shell').getBoundingClientRect().height)},location.origin)}
 new ResizeObserver(notifyHeight).observe($('.shell'));
 function categoryLabels(parent,t){const group=document.createElement('span');group.className='task-categories';for(const name of names(t)){const tag=document.createElement('span');tag.className='task-category';tag.style.setProperty('--category-color',color(name));tag.textContent=name;group.append(tag)}parent.append(group)}
-async function showTask(id,button){
- if(parent!==window){parent.postMessage({type:'tend:snapshot-task',id},location.origin);return}
+async function showTask(id,button,actionId=null){
+ if(parent!==window){parent.postMessage({type:'tend:snapshot-task',id,action_id:actionId},location.origin);return}
  const request=++detailRequest;activeButton=button;
  try{const response=await fetch('/api/threads/'+encodeURIComponent(id));if(!response.ok)throw Error('Task is no longer available');const t=await response.json();if(request!==detailRequest)return;
- $('#detail-title').textContent=t.title;$('#detail-meta').textContent=[names(t).join(' · '),t.state,t.due_at?'Due '+t.due_at.slice(0,10):''].filter(Boolean).join(' · ');$('#detail-summary').textContent=t.summary||'';
- const entries=$('#detail-entries');entries.replaceChildren();for(const e of [...(t.entries||[]),...(t.activity||[])]){const p=document.createElement('p');p.textContent=e.body;entries.append(p)}$('#details').hidden=false;
+ const selected=actionId?(t.entries||[]).find(e=>e.id===actionId):null;
+ $('#detail-title').textContent=selected?.body||t.title;$('#detail-meta').textContent=[selected?t.title:'',names(t).join(' · '),selected?.done?'Done':t.state,(selected||t).due_at?'Due '+(selected||t).due_at.slice(0,10):'',(selected||t).revisit_at?'Reminder '+(selected||t).revisit_at.slice(0,10):''].filter(Boolean).join(' · ');$('#detail-summary').textContent=t.summary||'';
+ const entries=$('#detail-entries');entries.replaceChildren();for(const e of selected?(selected.notes||[]):[...(t.entries||[]),...(t.activity||[])]){const p=document.createElement('p');p.textContent=e.body;entries.append(p)}$('#details').hidden=false;
  }catch(e){$('#error').textContent=e.message}
 }
 $('#close').onclick=()=>{detailRequest++;$('#details').hidden=true;activeButton?.focus()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#close').click()});
-function taskButton(t,activity=false){const button=document.createElement('button');button.className='task'+(activity?' activity':'');button.style.setProperty('--task-color',color(names(t)[0]));if(activity){const label=document.createElement('span');label.className='activity-label';label.textContent=t.kind;button.append(label)}const title=document.createElement('span');title.className='task-title';title.textContent=activity?t.body:t.title;button.append(title);categoryLabels(button,t);button.title=[t.title,...names(t),activity?t.body:t.state].filter(Boolean).join(' · ');button.onclick=()=>showTask(t.id||t.thread_id,button);return button}
+function taskButton(t,activity=false){const button=document.createElement('button');button.className='task'+(activity?' activity':'');button.style.setProperty('--task-color',color(names(t)[0]));if(activity||t.schedule_label){const label=document.createElement('span');label.className='activity-label';label.textContent=activity?t.kind:t.schedule_label;button.append(label)}const title=document.createElement('span');title.className='task-title';title.textContent=activity?t.body:t.title;button.append(title);categoryLabels(button,t);button.title=[t.title,...names(t),activity?t.body:t.state].filter(Boolean).join(' · ');button.onclick=()=>showTask(t.id||t.thread_id,button,t.action_id||null);return button}
 function render(data){
  last=data;const all=data.days||[],single=all.length===1;
  const weekends=all.some(d=>new Date(d.date+'T12:00:00').getDay()%6===0&&((d.tasks||[]).length||(d.activity||[]).length));
- const cols=single?1:weekends?7:5;
+ const cols=single?1:weekends?7:5,weekStart=data.week_start??1;const order=Array.from({length:7},(_,i)=>(weekStart+i)%7).filter(d=>cols===7||d>0&&d<6);
  const first=new Date(data.start+'T12:00:00'),end=new Date(data.end+'T12:00:00');
  const format=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
  $('#range').textContent=single?first.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'}):format(first)+' – '+format(end)+', '+end.getFullYear();
  const grid=$('#grid'),headers=$('#weekdays');grid.replaceChildren();headers.replaceChildren();$('.sheet').style.setProperty('--cols',cols);grid.classList.toggle('single',single);grid.classList.toggle('week',all.length>1&&all.length<=7);headers.classList.toggle('week',all.length>1&&all.length<=7);grid.classList.toggle('seven',cols===7);headers.hidden=single;
- for(const name of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].slice(0,cols)){const span=document.createElement('span');span.textContent=name;headers.append(span)}
+ for(const name of order.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d])){const span=document.createElement('span');span.textContent=name;headers.append(span)}
  // Render complete calendar rows so partial ranges and weekend-only ranges stay aligned.
- const begin=new Date(first),finish=new Date(end);if(!single){begin.setDate(begin.getDate()-(begin.getDay()+6)%7);finish.setDate(finish.getDate()+6-(finish.getDay()+6)%7)}
+ const begin=new Date(first),finish=new Date(end);if(!single){begin.setDate(begin.getDate()-(begin.getDay()-weekStart+7)%7);finish.setDate(finish.getDate()+6-(finish.getDay()-weekStart+7)%7)}
  const lookup=new Map(all.map(d=>[d.date,d]));
  for(let date=new Date(begin);date<=finish;date.setDate(date.getDate()+1)){
   if(cols===5&&(date.getDay()===0||date.getDay()===6))continue;
@@ -76,7 +77,7 @@ function render(data){
  }
  notifyHeight();
 }
-async function load(){try{const monday=new Date();monday.setDate(monday.getDate()-(monday.getDay()+6)%7);const sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);const query=new URLSearchParams({start:params.get('start')||dateOnly(monday),end:params.get('end')||dateOnly(sunday)});if(params.get('category'))query.set('category',params.get('category'));const response=await fetch('/api/snapshot?'+query);if(!response.ok)throw Error('Could not load this calendar');render(await response.json())}catch(e){$('#error').textContent=e.message}}
+async function load(){try{const prefs=await fetch('/api/preferences').then(r=>r.ok?r.json():({week_start:1}));const monday=new Date();monday.setDate(monday.getDate()-(monday.getDay()-(prefs.week_start??1)+7)%7);const sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);const query=new URLSearchParams({start:params.get('start')||dateOnly(monday),end:params.get('end')||dateOnly(sunday)});if(params.get('category'))query.set('category',params.get('category'));const response=await fetch('/api/snapshot?'+query);if(!response.ok)throw Error('Could not load this calendar');render(await response.json())}catch(e){$('#error').textContent=e.message}}
 function download(format){
  if(!last){$('#error').textContent='Calendar is still loading. Please try again.';return}
  const query=new URLSearchParams({start:last.start,end:last.end,theme:document.documentElement.dataset.theme||'sage'});

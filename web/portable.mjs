@@ -1,14 +1,16 @@
 import {emptyState, Model, Problem, categories, required, timestamp, copy} from './store.mjs';
+import {preferences,DEFAULT_PREFERENCES} from './decisions.mjs';
 
 const tables = ['tasks','entries','notes','activity','relations','messages'];
 export function exportData(state) {
   return {format:'tether-chat', version:1, exported_at:new Date().toISOString(),
-    data:Object.fromEntries(tables.map(name => [name, copy(state[name])]))};
+    data:{...Object.fromEntries(tables.map(name => [name, copy(state[name])])),preferences:preferences(state.preferences||{})}};
 }
 export function validateBackup(payload) {
   if (!payload || payload.format !== 'tether-chat' || payload.version !== 1 || !payload.data)
     throw new Problem('Choose a tether portable JSON backup');
   const state = emptyState(), data = payload.data;
+  try{state.preferences=preferences(data.preferences||{})}catch(error){throw new Problem(error.message)}
   for (const name of tables) {
     if (!Array.isArray(data[name]) || data[name].length > 200000) throw new Problem('Invalid or oversized backup table: '+name);
   }
@@ -72,5 +74,6 @@ export function importData(state, payload) {
   // Validate cross-table references before committing any merged data.
   validateBackup(exportData(candidate));
   for (const table of tables) state[table]=candidate[table];
+  if(payload.data.preferences && JSON.stringify(preferences(state.preferences||{}))===JSON.stringify(DEFAULT_PREFERENCES))state.preferences=incoming.preferences;
   return {ok:true,added:counts};
 }

@@ -1,5 +1,7 @@
 /* Browser task engine. All writes are committed in a single IndexedDB transaction. */
+import {requestLocation} from './locations.mjs';
 import {briefNote} from './notes.mjs';
+import {preferences,DEFAULT_PREFERENCES,resolveReminder,chooseCategories,taskKey} from './decisions.mjs';
 export const SCHEMA = 1;
 export const now = () => new Date().toISOString();
 export const uid = () => crypto.randomUUID ? crypto.randomUUID().replaceAll('-', '')
@@ -38,7 +40,7 @@ export function categories(names) {
 }
 export function emptyState() {
   return {schema: SCHEMA, tasks: [], entries: [], notes: [], activity: [], relations: [],
-    messages: [], jobs: [], settings: {}, notificationClaims: {}};
+    messages: [], jobs: [], settings: {}, preferences:{...DEFAULT_PREFERENCES}, assistant_context:{}, notificationClaims: {}};
 }
 export class Database {
   constructor(name) { this.name = name; }
@@ -51,7 +53,7 @@ export class Database {
       request.onblocked = () => reject(new Problem('Close other tether tabs to finish updating storage'));
     });
     this.db.onversionchange = () => this.db.close();
-    await this.write(() => null);
+    await this.write(state => {state.preferences=preferences(state.preferences||{});return null});
     return this;
   }
   read(fn) { return this.transaction(fn, 'readonly'); }
@@ -78,6 +80,38 @@ export class Database {
 }
 export class Model {
   constructor(state, clock = now) { this.s = state; this.clock = clock; }
+  preferences(){return preferences(this.s.preferences||{})}
+  setPreferences(fields){try{this.s.preferences=preferences({...this.preferences(),...fields});return copy(this.s.preferences)}catch(error){throw new Problem(error.message)}}
+  categoryNames(){return [...new Set(this.s.tasks.flatMap(t=>t.categories||[t.category||'Unsorted']))].filter(name=>name.toLowerCase()!=='unsorted').sort()}
+  focus(id){
+    if(id && this.s.tasks.some(t=>t.id===id))this.s.assistant_context={task_id:id};
+    let task=this.s.tasks.find(t=>t.id===this.s.assistant_context?.task_id && !t.archived_at && t.state!=='settled');
+    if(!task){for(const row of this.s.messages.filter(m=>m.role==='assistant').slice(-10).reverse()){
+      const ids=[...new Set([...row.body.matchAll(/#task\/([A-Za-z0-9_-]+)/g)].map(match=>match[1]))];
+      if(ids.length===1){task=this.s.tasks.find(t=>t.id===ids[0]&&!t.archived_at&&t.state!=='settled');if(task)break}
+    }}
+    const active=this.s.tasks.filter(t=>!t.archived_at&&t.state!=='settled');
+    if(!task && active.length && new Set(active.map(t=>taskKey(t.title))).size===1)task=active[0];
+    return task?this.get(task.id):null;
+  }
+  assistantContext(){const p=this.preferences(),focused=this.focus();return {preferences:p,available_categories:this.categoryNames(),focused_task:focused?{id:focused.id,title:focused.title,categories:focused.categories,summary:focused.summary.slice(0,300),revisit_at:focused.revisit_at,due_at:focused.due_at}:null,
+    recent_tasks:this.list().filter(t=>!t.archived_at&&t.state!=='settled').slice(0,12).map(t=>({id:t.id,title:t.title,categories:t.categories,summary:t.summary.slice(0,200),revisit_at:t.revisit_at})),
+    default_reminder_choices:Object.fromEntries(['tomorrow','next week','next month','next year'].map(period=>[period,resolveReminder(period,p,new Date(this.clock()))]))}}
+  capture(args){
+    const title=required(args.title,'Title',300),key=taskKey(title);
+    let existing=args.existing_id?this.task(args.existing_id):this.s.tasks.find(t=>!t.archived_at&&t.state!=='settled'&&key&&taskKey(t.title)===key);
+    const reused=!!existing;
+    if(existing?.archived_at)throw new Problem('Restore this archived task before changing it');
+    const names=chooseCategories(title,args.summary||'',this.categoryNames(),args.categories||[]);
+    let reminder;try{if(args.remind_at)reminder=resolveReminder(args.remind_at,this.preferences(),new Date(this.clock()))}catch(error){throw new Problem(error.message)}
+    if(existing){
+      const fields={};if(existing.categories.every(name=>name.toLowerCase()==='unsorted'))fields.categories=names;
+      if(args.summary&&!existing.summary)fields.summary=args.summary;
+      if(reminder)fields.revisit_at=reminder;
+      if(Object.keys(fields).length)this.update(existing.id,fields);
+    }else{existing=this.create(title,args.summary||'',names);if(reminder)this.update(existing.id,{revisit_at:reminder})}
+    this.focus(existing.id);return {...this.get(existing.id),reused};
+  }
   task(id) {
     const task = this.s.tasks.find(t => t.id === id);
     if (!task) throw new Problem('Task not found', 404);
@@ -284,32 +318,50 @@ export class Model {
     const events = this.s.activity.map(e => ({...e, ...Object.fromEntries(['title','category','categories'].map(k => [k,this.task(e.thread_id)[k]]))}))
       .filter(e => (!category || e.categories.includes(category)) && e.occurred_at.slice(0,10) >= start && e.occurred_at.slice(0,10) <= end);
     const days = [], categoryCounts = {}, activityTypes = {};
+    const localDay=value=>{if(!value)return null;if(/^\d{4}-\d\d-\d\d$/.test(value))return value;const d=new Date(value);if(!Number.isFinite(+d))return null;return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+    const scheduled=[];
+    const add=(task,action=null)=>{
+      const record=action||task,dates=new Map();
+      for(const [field,kind] of [['due_at','deadline'],['revisit_at','reminder'],...(!action?[['next_occurrence','reminder']]:[])]){
+        const date=localDay(record[field]);if(!date||date<start||date>end)continue;
+        if(!dates.has(date))dates.set(date,new Set());dates.get(date).add(kind);
+      }
+      for(const [date,kinds] of dates)scheduled.push({id:task.id,task_id:task.id,action_id:action?.id||null,title:action?.body||task.title,task_title:task.title,
+        category:task.category,categories:task.categories,state:action?.done?'settled':task.state,date,schedule_kinds:[...kinds],
+        schedule_label:[kinds.has('deadline')?'Due':'',kinds.has('reminder')?'Reminder':'',action?.done?'Done':''].filter(Boolean).join(' · '),
+        href:action?'/board#action/'+task.id+'/'+action.id:'/board#task/'+task.id});
+    };
+    for(const task of tasks){add(task);for(const action of this.s.entries.filter(e=>e.thread_id===task.id&&e.kind==='action'))add(task,action)}
     for (let date = +first; date <= +last; date += 86400000) {
       const iso = new Date(date).toISOString().slice(0,10);
-      const due = tasks.filter(t => t.due_at?.slice(0,10) === iso).map(t =>
-        ({id:t.id,title:t.title,category:t.category,categories:t.categories,state:t.state,date:iso,href:'/board#task/'+t.id}));
+      const due = scheduled.filter(t=>t.date===iso);
       due.sort((a,b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title));
       for (const task of due) for (const name of task.categories) categoryCounts[name] = (categoryCounts[name] || 0) + 1;
       days.push({date:iso,tasks:due,activity:events.filter(e => e.occurred_at.slice(0,10) === iso)});
     }
     for (const event of events) activityTypes[event.kind] = (activityTypes[event.kind] || 0) + 1;
-    return {start,end,category:category || null,days,insights:{scheduled_due:days.reduce((n,d) => n+d.tasks.length,0),
+    return {start,end,category:category || null,week_start:this.preferences().week_start,days,insights:{scheduled_due:days.reduce((n,d) => n+d.tasks.length,0),
       activity_events:events.length,active_days:days.filter(d => d.activity.length).length,categories:categoryCounts,activity_types:activityTypes},
-    notice:'Due dates use current task records. Activity uses recorded UTC dates. No historical changes are inferred.'};
+    notice:'Task and action reminders and deadlines use local calendar dates. Activity uses recorded UTC dates. No historical changes are inferred.'};
   }
   dispatch(name, args) {
     switch (name) {
       case 'list_threads': return this.list(args.query || '').slice(0,100);
       case 'get_thread': return this.get(args.id);
       case 'overview': return this.overview();
-      case 'capture': return this.create(args.title, args.summary || '');
+      case 'capture': return this.capture(args);
+      case 'request_location_lookup': return requestLocation(this,args);
+      case 'get_preferences': return this.preferences();
+      case 'set_preferences': return this.setPreferences(args);
+      case 'list_categories': return this.categoryNames();
+      case 'get_context': return this.assistantContext();
       case 'add_note': return this.add(args.id, args.kind || 'thought', args.text);
       case 'add_action_note': return this.addNote(args.action_id, args.text);
       case 'update_action_note': return this.editNote(args.action_id, args.note_id, args.text);
       case 'delete_action_note': return this.deleteNote(args.action_id, args.note_id);
-      case 'update_action': return this.updateAction(args.action_id, args);
+      case 'update_action': {const fields={...args};if(fields.revisit_at)try{fields.revisit_at=resolveReminder(fields.revisit_at,this.preferences(),new Date(this.clock()))}catch(error){throw new Problem(error.message)}return this.updateAction(args.action_id, fields)}
       case 'set_status': return this.update(args.id, {state:args.state});
-      case 'set_revisit': return this.update(args.id, {revisit_at:args.when});
+      case 'set_revisit': {let date;try{date=resolveReminder(args.when,this.preferences(),new Date(this.clock()))}catch(error){throw new Problem(error.message)}return this.update(args.id, {revisit_at:date})}
       case 'set_due_date': return this.update(args.id, {due_at:args.when});
       case 'set_category': return this.update(args.id, {categories:[args.category]});
       case 'set_categories': return this.setCategories(args.id, args.categories, args.mode || 'replace');
@@ -343,7 +395,7 @@ export function day(value) {
   if (!Number.isFinite(+date) || date.toISOString().slice(0,10) !== value) throw new Problem('Invalid calendar date');
   return date;
 }
-export function snapshotRange(text, today = new Date()) {
+export function snapshotRange(text, today = new Date(),weekStart=1) {
   text = text.trim().toLowerCase();
   text = text.replace(/^\/snapshot\s+(week|month)$/, '/snapshot this $1').replace(/^\/snapshot\s+day$/, '/snapshot today');
   if (!/\bsnapshots?\b|\bcalendar (report|view|summary)\b|\bvisual (task |activity )?(report|summary)\b/.test(text)) return null;
@@ -354,14 +406,14 @@ export function snapshotRange(text, today = new Date()) {
   else if (/\b(yesterday|tomorrow|today)\b/.test(text)) start = end = shift(date,text.includes('yesterday') ? -1 : text.includes('tomorrow') ? 1 : 0);
   else if ((match = text.match(/\b(last|previous|this|current|next)\s+(week|month)\b/))) {
     const offset = {last:-1,previous:-1,this:0,current:0,next:1}[match[1]];
-    if (match[2] === 'week') { start=shift(date,-(date.getUTCDay()+6)%7+offset*7); end=shift(start,6); }
+    if (match[2] === 'week') { start=shift(date,-(date.getUTCDay()-weekStart+7)%7+offset*7); end=shift(start,6); }
     else { start=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+offset,1)); end=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,0)); }
   } else if ((match = text.match(/\b(next|past|last)\s+(\d{1,3})\s+(days?|weeks?)\b/))) {
     const count = Number(match[2])*(match[3].startsWith('week') ? 7 : 1);
     if (count < 1 || count > 366) throw new Problem('Snapshots support 1–366 days');
     start=match[1] === 'next' ? date : shift(date,1-count); end=match[1] === 'next' ? shift(date,count-1) : date;
   } else if ((match = text.match(/\b\d{4}-\d\d-\d\d\b/))) start=end=day(match[0]);
-  else { start=shift(date,-(date.getUTCDay()+6)%7); end=shift(start,6); }
+  else { start=shift(date,-(date.getUTCDay()-weekStart+7)%7); end=shift(start,6); }
   if (+end < +start || +end - +start > 365*86400000) throw new Problem('Snapshot range must be 1–366 days');
   return [iso(start),iso(end)];
 }

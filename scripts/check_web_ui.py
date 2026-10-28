@@ -109,13 +109,13 @@ def main():
                     assert route.request.method=='GET'
                     model_requests.append(route.request.headers['authorization'])
                     route.fulfill(status=200,content_type='application/json',headers={'Access-Control-Allow-Origin':'*'},
-                                  body=json.dumps({'data':[{'id':id} for id in ['test-model','test-mini','changed-test-model','text-embedding-fixture']]}))
+                                  body=json.dumps({'data':[{'id':id,'supported_parameters':[] if id=='text-embedding-fixture' else ['tools']} for id in ['test-model','test-mini','changed-test-model','text-embedding-fixture']]}))
                 context.route('https://provider.example/v1/models',models)
 
                 frame.get_by_role('button',name='Settings',exact=True).click()
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1')
                 frame.get_by_label('API key',exact=True).fill('synthetic-test-key')
-                expect(frame.locator('#modelStatus')).to_contain_text('4 models found')
+                expect(frame.locator('#modelStatus')).to_contain_text('3 tool-calling models found')
                 expect(frame.get_by_label('Model',exact=True)).to_have_value('test-mini')
                 assert model_requests==['Bearer synthetic-test-key'] and requests==[]
                 frame.get_by_label('Model',exact=True).fill('test-model')
@@ -126,7 +126,7 @@ def main():
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
                 # A billing error keeps the saved key usable and must not be retried.
                 page.set_viewport_size({'width':1280,'height':1400})
-                frame.locator('#provider').screenshot(path=str(ROOT/'docs/screenshots/browser-connection-2026-18.jpg'),type='jpeg',quality=90)
+                frame.locator('#provider').screenshot(path=str(folder/'connection.jpg'),type='jpeg',quality=90)
                 page.set_viewport_size({'width':1280,'height':900})
                 before=len(requests);provider_error='credit_balance_exhausted'
                 frame.get_by_role('button',name='Test connection',exact=True).click()

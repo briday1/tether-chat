@@ -46,6 +46,7 @@
   if(stamp!==jobStamp){jobStamp=stamp;queueAttention();refreshReferences()}
   const desired=[];
   for(const row of state.messages||[]){desired.push(messageNode(row));const job=byUser.get(row.id);if(job&&job.status!=='done')desired.push(pendingNode(job))}
+  desired.push(...(window.tetherLocationCards?.(state.locations)||[]));
   for(const id of accepted)forget(id);
   for(const payload of Object.values(readJournal())){
    if(accepted.has(payload.request_id))continue;

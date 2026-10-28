@@ -29,7 +29,7 @@
     await pendingProvider;
     const form=$('#provider'),controls=[...form.querySelectorAll('input,button')];
     form.setAttribute('aria-busy','true');for(const control of controls)control.disabled=true;
-    try{configuration(await api('/settings'))}catch(e){status('#providerStatus',e.message)}
+    try{configuration(await api('/settings'));await window.tetherLoadPreferences?.()}catch(e){status('#providerStatus',e.message)}
     finally{for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
   })();
   window.tetherBeforeChat=async(text,attention)=>{

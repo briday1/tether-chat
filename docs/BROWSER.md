@@ -18,7 +18,7 @@ If an older release stays cached, open [Update tether](https://briday1.github.io
 
 Use an HTTPS OpenAI-compatible chat-completions endpoint with tool calling. The provider must permit the app's origin through CORS, including the Authorization and Content-Type headers. A provider that works with the desktop Python client may reject browser requests. Test the connection in Settings. The browser edition includes no proxy, and never sends your key to GitHub or a tether backend.
 
-Enter the provider API base URL and API key. Available model IDs load automatically from that connection's `/models` endpoint; choose a suggestion in **Model**, or enter an ID manually if the provider does not list models. The selected model must support chat completions and tool calling. Model discovery does not save credentials or generate a chat response.
+Enter the provider API base URL and API key. Model suggestions load automatically from that connection's `/models` endpoint and include only models with verified chat-completions tool support. OpenAI IDs use the bundled compatibility catalog; other providers must advertise tool capabilities. Embedding, image, audio, text-only, and unknown-capability models are hidden. You can enter a known-compatible ID manually if your provider omits capability metadata. The selected model must support chat completions and tool calling. Model discovery does not save credentials or generate a chat response.
 
 **Save connection** applies the connection immediately. **Test connection** saves the entered fields first, so a separate Save click is optional. Chat waits for an in-progress save, including key encryption; a reload is not needed. Changing the URL requires entering a key for the new endpoint; a blank key leaves your previous connection intact and asks you to re-enter it. Model-only edits retain the current key and its encrypted backup. If chat needs a missing or locked key, Settings opens and your unsent message stays in the draft.
 
@@ -54,6 +54,22 @@ tether-chat export --output tether-portable-backup.json
 
 The command creates a new file and refuses to overwrite an existing file. Import it using the browser's Settings. A running desktop server also provides a portable download at `/api/portable`; its normal SQLite backup at `/api/backup` remains available. Browser JSON files are browser-importable backups, not replacements for desktop SQLite databases. Automatic desktop/phone sync is not included.
 
+## Decisions, categories, and reminder defaults
+
+The assistant receives existing category names and recent task context before deciding what to save. It reuses a suitable category or creates one; assistant-created tasks are not left in Unsorted. A follow-up such as “just figure it out” updates the focused task. Capturing an equivalent active title reuses its task ID, preserving notes and established categories. Existing duplicate records are retained for review.
+
+**Settings → Reminder preferences** stores the first day of your week and your morning/night times in the local database. Defaults are Monday, 09:00, and 21:00. You can also tell the assistant a lasting preference, such as “My mornings start at 10.” These settings travel in portable backups; importing into a profile with custom preferences retains that profile's preferences.
+
+“Next day” means tomorrow morning; “next week” uses the preferred first day of the next week; “next month” means the first of the next month; “next year” means January 1. The browser uses your device's local calendar, including daylight saving changes. Explicit days/times take precedence. A reminder to make an appointment does not invent the appointment's date or a deadline.
+
+Snapshots show task and action reminders, recurring next occurrences, and deadlines. Labels distinguish Reminder and Due; dates on the same item/day appear together. Action cards open the selected action. Calendar views and exports honor the saved first day of the week. Scheduled dates use your local calendar; logged activity retains its recorded UTC day.
+
+## Confirmed address lookup
+
+For a task with a location, ask “Find the address for my dentist appointment.” The assistant asks for the place name and town/city when needed, then prepares a confirmation card. No lookup runs until you choose **Confirm and find address**. Edit the search first if needed, then select **Use this location** on the correct result. The chosen location and a Google Maps link are saved as a task note. Repeated selection saves once.
+
+Confirmed searches send only the displayed search to [Photon](https://github.com/komoot/photon), using OpenStreetMap data; they do not send your AI key or other task notes. Searches are limited to five results, cached for a day, and spaced apart. No autocomplete, background searches, or device geolocation is used. Photon is a public demo service without an availability guarantee; if it is unavailable or has no match, use the card's Google Maps search link or refine the place/city. Address data is attributed to [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). A place result may lack a street number; the app preserves what was returned and lets you confirm it.
+
 ## Requests and reminders
 
 One persistent parent page owns the AI queue while Conversation and Tasks use the shared desktop screens. Switching screens does not cancel requests. Requests have durable IDs and are serialized across tabs using Web Locks. Closing or reloading the entire app interrupts a running request; tether marks it interrupted and never automatically repeats potentially mutating tool calls. Queued requests can resume. Review any saved changes before explicitly retrying.
@@ -66,7 +82,7 @@ The existing `publish-pypi.yml` continues producing the desktop wheel and source
 
 For initial repository setup, GitHub Pages must use **GitHub Actions** as its publishing source. The workflow attempts to enable Pages automatically. If the repository token lacks permission to enable Pages, set **Settings → Pages → Source → GitHub Actions**, then rerun **Browser app and GitHub Pages**. No API keys belong in the workflow or static output.
 
-Service-worker caches contain only bundled public application assets. Provider requests, API keys, and task data are never cached as HTTP responses. A new release waits until older app sessions close before activating, keeping active sessions on a consistent set of files. Close all tether browser windows and reopen to pick up an installed update.
+Service-worker caches contain only bundled public application assets. Provider requests, API keys, and task data are never cached as HTTP responses. Use Settings → Update app, or the independent update page above, to activate a downloaded release after an active chat finishes.
 
 ## Build and check
 
@@ -79,4 +95,4 @@ python -m pytest -q tests/test_browser_build.py
 
 The generated `web-dist/` is the Pages artifact; it is not the desktop package or a second copy of the source screens. Local root hosting can use `--base-path /`. Serve the output over HTTPS or localhost; Web Crypto, Web Locks, service workers, and installation require a secure browser context.
 
-On a normal development machine or hosted CI runner, install Playwright and Chromium and run `python scripts/check_web_ui.py`. This checks the real static build at a repository subpath, IndexedDB, desktop imports, scoped action notes, encrypted keys, navigation during AI calls, exports, mobile layout, and fresh offline loads with a synthetic provider. No real API key or user task database is used.
+On a normal development machine or hosted CI runner, install Playwright and Chromium and run `python scripts/check_web_ui.py` and `python scripts/check_assistant_ui.py`. This checks the real static build at a repository subpath, IndexedDB, desktop imports, scoped action notes, encrypted keys, navigation during AI calls, exports, mobile layout, and fresh offline loads with a synthetic provider. No real API key or user task database is used.

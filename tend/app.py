@@ -180,6 +180,17 @@ class Provider(BaseModel):
 @app.get("/api/settings")
 def settings():return ai.public_config()
 
+@app.get('/api/preferences')
+def preferences():return db.preferences()
+
+@app.post('/api/preferences')
+def save_preferences(data:dict):
+    try:return db.set_preferences(data)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
+
+@app.get('/preferences.js')
+def preferences_script():return FileResponse(Path(__file__).with_name('preferences.js'),media_type='application/javascript')
+
 @app.post("/api/settings")
 def settings_save(data:Provider):
     try:return ai.save(data.base_url,data.model,data.api_key,data.clear_key)
@@ -236,6 +247,23 @@ def portable_backup():
     return Response(json.dumps(export_data(),ensure_ascii=False),media_type="application/json",
                     headers={"Content-Disposition":"attachment; filename=tether-portable-backup.json",
                              "Cache-Control":"no-store"})
+
+class LocationSearch(BaseModel):
+    query:str=Field(min_length=1,max_length=500)
+class LocationChoice(BaseModel):
+    result_id:str=Field(min_length=1,max_length=200)
+@app.post('/api/locations/{id}/search')
+def location_search(id:str,data:LocationSearch):
+    from .locations import search
+    try:return search(id,data.query)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
+@app.post('/api/locations/{id}/save')
+def location_save(id:str,data:LocationChoice):
+    from .locations import save
+    try:return save(id,data.result_id)
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
+@app.get('/locations.js')
+def location_script():return FileResponse(Path(__file__).with_name('locations.js'),media_type='application/javascript')
 
 @app.get("/api/conversation/rendered")
 def rendered_history():

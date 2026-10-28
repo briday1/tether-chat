@@ -35,4 +35,5 @@ def export_data():
                         'next_occurrence', 'archived_at'):
                 if key in row:
                     row[key] = _stamp(row[key])
+    data['preferences']=store.preferences()
     return {'format': 'tether-chat', 'version': 1, 'exported_at': _stamp(store.now()), 'data': data}

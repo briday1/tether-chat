@@ -24,8 +24,8 @@
         const preferred=candidates.find(id=>/(mini|flash|haiku|luna|lite)/i.test(id) && !/\d{4}-\d{2}-\d{2}/.test(id))||candidates[0];
         if(preferred)$('#model').value=preferred;
       }
-      $('#modelStatus').textContent=ids.length?`${ids.length} models found. Choose a suggestion or enter a model ID. The selected model must support tool calling.`:
-        'No models were returned. You can enter a model ID manually.';
+      $('#modelStatus').textContent=ids.length?`${ids.length} tool-calling models found. Choose a compatible model.`:
+        'No verified tool-calling models were reported. Enter an ID only if you know it supports chat tools.';
     }catch(error){if(current===revision && connection===signature())$('#modelStatus').textContent=error.message}
   }
   window.tetherProviderConfigured=c=>{

@@ -33,6 +33,8 @@ def paths(text, base):
                      ('/chat.js', base + 'chat.js'), ('/action-notes.js', base + 'action-notes.js'),
                      ('/voice.js', base + 'voice.js'),
                      ('/provider-models.js', base + 'provider-models.js'),
+                     ('/preferences.js', base + 'preferences.js'),
+                     ('/locations.js', base + 'locations.js'),
                      ('/updates.js', base + 'updates.js'),
                      ('/notes.js', base + 'notes.js'), ('/notes.css', base + 'notes.css'),
                      ('/favicon.svg', base + 'favicon.svg'), ('/manifest.webmanifest', base + 'manifest.webmanifest')]:
@@ -87,14 +89,15 @@ def build(output, base='/'):
     marker.write_text('Generated browser edition; do not edit.\n', encoding='utf-8')
     version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     tools, system = shared_ai()
-    config = {'version': version, 'base': base, 'tools': tools, 'system': system}
+    config = {'version': version, 'base': base, 'tools': tools, 'system': system,
+              'tool_models':json.loads((ROOT/'tend/tool-models.json').read_text(encoding='utf-8'))}
     (output / 'app-config.js').write_text('window.TETHER_CONFIG=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
     for source in (ROOT / 'web').iterdir():
         if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
             shutil.copy2(source, output / source.name)
     # Keep recovery independent of cached scripts, styles and app configuration.
     (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
-    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js'):
+    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js'):
         text = paths((ROOT / 'tend' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))

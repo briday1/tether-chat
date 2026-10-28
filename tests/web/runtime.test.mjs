@@ -205,10 +205,10 @@ test('retired audio API does not send a recording or require a key',async t=>{
 });
 test('model discovery uses unsaved fields without saving or sending chat requests',async t=>{
   const calls=[],{api,db}=await setup(t,async(url,options)=>{
-    calls.push({url,options});return Response.json({data:[{id:'tool-mini'},{id:'tool-mini'},{id:'embedding-model'},{bad:'missing ID'}]});
+    calls.push({url,options});return Response.json({data:[{id:'tool-mini',supported_parameters:['tools']},{id:'tool-mini',supported_parameters:['tools']},{id:'embedding-model'},{bad:'missing ID'}]});
   });
   const result=await api('/settings/models','POST',{base_url:'https://provider.test/v1/',api_key:'  typed-key  '});
-  assert.deepEqual(result.data.models,['embedding-model','tool-mini']);
+  assert.deepEqual(result.data.models,['tool-mini']);
   assert.equal(calls[0].url,'https://provider.test/v1/models');assert.equal(calls[0].options.method,'GET');
   assert.equal(calls[0].options.headers.Authorization,'Bearer typed-key');
   assert.deepEqual(db.state.settings,{});assert.equal((await api('/settings')).data.has_key,false);
@@ -240,4 +240,15 @@ test('long rate limit delays are shown without retrying early',async t=>{
   let calls=0;const {api}=await setup(t,async()=>{calls++;return Response.json({error:{code:'slow_down'}},{status:429,headers:{'Retry-After':'120'}})});
   await save(api);const result=await api('/settings/test','POST',{});
   assert.match(result.data.detail,/temporarily rate limited/);assert.match(result.data.detail,/120 seconds/);assert.equal(calls,1);
+});
+
+test('listed OpenAI chat tools receive their required reasoning option',async t=>{
+  const {readFileSync}=await import('node:fs');
+  const tool_models=JSON.parse(readFileSync(new URL('../../tend/tool-models.json',import.meta.url)));
+  const {api}=await setup(t,async(url,options)=>{
+    const body=JSON.parse(options.body);assert.equal(body.reasoning_effort,'none');assert.equal(body.model,'gpt-6-sol');
+    return provider({role:'assistant',content:'OK'});
+  },undefined,undefined,{config:{...config,tool_models}});
+  await api('/settings','POST',{base_url:'https://api.openai.com/v1',model:'gpt-6-sol',api_key:'synthetic-key',remember:false});
+  assert.equal((await api('/settings/test','POST',{})).status,200);
 });

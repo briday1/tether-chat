@@ -24,7 +24,7 @@ def check_provider_settings(page):
         page.get_by_role('button',name='Settings',exact=True).click()
         page.get_by_label('Provider API base URL').fill('https://provider.example/v1')
         page.get_by_label('API key',exact=True).fill('desktop-synthetic-key')
-        expect(page.locator('#modelStatus')).to_contain_text('2 models found')
+        expect(page.locator('#modelStatus')).to_contain_text('2 tool-calling models found')
         expect(page.get_by_label('Model',exact=True)).to_have_value('fixture-mini')
         assert saves==[] and tests==[] and discovered[-1]['api_key']=='desktop-synthetic-key'
         page.get_by_role('button',name='Test connection',exact=True).click()

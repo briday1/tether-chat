@@ -34,6 +34,7 @@ jobs:
       - name: Browser, desktop Attention, voice, and offline checks
         run: |
           python scripts/check_web_ui.py
+          python scripts/check_assistant_ui.py
           python scripts/check_web_updates.py
           python scripts/check_ui.py
           python scripts/check_session_ui.py

@@ -60,8 +60,9 @@ def _layout(start,end,category,theme):
     weekends=any(date.fromisoformat(d['date']).weekday()>=5 and (d['tasks'] or d['activity']) for d in all_days)
     cols=1 if single else 7 if weekends else 5
     first,last=date.fromisoformat(start),date.fromisoformat(end)
-    begin=first if single else first-timedelta(days=first.weekday())
-    finish=last if single else last+timedelta(days=6-last.weekday())
+    week_start=(data.get('week_start',1)+6)%7
+    begin=first if single else first-timedelta(days=(first.weekday()-week_start+7)%7)
+    finish=last if single else last+timedelta(days=6-(last.weekday()-week_start+7)%7)
     by_date={d['date']:d for d in all_days};cells=[];cursor=begin
     width=1100;cw=width/cols
     while cursor<=finish:
@@ -71,8 +72,9 @@ def _layout(start,end,category,theme):
                 for task in day['tasks']:
                     cats=task['categories'];lines=_wrap(task['title'],cw-28,12,True)
                     labels=[(c,_wrap(c,cw-39,10)) for c in cats]
-                    height=12+len(lines)*16+sum(len(parts)*13+2 for _,parts in labels)
-                    items.append({'lines':lines,'labels':labels,'height':height,'color':category_color(cats[0]),'activity':False})
+                    label=task.get('schedule_label','')
+                    height=12+len(lines)*16+sum(len(parts)*13+2 for _,parts in labels)+(14 if label else 0)
+                    items.append({'lines':lines,'labels':labels,'height':height,'color':category_color(cats[0]),'activity':False,'schedule_label':label})
                 for event in day['activity']:
                     cats=event['categories'];lines=_wrap(event['body'],cw-28,12)
                     labels=[(c,_wrap(c,cw-39,10)) for c in cats]
@@ -94,7 +96,7 @@ def _draw(start,end,category,theme,rect,text,layout=None):
     y=39
     if cols>1:
         rect(0,y,width,27,surface)
-        for i,name in enumerate(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][:cols]):text(i*cw+8,y+8,name,11,ink,False)
+        for i,name in enumerate([['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][(d+(data.get('week_start',1)+6)%7)%7] for d in range(7) if cols==7 or (d+(data.get('week_start',1)+6)%7)%7<5]):text(i*cw+8,y+8,name,11,ink,False)
         y+=27
     for row,rh in zip(rows,heights):
         for i,cell in enumerate(row):
@@ -106,11 +108,10 @@ def _draw(start,end,category,theme,rect,text,layout=None):
             for item in cell['items']:
                 rect(x+5,ty,cw-10,item['height'],_mix(item['color'],bg),3)
                 line_y=ty+6
-                if item['activity']:text(x+11,line_y,item['kind'],10,ink,False);line_y+=14
+                if item['activity'] or item.get('schedule_label'):text(x+11,line_y,item['kind'] if item['activity'] else item['schedule_label'],10,ink,False);line_y+=14
                 for line in item['lines']:text(x+11,line_y,line,12,ink,not item['activity']);line_y+=16
                 for cat,parts in item['labels']:
-                    rect(x+12,line_y+4,5,5,category_color(cat),2)
-                    for line in parts:text(x+22,line_y,line,10,ink,False);line_y+=13
+                    for line in parts:text(x+11,line_y,line,10,ink,False);line_y+=13
                     line_y+=2
                 ty+=item['height']+4
         rect(0,y+rh-1,width,1,surface)

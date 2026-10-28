@@ -1,4 +1,17 @@
 /* Provider errors are data. Never echo credentials supplied in an error body. */
+const baseModel=id=>(id.startsWith('ft:')?id.split(':')[1]:id).replace(/-\d{4}-\d\d-\d\d$/,'');
+export function modelOptions(base,id,catalog={}){return new URL(base).hostname==='api.openai.com'?catalog.openai?.[baseModel(id)]||{}:{}}
+export function compatibleModels(items,base,catalog={}){
+  return [...new Set(items.filter(item=>{
+    const id=item?.id;if(typeof id!=='string'||!id.trim()||id.length>200)return false;
+    const caps=item.capabilities||{},flags=[item.supports_tool_calling,item.supports_function_calling,caps.tools,caps.tool_calling,caps.function_calling];
+    if(flags.some(value=>value===false)||typeof item.shutdown_date==='string'&&item.shutdown_date<=new Date().toISOString().slice(0,10))return false;
+    if(/embed|whisper|tts|audio|realtime|transcrib|moderation|dall-e|image|video|sora/i.test(id))return false;
+    const declared=Array.isArray(item.supported_parameters)?item.supported_parameters.some(p=>['tools','function_calling'].includes(p)):null;
+    if(declared===false)return false;
+    return new URL(base).hostname==='api.openai.com'?Object.hasOwn(catalog.openai||{},baseModel(id)):flags.some(value=>value===true)||declared===true;
+  }).map(item=>item.id))].sort();
+}
 export function retryDelay(header,attempt=0,now=Date.now()) {
   if(header!==null && String(header).trim()){
     const seconds=Number(header),date=Date.parse(header);
