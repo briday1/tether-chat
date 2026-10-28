@@ -27,13 +27,33 @@ window.addEventListener('popstate',()=>{const next=pageURL();if(next!==current){
 window.tetherReady=createRuntime({config});
 try{
   const runtime=await window.tetherReady;window.tetherFetch=runtime.fetch;
-  window.tetherUpdateApp=async()=>{
-    if(navigator.onLine===false)throw Error('Connect to the internet to update tether.');
-    await frame.contentWindow?.tetherPrepareUpdate?.();
-    const response=await runtime.fetch(config.base+'api/chat/state'),state=await response.json();
-    if((state.jobs||[]).some(job=>['running','queued'].includes(job.status)))throw Error('Finish the current chat request, then update the app.');
-    location.assign(config.base+'update.html?check='+Date.now());
-  };
+  let checking=false,refreshing=false;
+  async function checkRelease(){
+    if(checking||refreshing||document.hidden||navigator.onLine===false)return;
+    checking=true;
+    try{
+      const response=await fetch(config.base+'app-config.js?release='+Date.now(),{cache:'no-store'});
+      if(!response.ok)return;
+      const text=await response.text(),prefix='window.TETHER_CONFIG=';
+      if(!text.startsWith(prefix))return;
+      const latest=JSON.parse(text.slice(prefix.length).trim().replace(/;$/,''));
+      const parts=v=>String(v).split('.').map(Number),[year,release]=parts(latest.version),[oldYear,oldRelease]=parts(config.version);
+      if(!(year>oldYear||year===oldYear&&release>oldRelease))return;
+      if(!await frame.contentWindow?.tetherPrepareUpdate?.())return;
+      const state=await (await runtime.fetch(config.base+'api/chat/state')).json();
+      if((state.jobs||[]).some(job=>['running','queued'].includes(job.status)))return;
+      refreshing=true;
+      location.replace(config.base+'update.html?automatic=1');
+    }catch(_){ /* Keep the installed app working offline or during a failed deploy. */ }
+    finally{checking=false}
+  }
+  window.addEventListener('online',checkRelease);
+  window.addEventListener('focus',checkRelease);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkRelease()});
+  navigator.serviceWorker?.addEventListener('controllerchange',checkRelease);
+  navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='TETHER_RELEASE_AVAILABLE')checkRelease()});
+  setInterval(checkRelease,15000);
+  frame.addEventListener('load',checkRelease);
   window.tetherNotify=()=>runtime.notifications();
   current=pageURL();frame.src=current;frame.hidden=false;loading.hidden=true;
   frame.addEventListener('load',()=>{
@@ -49,13 +69,10 @@ try{
   });
   if('serviceWorker' in navigator)navigator.serviceWorker.register(config.base+'sw.js',{scope:config.base,updateViaCache:'none'})
     .then(registration=>{
-      const ready=()=>{window.tetherUpdateAvailable=!!registration.waiting;try{frame.contentWindow.dispatchEvent(new Event('tether:update-available'))}catch(_){}};
-      const watch=()=>{registration.installing?.addEventListener('statechange',ready);ready()};
-      registration.addEventListener('updatefound',watch);watch();
-      let checked=Date.now();
-      document.addEventListener('visibilitychange',()=>{
-        if(!document.hidden && Date.now()-checked>60000){checked=Date.now();registration.update().catch(()=>{})}
-      });
+      registration.addEventListener('updatefound',()=>registration.installing?.addEventListener('statechange',checkRelease));
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)registration.update().catch(()=>{})});
+      window.addEventListener('online',()=>registration.update().catch(()=>{}));
+      setInterval(()=>{if(!document.hidden)registration.update().catch(()=>{})},60000);
     }).catch(()=>{ /* Online use remains available when offline installation is blocked. */ });
 }catch(error){
   loading.textContent='Could not open local storage. Allow website storage for tether and reload. '+(error.message||'');
