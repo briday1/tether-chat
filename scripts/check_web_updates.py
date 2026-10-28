@@ -39,6 +39,7 @@ class FreshHandler(SimpleHTTPRequestHandler):
 def main():
     from playwright.sync_api import sync_playwright,expect
     with tempfile.TemporaryDirectory(prefix='tether-web-update-') as temporary:
+        print('Update check: build fixture',flush=True)
         folder=Path(temporary);release=builder.build(folder/'release','/tether-chat/')
         config=json.loads((release/'app-config.js').read_text().removeprefix('window.TETHER_CONFIG=').rstrip(';\n'))
         version=config['version'];served=folder/'site'/'tether-chat';shutil.copytree(release,served)
@@ -62,6 +63,7 @@ def main():
                 browser=pw.chromium.launch(**({'executable_path':executable} if executable else {}))
                 context=browser.new_context(viewport={'width':390,'height':844})
                 context.route('https://**/*',lambda route:route.fulfill(status=418,body='No remote AI calls during update checks'))
+                print('Update check: open legacy release',flush=True)
                 page=context.new_page();page.goto(base)
                 page.wait_for_function('navigator.serviceWorker.controller!==null')
                 page.evaluate("""async()=>{const r=await tetherReady;
@@ -75,6 +77,7 @@ def main():
                 unrelated=context.new_page();unrelated.goto(base.replace('/tether-chat/','/unrelated.html'));unrelated.evaluate("window.keepThisTab='untouched'")
                 other=context.new_page();other.goto(base)
                 expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text('2026.18')
+                print('Update check: deploy current release',flush=True)
                 shutil.copytree(release,served,dirs_exist_ok=True)
                 page.evaluate(DB,'busy')
                 # New workers activate without any Settings action, but do not
@@ -87,6 +90,7 @@ def main():
                 update.screenshot(path=str(folder/'update-waiting.jpg'),type='jpeg',quality=90)
                 # The second tab stays open throughout recovery; no all-tabs-closed workaround.
                 other.evaluate(DB,'idle')
+                print('Update check: finish legacy recovery',flush=True)
                 update.wait_for_url(base,timeout=90000)
                 # Legacy shells start current code on normal navigation; no forced
                 # navigation of other tabs with potentially unsaved editors.
@@ -113,8 +117,10 @@ def main():
                     config.version='2026.18';await cache.put(path,new Response('window.TETHER_CONFIG='+JSON.stringify(config)+';'));
                   }
                 }''')
+                print('Update check: ignore stale cache',flush=True)
                 update.reload()
                 expect(updated.locator('#browserVersion')).to_contain_text(version)
+                print('Update check: defer active work',flush=True)
                 future=version.split('.')[0]+'.'+str(int(version.split('.')[1])+1)
                 update.evaluate(DB,'busy')
                 updated.get_by_label('Message tether').fill('Keep this automatic-update draft.')
@@ -131,12 +137,14 @@ def main():
                 expect(updated.locator('#browserVersion')).to_contain_text(version)
                 updated.get_by_role('button',name='Close settings',exact=True).click()
                 update.evaluate("window.dispatchEvent(new Event('focus'))")
+                print('Update check: await automatic refresh',flush=True)
                 expect(updated.locator('#browserVersion')).to_contain_text(future,timeout=90000)
                 expect(updated.get_by_label('Message tether')).to_have_value('Keep this automatic-update draft.')
                 after=update.evaluate(DB,'read')
                 for field in ('tasks','entries','settings'):assert after[field]==before[field]
                 assert unrelated.evaluate('window.keepThisTab')=='untouched'
                 # The complete installed bundle remains usable without the network.
+                print('Update check: offline reload',flush=True)
                 context.set_offline(True);update.reload()
                 expect(updated.locator('#browserVersion')).to_contain_text(future)
                 expect(updated.get_by_label('Message tether')).to_have_value('Keep this automatic-update draft.')
