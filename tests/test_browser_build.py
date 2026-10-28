@@ -105,3 +105,13 @@ def test_household_sharing_is_inside_settings_not_navigation(tmp_path):
     bridge=(output/'bridge.js').read_text(encoding='utf-8')
     assert "query.set('settings','sharing')" in bridge
     assert 'Create shared household' not in (output/'drive-sharing.html').read_text(encoding='utf-8')
+
+
+def test_privacy_discloses_opt_in_encrypted_household_ai():
+    text=(ROOT/'web/privacy.html').read_text(encoding='utf-8')
+    assert 'If you choose Share AI connection' in text
+    assert 'does not upload the plaintext key' in text
+    assert 'decrypt, use and extract the key' in text
+    assert 'changing the passphrase alone does not revoke copies' in text
+    assert 'not included in the task Journal' in text
+    assert 'Provider keys and connection settings are excluded from' not in text
