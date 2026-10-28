@@ -14,7 +14,7 @@ function pageURL(){
 }
 function shellURL(url){
   const page=url.pathname.slice(config.base.length),query=new URLSearchParams(url.search);query.set('release',config.version);
-  if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');query.set('release',config.version);
+  if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');
   return config.base+(query.size?'?'+query:'')+url.hash;
 }
 window.tetherNavigate=(href,{replace=false}={})=>{
