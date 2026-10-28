@@ -35,6 +35,7 @@ jobs:
         run: |
           python scripts/check_web_ui.py
           python scripts/check_display_ui.py
+          python scripts/check_drive_sync_ui.py
           python scripts/check_assistant_ui.py
           timeout 180s python -u scripts/check_web_updates.py
           python scripts/check_ui.py

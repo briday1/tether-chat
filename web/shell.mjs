@@ -28,24 +28,24 @@ window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();ins
 window.tetherInstall=async()=>{if(!installPrompt)return false;await installPrompt.prompt();installPrompt=null;return true};
 function pageURL(){
   const query=new URLSearchParams(location.search),view=query.get('view')||'conversation';query.delete('view');query.set('release',config.version);query.set('workspace',workspace);
-  const page={board:'board.html',snapshots:'snapshots.html',display:'display.html',conversation:'conversation.html'}[view]||'conversation.html';
+  const page={sharing:'drive-sharing.html',board:'board.html',snapshots:'snapshots.html',display:'display.html',conversation:'conversation.html'}[view]||'conversation.html';
   return config.base+page+(query.size?'?'+query:'')+location.hash;
 }
 function shellURL(url){
   const page=url.pathname.slice(config.base.length),query=new URLSearchParams(url.search);query.set('release',config.version);query.set('workspace',workspace);
-  if(page==='display.html')query.set('view','display');else if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');
+  if(page==='drive-sharing.html')query.set('view','sharing');else if(page==='display.html')query.set('view','display');else if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');
   return config.base+(query.size?'?'+query:'')+url.hash;
 }
 window.tetherNavigate=(href,{replace=false}={})=>{
   const url=new URL(href,location.origin);
-  if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html'].some(page=>url.pathname===config.base+page))return;
+  if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html','drive-sharing.html'].some(page=>url.pathname===config.base+page))return;
   url.searchParams.set('release',config.version);url.searchParams.set('workspace',workspace);
   const next=url.pathname+url.search+url.hash;if(current===next)return;
   history[replace?'replaceState':'pushState']({},'',shellURL(url));current=next;navigateFrame(next);
 };
 window.tetherSyncRoute=href=>{
   const url=new URL(href,location.origin);
-  if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html'].some(page=>url.pathname===config.base+page))return;
+  if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html','drive-sharing.html'].some(page=>url.pathname===config.base+page))return;
   url.searchParams.set('release',config.version);url.searchParams.set('workspace',workspace);
   const next=url.pathname+url.search+url.hash;
   if(current!==next){current=next;history.replaceState({},'',shellURL(url))}
