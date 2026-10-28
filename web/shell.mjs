@@ -1,4 +1,6 @@
 import {createRuntime} from './runtime.mjs';
+import {HomeSync,uuid} from './drive-sync-service.mjs';
+import {DriveSheets} from './drive-sheets.mjs';
 import {prepareLaunch} from './launch.mjs';
 const config=window.TETHER_CONFIG,frame=document.querySelector('#app-frame'),loading=document.querySelector('#loading');
 let current='',installPrompt=null;
@@ -41,6 +43,14 @@ window.tetherSyncRoute=href=>{
 };
 window.addEventListener('popstate',()=>{const url=new URL(location.href);url.searchParams.set('workspace','home');history.replaceState({},'',url);const next=pageURL();if(next!==current){current=next;navigateFrame(next)}});
 window.tetherReady=prepareLaunch(config).then(open=>open?runtimeFor(workspace):new Promise(()=>{}));
+// Own sync in the persistent shell realm: child-screen timers/fetches disappear on navigation.
+window.tetherHomeSyncReady=window.tetherReady.then(runtime=>{
+  const apiBase=config.base+'api',prefix='tether-home-drive:'+apiBase+':';
+  let actor=localStorage.getItem(prefix+'device');if(!actor){actor=uuid();localStorage.setItem(prefix+'device',actor)}
+  const local=async(method,body)=>{const response=await runtime.fetch(apiBase+'/drive-sync/local',{method,headers:{'Content-Type':'application/json','X-Tether-Workspace':'home'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json();if(!response.ok){const error=Error(result.detail||'Local sync failed');error.status=response.status;throw error}return result};
+  return window.tetherHomeSync=new HomeSync({local,transport:new DriveSheets(window.fetch.bind(window)),actor,scheduler:window});
+});
+
 try{
   const runtime=await window.tetherReady;window.tetherFetch=runtime.fetch;
   window.tetherNotify=()=>runtime.notifications();

@@ -1,5 +1,3 @@
-import {HomeSync,uuid} from './drive-sync-service.mjs';
-import {DriveSheets} from './drive-sheets.mjs';
 import {HouseholdSetup} from './drive-setup.mjs';
 const root=document.getElementById('sharingSettings');
 const $=id=>root.querySelector('#'+id),host=window.top;
@@ -7,8 +5,7 @@ if(window.TETHER_CONFIG?.product!=='tether-home')throw Error('Household sharing 
 const fetcher=window.fetch.bind(window),apiBase=window.TETHER_CONFIG.base+'api';
 const local=async(method,body)=>{const response=await fetcher(apiBase+'/drive-sync/local',{method,headers:{'Content-Type':'application/json','X-Tether-Workspace':'home'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json();if(!response.ok){const error=Error(result.detail||'Local sync failed');error.status=response.status;throw error}return result};
 const storagePrefix='tether-home-drive:'+apiBase+':';
-let device;try{device=localStorage.getItem(storagePrefix+'device');if(!device){device=uuid();localStorage.setItem(storagePrefix+'device',device)}}catch(_){throw Error('Allow local browser storage before connecting Drive.')}
-const service=host.tetherHomeSync||(host.tetherHomeSync=new HomeSync({local,transport:new DriveSheets(fetcher),actor:device,scheduler:host}));
+const service=await host.tetherHomeSyncReady;
 let busy=false,picker=null,uiGeneration=0;
 const pendingDialogs=new Set();
 function dialogResult(start){return new Promise((resolve,reject)=>{
@@ -52,7 +49,7 @@ $('connect').onclick=()=>run(async()=>{
   if(!/^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId)||!/^\d+$/.test(project)||!key)throw Error('Complete the public app setup: OAuth client ID, project number and restricted Picker browser key.');
   if(!window.google?.accounts?.oauth2||!window.google?.picker){await libraries();service.status='Google sign-in is ready. Click Connect Google Drive again.';return;}
   for(const field of ['clientId','projectNumber','pickerKey'])localStorage.setItem(storagePrefix+field,$(field).value.trim());
-  await dialogResult((resolve,reject)=>{const auth=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:SCOPE,callback:result=>{if(generation!==uiGeneration)return reject(Error('Google connection was paused.'));if(result.error)return reject(Error(result.error));if(!google.accounts.oauth2.hasGrantedAllScopes(result,SCOPE))return reject(Error('The selected-file Drive permission was not granted.'));const grantedToken=result.access_token;service.token=grantedToken;host.setTimeout(()=>{if(service.token===grantedToken){uiGeneration++;host.tetherHomeSetup?.stop();service.token='';service.stop();service.status='Reconnect Google Drive; your edits are safe.';service.changed(service)}},Math.max(0,(Number(result.expires_in)-30)*1000));resolve()},error_callback:()=>reject(Error('Google sign-in was cancelled or blocked.'))});auth.requestAccessToken({prompt:''})});
+  await dialogResult((resolve,reject)=>{const auth=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:SCOPE,callback:result=>{if(generation!==uiGeneration)return reject(Error('Google connection was paused.'));if(result.error)return reject(Error(result.error));if(!google.accounts.oauth2.hasGrantedAllScopes(result,SCOPE))return reject(Error('The selected-file Drive permission was not granted.'));service.authorize(result.access_token,Number(result.expires_in));resolve()},error_callback:()=>reject(Error('Google sign-in was cancelled or blocked.'))});auth.requestAccessToken({prompt:''})});
   const s=await local('GET');service.status='Google connected';if(s.metadata.session)await service.start(service.token)
 });
 function chooseHousehold(){
