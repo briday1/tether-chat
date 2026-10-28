@@ -1,6 +1,7 @@
 import {createRuntime} from './runtime.mjs';
 import {HomeSync,uuid} from './drive-sync-service.mjs';
 import {DriveSheets} from './drive-sheets.mjs';
+import {parseHouseholdInvite} from './household-invite.mjs';
 import {prepareLaunch} from './launch.mjs';
 const config=window.TETHER_CONFIG,frame=document.querySelector('#app-frame'),loading=document.querySelector('#loading');
 let current='',installPrompt=null;
@@ -12,7 +13,17 @@ function runtimeFor(){return homeRuntime ||= createRuntime({config:{...config,wo
 // Pin this document and all of its screens to one installed bundle.
 const sessionURL=new URL(location.href);sessionURL.searchParams.set('release',config.version);sessionURL.searchParams.set('workspace','home');
 if(sessionURL.searchParams.get('view')==='sharing'){sessionURL.searchParams.delete('view');sessionURL.searchParams.set('settings','sharing');}
+const inviteKey='tether-home-invite:'+config.base;
+try{
+  const incoming=parseHouseholdInvite(sessionURL);
+  window.tetherHouseholdInvite=incoming||parseHouseholdInvite(sessionStorage.getItem(inviteKey)||sessionURL);
+  if(incoming)sessionStorage.setItem(inviteKey,sessionURL.href);
+}catch(error){window.tetherHouseholdInvite=null;window.tetherInviteError=error.message;try{sessionStorage.removeItem(inviteKey)}catch(_){}}
+if(window.tetherHouseholdInvite||window.tetherInviteError)sessionURL.searchParams.set('settings','sharing');
+window.tetherDismissInvite=()=>{window.tetherHouseholdInvite=null;window.tetherInviteError=null;sessionStorage.removeItem(inviteKey);const url=new URL(location.href);url.hash='';history.replaceState({},'',url);};
 history.replaceState({},'',sessionURL.pathname+sessionURL.search+sessionURL.hash);
+// A new invite pasted into an already-open tab is a new explicit navigation.
+window.addEventListener('hashchange',()=>{if(new URLSearchParams(location.hash.slice(1)).has('tetherInvite'))location.reload()});
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event});
 window.tetherInstall=async()=>{if(!installPrompt)return false;await installPrompt.prompt();installPrompt=null;return true};
 function pageURL(){

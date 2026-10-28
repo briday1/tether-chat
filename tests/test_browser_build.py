@@ -92,6 +92,9 @@ def test_household_sharing_is_inside_settings_not_navigation(tmp_path):
         assert text.index('id="settings"') < text.index('id="sharingSettings"') < text.index('<h2>AI connection</h2>')
         assert 'type="module" src="./drive-sharing.mjs"' in text
         assert 'Create shared household' in text
+        assert 'id="householdInvitation"' in text
+        assert 'Copy household invitation link' in text
+    assert (output/'household-invite.mjs').is_file()
     workspace=(output/'workspace.js').read_text(encoding='utf-8')
     assert 'data-drive-nav' not in workspace
     assert "searchParams.get('settings')==='sharing'" in workspace

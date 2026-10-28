@@ -1,3 +1,4 @@
+import {buildHouseholdInvite} from './household-invite.mjs';
 import {HouseholdSetup} from './drive-setup.mjs';
 const root=document.getElementById('sharingSettings');
 const $=id=>root.querySelector('#'+id),host=window.top;
@@ -16,13 +17,19 @@ function dialogResult(start){return new Promise((resolve,reject)=>{
 const setup=new HouseholdSetup({transport:service.transport,localStorage,storageKey:storagePrefix+'pending-sheet-setup',activate:activateHousehold});
 host.tetherHomeSetup=setup;
 const sheetURL=id=>'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(id)+'/edit';
+const invitation=()=>host.tetherHouseholdInvite;
 const status=text=>$('syncStatus').textContent=text;
 async function show(){
   const s=await local('GET'),session=s.metadata.session,pending=setup.state();
+  const invite=invitation(),inviteError=host.tetherInviteError;
+  $('householdInvitation').hidden=!invite&&!inviteError;
+  $('invitationTitle').textContent=invite?'Join '+invite.name:inviteError||'';
+  $('invitationHelp').textContent=invite?(session?(session.spreadsheetId===invite.id?'This device is already connected to this household.':'This device is connected to another household. Disconnect it first; local tasks are kept.'): 'Connect your Google account, review the sharing consent below, then join. '+Object.keys(s.records||{}).length+' local Home records will be merged and shared. The name in this link is supplied by its sender; confirm the Sheet in Google.') : 'Ask the sender for a new household invitation link.';
+  $('joinInvitation').disabled=!invite||!!session;
   $('pendingSetup').hidden=!pending;$('setupProgress').textContent=pending?'Saved setup: '+pending.step+(pending.inflight?' (last request needs checking)':''):'';
   $('pendingSheet').hidden=!pending?.household;if(pending?.household)$('pendingSheet').href=sheetURL(pending.household.id);
   $('householdStatus').textContent=session?'Household: '+(session.householdName||'Shared Home'):'No household connected';
-  $('householdChoices').hidden=!!session;$('newHousehold').hidden=!!session;$('sharingLinks').hidden=!session;
+  $('householdChoices').hidden=!!session||!!invite;$('newHousehold').hidden=!!session||!!invite;$('sharingLinks').hidden=!session;
   if(session)$('shareHousehold').href=sheetURL(session.spreadsheetId);
   $('connectionStatus').textContent=session?'This device is connected to the household Sheet. Other people must receive access and connect the same Sheet; this status does not confirm their connection.':'';
   $('disconnect').disabled=!session;$('sync').disabled=!service.token||!session;
@@ -52,10 +59,11 @@ $('connect').onclick=()=>run(async()=>{
   await dialogResult((resolve,reject)=>{const auth=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:SCOPE,callback:result=>{if(generation!==uiGeneration)return reject(Error('Google connection was paused.'));if(result.error)return reject(Error(result.error));if(!google.accounts.oauth2.hasGrantedAllScopes(result,SCOPE))return reject(Error('The selected-file Drive permission was not granted.'));service.authorize(result.access_token,Number(result.expires_in));resolve()},error_callback:()=>reject(Error('Google sign-in was cancelled or blocked.'))});auth.requestAccessToken({prompt:''})});
   const s=await local('GET');service.status='Google connected';if(s.metadata.session)await service.start(service.token)
 });
-function chooseHousehold(){
+function chooseHousehold(invite=null){
   if(!service.token)throw Error('Connect Google Drive first.');
   return dialogResult(resolve=>{
     const view=new google.picker.DocsView(google.picker.ViewId.DOCS).setMode(google.picker.DocsViewMode.LIST).setMimeTypes('application/vnd.google-apps.spreadsheet');
+    if(invite)view.setFileIds(invite.id).setLabel('Invited household');
     const builder=new google.picker.PickerBuilder().addView(view).setOAuthToken(service.token).setDeveloperKey($('pickerKey').value.trim()).setAppId($('projectNumber').value.trim()).setOrigin(location.origin).setCallback(data=>{
       if(data.action===google.picker.Action.PICKED){picker?.dispose();picker=null;resolve(data.docs?.[0]||null)}else if(data.action===google.picker.Action.CANCEL){picker?.dispose();picker=null;resolve(null)}
     });picker=builder.build();picker.setVisible(true);
@@ -81,7 +89,19 @@ $('joinHousehold').onclick=()=>run(async()=>{
 });
 $('resumeSetup').onclick=()=>run(async()=>{requireSetup();await setup.resume(service.token)});
 $('abandonSetup').onclick=()=>run(async()=>{if(confirm('Forget pending setup? Existing Sheets and local data are kept. Check Drive before creating another household.'))setup.abandon()});
-$('copyInvite').onclick=()=>run(async()=>{const s=await local('GET');if(!s.metadata.session)throw Error('Create or join a household first.');await navigator.clipboard.writeText(sheetURL(s.metadata.session.spreadsheetId));service.status='Household link copied. Grant access with Google’s Share button before sending it.';});
+$('joinInvitation').onclick=()=>run(async()=>{
+  requireSetup();const invite=invitation();if(!invite)throw Error('Open a valid household invitation first.');
+  const generation=uiGeneration,current=await local('GET');
+  if(current.metadata.session)throw Error('Disconnect the existing household before joining another. Local tasks are kept.');
+  if(setup.state())throw Error('Resume or forget the pending setup before joining this invitation.');
+  if(generation!==uiGeneration)throw Error('Setup paused.');
+  const file=await chooseHousehold(invite);if(generation!==uiGeneration)throw Error('Setup paused.');
+  if(!file){service.status='Invitation kept. If no file appears, check your Google account and ask the sender to grant Editor access, then try again.';return;}
+  if(file.id!==invite.id)throw Error('That is not the invited household. Try again and select the invited Sheet; nothing was joined.');
+  service.stop();await setup.join(service.token,{id:invite.id});
+});
+$('dismissInvitation').onclick=()=>{pauseSetup();host.tetherDismissInvite();const url=new URL(location.href);url.hash='';history.replaceState({},'',url);show()};
+$('copyInvite').onclick=()=>run(async()=>{const s=await local('GET');if(!s.metadata.session)throw Error('Create or join a household first.');await navigator.clipboard.writeText(buildHouseholdInvite(new URL(window.TETHER_CONFIG.base,location.origin),{id:s.metadata.session.spreadsheetId,name:s.metadata.session.householdName||'Shared Home'}));service.status='Household invitation copied. Share the Sheet with your partner as an Editor in Google Drive, then send this tether-home invitation.';});
 $('sync').onclick=()=>run(()=>service.sync({force:true}));$('pause').onclick=()=>{uiGeneration++;setup.stop();service.stop();service.status='Paused; local edits are safe';show()};
 $('disconnect').onclick=()=>run(async()=>{if(confirm('Stop syncing this household? Local tasks and the shared Sheet are kept.')){uiGeneration++;setup.stop();await service.disconnect()}});
 const pauseSetup=()=>{uiGeneration++;setup.stop();for(const cancel of [...pendingDialogs])cancel();picker?.dispose();picker=null};
