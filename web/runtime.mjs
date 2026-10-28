@@ -57,7 +57,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     }catch(error){
       if(error instanceof Problem)throw error;
       throw new Problem(controller.signal.aborted?'Loading models timed out. Check your connection and refresh the list.':
-        'Could not load models from this browser. Check the URL and browser access (CORS), then refresh the list.');
+        'The Browser edition could not load models from this provider. Check the URL and network access. If the provider blocks browser requests (CORS), use the Python desktop edition; installing this web app does not remove browser restrictions.');
     }finally{clearTimeout(timeout)}
   }
   async function saveSettings(body) {
@@ -102,7 +102,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       }catch(error){
         if(error instanceof Problem)throw error;
         throw new Problem(controller.signal.aborted ? 'The provider timed out. The outcome is unknown; tether did not repeat the request.'
-          : 'Could not reach the provider from this browser. Check internet/VPN access and whether the provider permits browser requests (CORS). The desktop app can use providers that block browser requests.');
+          : 'The Browser edition could not reach this provider. Check the URL and internet/VPN access. If browser requests are blocked (CORS), use the Python desktop edition; installing this web app does not remove browser restrictions.');
       }finally{clearTimeout(timeout)}
     }
   }

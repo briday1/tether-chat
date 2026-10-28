@@ -16,6 +16,8 @@ If an older release stays cached, open [Update tether](https://briday1.github.io
 
 ## AI connection
 
+Installing this edition as an app on Windows, macOS, or a phone does not change its browser networking rules. Settings identifies it as **Browser connection**. The Python desktop edition, launched with `tether-chat-desktop`, contacts providers through its local service and does not depend on provider CORS permission. The two editions keep separate task data; export a browser backup before switching.
+
 Use an HTTPS OpenAI-compatible chat-completions endpoint with tool calling. The provider must permit the app's origin through CORS, including the Authorization and Content-Type headers. A provider that works with the desktop Python client may reject browser requests. Test the connection in Settings. The browser edition includes no proxy, and never sends your key to GitHub or a tether backend.
 
 Enter the provider API base URL and API key. The selectable Model list loads automatically from that connection's `/models` endpoint and include only models with verified chat-completions tool support. OpenAI IDs use the bundled compatibility catalog; other providers must advertise tool capabilities. Embedding, image, audio, text-only, and unknown-capability models are hidden. There is no model text field or autocomplete. If a provider omits capability metadata for unknown models, those models stay out of the list. The selected model must support chat completions and tool calling. Model discovery does not save credentials or generate a chat response.

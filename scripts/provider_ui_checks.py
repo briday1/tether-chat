@@ -1,6 +1,15 @@
 """Exercise desktop settings controls with an isolated synthetic credential service."""
 import json
 
+def check_settings_appearance(ui):
+    controls=ui.locator('#settings button:not(#closeSettings)').evaluate_all('''buttons=>buttons.filter(b=>b.getClientRects().length).map(b=>{
+      const s=getComputedStyle(b);return {text:b.textContent,height:b.getBoundingClientRect().height,font:s.fontSize,radius:s.borderRadius,border:s.borderTopWidth,padding:s.padding};
+    })''')
+    assert len(controls)>=3,controls
+    for control in controls:
+        assert control['height']>=40 and control['font']=='13px' and control['radius']=='8px' and control['border']=='1px',control
+    assert len({control['padding'] for control in controls})==1,controls
+
 
 def check_provider_settings(page):
     from playwright.sync_api import expect
@@ -22,6 +31,8 @@ def check_provider_settings(page):
     page.route('**/api/settings**',settings)
     try:
         page.get_by_role('button',name='Settings',exact=True).click()
+        check_settings_appearance(page)
+        expect(page.locator('#connectionMode')).to_contain_text('Desktop connection')
         page.get_by_label('Provider API base URL').fill('https://provider.example/v1')
         page.get_by_label('API key',exact=True).fill('desktop-synthetic-key')
         expect(page.locator('#modelStatus')).to_contain_text('2 tool-calling models available')
