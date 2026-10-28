@@ -27,7 +27,7 @@ def paths(text, base):
     # api('/board') is an endpoint suffix, whereas '/board#task/…' is a
     # navigation URL. Protect the former before making Pages navigation explicit.
     text = text.replace("api('/board')", "api('__TETHER_BOARD_API__')").replace('api("/board")', 'api("__TETHER_BOARD_API__")')
-    for old, new in [('/board', base + 'board.html'), ('/snapshots', base + 'snapshots.html'),
+    for old, new in [('/board', base + 'board.html'), ('/workspace.js', base + 'workspace.js'), ('/display.js', base + 'display.js'), ('/display.css', base + 'display.css'), ('/snapshots', base + 'snapshots.html'),
                      ('/api', base + 'api'), ('/icon/', base + 'icon/'),
                      ('/theme.css', base + 'theme.css'), ('/theme.js', base + 'theme.js'),
                      ('/chat.js', base + 'chat.js'), ('/action-notes.js', base + 'action-notes.js'),
@@ -40,7 +40,9 @@ def paths(text, base):
                      ('/favicon.svg', base + 'favicon.svg'), ('/manifest.webmanifest', base + 'manifest.webmanifest')]:
         for quote in ('"', "'"):
             text = text.replace(quote + old, quote + new)
+    text = re.sub(r'''(["'])/display(?=["'?#])''', lambda m:m[1]+base+'display.html', text)
     text = text.replace('href="/"', 'href="' + base + 'conversation.html"')
+    text = text.replace("'/?task_context=", "'" + base + 'conversation.html?task_context=')
     text = text.replace("'/?discuss=", "'" + base + 'conversation.html?discuss=')
     text = text.replace('__TETHER_BOARD_API__', '/board')
     return text
@@ -48,7 +50,7 @@ def paths(text, base):
 
 def screen(name, base):
     page = (ROOT / 'tend' / name).read_text(encoding='utf-8')
-    if name != 'snapshot.html':
+    if name not in ('snapshot.html','display.html'):
         page, changed = re.subn(r'<h2>AI connection</h2>.*?<a href="/api/backup"[^>]*>Download SQLite backup</a>',
                                lambda _: (ROOT / 'web/settings.html').read_text(encoding='utf-8'), page, flags=re.S)
         if changed != 1:
@@ -56,7 +58,7 @@ def screen(name, base):
         start = page.index('async function loadSettings(){')
         end = page.index('function navigateBoardHash(){', start) if name == 'board.html' else page.index('</script>', start)
         page = page[:start] + 'const loadSettings=window.tetherLoadSettings,loadStorage=window.tetherLoadStorage;\n' + page[end:]
-    else:
+    elif name == 'snapshot.html':
         page, changed = re.subn(r'function download\(format\)\{.*?\n\}',
                                'function download(format){window.tetherExportCalendar(last,format)}', page, flags=re.S)
         if changed != 1:
@@ -99,12 +101,12 @@ def build(output, base='/'):
             shutil.copy2(source, output / source.name)
     # Keep recovery independent of cached scripts, styles and app configuration.
     (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
-    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js'):
+    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'workspace.js', 'display.js', 'display.css'):
         text = paths((ROOT / 'tend' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))
         (output / name).write_text(text, encoding='utf-8')
-    for original, target in [('index.html','conversation.html'),('board.html','board.html'),('snapshot.html','snapshots.html')]:
+    for original, target in [('index.html','conversation.html'),('board.html','board.html'),('snapshot.html','snapshots.html'),('display.html','display.html')]:
         (output / target).write_text(screen(original, base), encoding='utf-8')
     sys.path.insert(0, str(ROOT))
     from tend.windows_icon import raster

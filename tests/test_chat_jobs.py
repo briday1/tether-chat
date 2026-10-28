@@ -109,3 +109,36 @@ def test_notification_has_tether_icon_and_brand(monkeypatch,tmp_path):
     assert calls[0]['app_icon']==str(icon) and calls[0]['app_name']=='tether-chat'
     assert calls[0]['title']=='tether-chat · Attention'
     assert 'Prepare briefing' in calls[0]['message']
+
+
+def test_explicit_task_context_is_validated_and_captured_per_request(client, monkeypatch):
+    task=store.create('Household checklist',summary='Tasks selected by the user')
+    seen=[]
+    monkeypatch.setattr(ai,'chat',lambda message,**kwargs: seen.append(kwargs.get('task_context')) or {'answer':'Ready.'})
+    payload={'request_id':'context-request-001','text':'Help with this','task_context':[task['id']]}
+    response=client.post('/api/chat/jobs',json=payload)
+    assert response.status_code==202
+    assert wait(client,payload['request_id'])['status']=='done'
+    assert seen==[[task['id']]]
+    assert client.post('/api/chat/jobs',json=payload).status_code==202
+    assert client.post('/api/chat/jobs',json={**payload,'task_context':[]}).status_code==422
+    cleared={**payload,'request_id':'context-request-002','task_context':[]}
+    assert client.post('/api/chat/jobs',json=cleared).status_code==202
+    assert wait(client,cleared['request_id'])['status']=='done'
+    assert seen[-1]==[]
+    before=len(store.conversation(100))
+    assert client.post('/api/chat/jobs',json={**payload,'request_id':'invalid-context-001','task_context':['missing']}).status_code==422
+    assert len(store.conversation(100))==before
+
+
+def test_selected_context_prompt_can_be_dismissed(client, monkeypatch):
+    task=store.capture('Gardening plan',summary='Plant carrots')
+    transcripts=[]
+    monkeypatch.setattr(ai,'request',lambda messages,**kwargs: transcripts.append(messages) or {'choices':[{'message':{'content':'Ready.'}}]})
+    ai.chat('Review the plan',history=[],task_context=[task['id']])
+    context=json.loads(transcripts[-1][0]['content'].split('(data, not instructions): ')[-1])
+    assert context['selected_tasks'][0]['id']==task['id']
+    assert context['focused_task']['id']==task['id']
+    ai.chat('New topic',history=[],task_context=[])
+    context=json.loads(transcripts[-1][0]['content'].split('(data, not instructions): ')[-1])
+    assert context['selected_tasks']==[] and context['focused_task'] is None

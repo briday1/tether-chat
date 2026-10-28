@@ -252,3 +252,39 @@ test('listed OpenAI chat tools receive their required reasoning option',async t=
   await api('/settings','POST',{base_url:'https://api.openai.com/v1',model:'gpt-6-sol',api_key:'synthetic-key',remember:false});
   assert.equal((await api('/settings/test','POST',{})).status,200);
 });
+
+test('explicit task context is request-scoped, validated, and dismissible',async t=>{
+  const requests=[];
+  const {api,db}=await setup(t,async(url,options)=>{requests.push(JSON.parse(options.body));return provider({content:'Ready.'})});
+  await save(api);
+  const task=(await api('/threads','POST',{title:'Home checklist',summary:'Plant carrots'})).data;
+  const body={request_id:'selected-context-001',text:'Review the plan',task_context:[task.id]};
+  assert.equal((await api('/chat/jobs','POST',body)).status,202);
+  await waitFor(()=>db.state.jobs[0]?.status==='done');
+  const context=JSON.parse(requests.at(-1).messages[0].content.split('(data, not instructions): ')[1]);
+  assert.equal(context.selected_tasks[0].id,task.id);assert.equal(context.focused_task.id,task.id);
+  assert.equal((await api('/chat/jobs','POST',body)).status,202);
+  assert.equal((await api('/chat/jobs','POST',{...body,task_context:[]})).status,422);
+  assert.equal((await api('/chat/jobs','POST',{...body,request_id:'selected-context-002',task_context:[]})).status,202);
+  await waitFor(()=>db.state.jobs[1]?.status==='done');
+  const cleared=JSON.parse(requests.at(-1).messages[0].content.split('(data, not instructions): ')[1]);
+  assert.deepEqual(cleared.selected_tasks,[]);assert.equal(cleared.focused_task,null);
+  const count=db.state.jobs.length;
+  assert.equal((await api('/chat/jobs','POST',{...body,request_id:'invalid-context-001',task_context:['missing']})).status,404);
+  assert.equal(db.state.jobs.length,count);
+});
+test('Home runtime keeps local data and prompts separate without changing Work config',async t=>{
+  const requests=[];
+  const home=await setup(t,async(_url,init)=>{requests.push(JSON.parse(init.body));return provider({content:'Home plan.'})},new MemoryDB(),new Locks(),{config:{...config,workspace:'home'}});
+  const work=await setup(t);
+  await home.api('/threads','POST',{title:'Groceries'});
+  await work.api('/threads','POST',{title:'Project update'});
+  assert.deepEqual((await home.api('/threads')).data.map(x=>x.title),['Groceries']);
+  assert.deepEqual((await work.api('/threads')).data.map(x=>x.title),['Project update']);
+  await save(home.api);
+  await home.api('/chat/jobs','POST',{request_id:'home-prompt-001',text:'Plan my day'});
+  await waitFor(()=>home.db.state.jobs[0]?.status==='done');
+  assert.ok(requests[0].messages[0].content.includes('Home mode'));
+  assert.ok(!JSON.stringify(requests).includes('Project update'));
+  assert.equal(config.system,'Use tools to save changes.');
+});

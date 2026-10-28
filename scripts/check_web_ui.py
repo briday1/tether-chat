@@ -21,6 +21,7 @@ def main():
     from attention_ui_checks import check_attention_updates
     from note_ui_checks import check_note_replies
     from provider_ui_checks import check_settings_appearance
+    from context_ui_checks import check_task_context
     spec=importlib.util.spec_from_file_location('build_web',ROOT/'scripts/build_web.py')
     builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
     with tempfile.TemporaryDirectory(prefix='tether-web-ui-') as temp:
@@ -82,6 +83,9 @@ def main():
                 expect(frame.get_by_label('Completed',exact=True)).not_to_be_checked()
                 expect(frame.locator('#actionDrawer')).not_to_contain_text('A browser update under this action.')
                 frame.get_by_role('button',name='Close action item').click()
+
+                check_task_context(page,frame,'Prepare briefing')
+                frame.get_by_role('link',name='Tasks',exact=True).click()
 
                 # Fake only the remote paid provider; the UI, IndexedDB and tool runner are real.
                 requests=[];model_requests=[];provider_error=None

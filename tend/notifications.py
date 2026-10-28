@@ -16,14 +16,18 @@ def notify(reminder):
 
 
 def run():
-    store.init()
+    from . import workspaces
+    for mode in ('work','home'):
+        with workspaces.use(mode):store.init()
     print("tether-chat attention worker running (no background AI calls)",flush=True)
     while True:
-        for reminder in store.claim_notifications():
-            try:
-                notify(reminder)
-            except Exception as exc:
-                print("Desktop notification unavailable:",type(exc).__name__,flush=True)
+        for mode in ('work','home'):
+            with workspaces.use(mode):
+                for reminder in store.claim_notifications():
+                    try:
+                        notify({**reminder,'title':mode.title()+': '+reminder['title']})
+                    except Exception as exc:
+                        print("Desktop notification unavailable:",type(exc).__name__,flush=True)
         time.sleep(20)
 
 if __name__=="__main__":run()

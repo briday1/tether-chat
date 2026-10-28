@@ -1,7 +1,26 @@
 /* The server owns the queue. Closing/navigating this page never cancels a job. */
 (() => {
  const chat=document.querySelector('#chat');if(!chat)return;
- const journalKey='tether-chat-outbox',draftKey='tether-chat-draft';
+ const workspace=window.tetherWorkspace||'work';
+ const suffix=workspace==='work'?'':'-'+workspace;
+ const journalKey='tether-chat-outbox'+suffix,draftKey='tether-chat-draft'+suffix;
+ const contextKey='tether-chat-context-'+workspace;
+ let contextIds=[];try{const saved=JSON.parse(sessionStorage.getItem(contextKey)||'[]');if(Array.isArray(saved))contextIds=saved.filter(id=>typeof id==='string').slice(0,10)}catch(_){}
+ const contextTitles=new Map(),contextBar=el('div','chat-task-context');contextBar.setAttribute('aria-label','Selected task context');
+ document.querySelector('#composer').prepend(contextBar);
+ const contextStyle=document.createElement('style');contextStyle.textContent='.chat-task-context{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px}.chat-task-context:empty{display:none}.chat-context-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text)}.chat-context-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}.chat-context-chip button{background:none;border:0;padding:2px;display:flex;color:var(--muted);cursor:pointer}.chat-context-chip button:hover{color:var(--text)}';document.head.append(contextStyle);
+ function saveContext(){try{sessionStorage.setItem(contextKey,JSON.stringify(contextIds))}catch(_){}renderContext()}
+ function renderContext(){
+  contextBar.replaceChildren();if(!contextIds.length)return;
+  contextBar.append(el('span','muted','Task context:'));
+  for(const id of contextIds){const title=contextTitles.get(id)||'Selected task',chip=el('div','chat-context-chip'),remove=el('button');remove.type='button';remove.title='Remove '+title+' from chat context';remove.setAttribute('aria-label',remove.title);remove.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';remove.onclick=()=>{contextIds=contextIds.filter(value=>value!==id);saveContext()};chip.append(el('span','',title),remove);contextBar.append(chip)}
+ }
+ async function refreshContext(){
+  await Promise.all(contextIds.map(async id=>{try{const task=await api('/threads/'+encodeURIComponent(id));contextTitles.set(id,task.title)}catch(_){contextTitles.set(id,'Unavailable task — remove to continue')}}));renderContext();
+ }
+ const contextURL=new URL(location.href),addedContext=contextURL.searchParams.get('task_context');
+ if(addedContext){contextIds=[...new Set([...contextIds,addedContext])].slice(-10);saveContext();contextURL.searchParams.delete('task_context');history.replaceState(history.state,'',contextURL)}
+ renderContext();refreshContext();
  let syncing=false,syncAgain=false,timer=null,jobs=[],first=true,submitting=false,jobStamp='';
  let attentionRequest=0,attentionStamp='',attentionTimer=null;
  const nodes=new Map(),pendingNodes=new Map(),sending=new Set(),attentionSending=new Set(),rejected=new Map();
@@ -29,7 +48,7 @@
    node.append(el('span','retry-error',job.error+(unchanged?' No tasks were changed.':' Changes may have been saved before the failure.')));
    const retry=el('button','retry-icon');retry.type='button';retry.title='Retry this request';retry.setAttribute('aria-label','Retry this request');
    retry.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.2 5.5M20 4v7h-7"/></svg>';
-   retry.onclick=async()=>{retry.disabled=true;try{await enqueue(job.message,job.context?.kind==='attention'?{task_id:job.context.task_id,action_id:job.context.action_id}:null)}finally{retry.disabled=false}};
+   retry.onclick=async()=>{retry.disabled=true;try{await enqueue(job.message,job.context?.kind==='attention'?{task_id:job.context.task_id,action_id:job.context.action_id}:null,job.context?.kind==='task_context'?job.context.task_ids:undefined)}finally{retry.disabled=false}};
    node.append(retry);
   }else{
    node.append(el('div','tend-activity-heading',job.status==='queued'?'Queued…':'Working on your request'));
@@ -87,11 +106,11 @@
    const node=pendingNodes.get(payload.request_id);if(node){node.textContent=error.message;node.dataset.signature=''}
   }finally{sending.delete(payload.request_id)}
  }
- async function enqueue(text,attention=null){
+ async function enqueue(text,attention=null,selectedContext=contextIds){
   if(!attention&&text.length>50000){inputError.textContent='This message is over 50,000 characters. Split it into smaller messages. Your text has been kept.';inputError.hidden=false;return null}
   inputError.hidden=true;
   if(window.tetherBeforeChat && !await window.tetherBeforeChat(text,attention))return null;
-  const payload={request_id:newId(),text,...(attention?{attention}:{})};remember(payload);
+  const payload={request_id:newId(),text,...(attention?{attention}:{task_context:[...selectedContext]})};remember(payload);
   if(chat.querySelector('.welcome'))chat.replaceChildren();
   const user=messageNode({id:'outbox-'+payload.request_id,role:'user',body:text});chat.append(user,pendingNode({id:payload.request_id,status:'queued',progress:['Sending your request…']}));scrollChat();
   send(payload);sync();return payload.request_id;

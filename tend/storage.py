@@ -27,6 +27,8 @@ def _write(config):
         if os.path.exists(temp):os.unlink(temp)
 
 def stage(target,mode="move"):
+    from .workspaces import current
+    if current()!='work':raise ValueError("Manage database locations from Work; Home remains in its own local file")
     if mode not in ("move","existing"):raise ValueError("Choose Move current or Use existing")
     if os.environ.get("TEND_DB"):raise ValueError("Remove TEND_DB environment override before relocating the database")
     path=Path(target).expanduser().resolve()
@@ -46,6 +48,9 @@ def activate_pending():
     if not target:return
     destination=Path(target)
     source=active_path()
+    # Keep Home attached to its original file when changing the Work location.
+    home=source.with_name(source.stem+'.home'+source.suffix)
+    if home.exists():config.setdefault('home',str(home))
     if config.get("pending_mode")=="existing":
         validate_existing(destination)
         config["active"]=str(destination)

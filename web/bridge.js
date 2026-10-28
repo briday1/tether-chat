@@ -5,10 +5,11 @@
   try{shell=window.top.location.origin===location.origin && window.top.tetherReady ? window.top : null}catch(_){}
   if(!shell){
     const query=new URLSearchParams(location.search),page=location.pathname.split('/').at(-1);
-    if(page==='board.html')query.set('view','board');if(page==='snapshots.html')query.set('view','snapshots');
+    if(page==='display.html')query.set('view','display');if(page==='board.html')query.set('view','board');if(page==='snapshots.html')query.set('view','snapshots');
     location.replace(config.base+(query.size?'?'+query:'')+location.hash);return;
   }
-  window.fetch=(...args)=>shell.tetherReady.then(runtime=>runtime.fetch(...args));
+  const screenRuntime=shell.tetherReady;
+  window.fetch=(...args)=>screenRuntime.then(runtime=>runtime.fetch(...args));
   const api=async(path,method='GET',data)=>{
     const response=await fetch(config.base+'api'+path,{method,headers:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
     const result=await response.json();if(!response.ok){const error=Error(result.detail||'Request failed');error.status=response.status;throw error}window.tetherDataChanged?.(path,method);return result;
@@ -57,7 +58,7 @@
   document.addEventListener('click',event=>{
     const link=event.target.closest('a[href]');if(!link||event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||link.target==='_blank')return;
     const url=new URL(link.href,location.href);
-    if(url.origin===location.origin && ['conversation.html','board.html','snapshots.html'].some(page=>url.pathname===config.base+page)){
+    if(url.origin===location.origin && ['conversation.html','board.html','snapshots.html','display.html'].some(page=>url.pathname===config.base+page)){
       // The screen's own task-drawer handlers run before this bubbling listener.
       event.preventDefault();shell.tetherNavigate(url.href);
     }

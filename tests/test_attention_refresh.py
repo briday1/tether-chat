@@ -57,3 +57,15 @@ def test_reconsideration_cannot_restore_a_task_completed_during_the_request(reco
         return {'choices': [{'message': {'content': json.dumps({'items': [{'id': task['id'], 'reason': 'Old reason'}]})}}]}
     records.setattr(ai, 'request', finish)
     assert attention.items(True)['items']==[]
+
+
+def test_attention_suggestions_do_not_cross_database_paths(tmp_path,monkeypatch):
+    """Copied/imported IDs must not leak suggestions between Home and Work."""
+    task={'id':'same-imported-id','title':'Shared old title','summary':'','state':'open','due':False,'updated_at':'2026-01-01','revisit_at':None,'recurrence':None}
+    monkeypatch.setattr(store,'list_threads',lambda:[task])
+    monkeypatch.setattr(ai,'public_config',lambda:{'has_key':True})
+    monkeypatch.setattr(ai,'request',lambda *a,**k:{'choices':[{'message':{'content':'{"items":[{"id":"same-imported-id","reason":"Work-only suggestion"}]}'}}]})
+    monkeypatch.setattr(store,'path',lambda:tmp_path/'work.sqlite3')
+    assert ai.attention(force=True)['items'][0]['reason']=='Work-only suggestion'
+    monkeypatch.setattr(store,'path',lambda:tmp_path/'home.sqlite3')
+    assert ai.attention()['items']==[]

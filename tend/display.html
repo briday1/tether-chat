@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Display · tether.</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/display.css">
+<script src="/theme.js"></script>
+<script src="/workspace.js"></script>
+</head>
+<body>
+<header class="topnav"><div class="brand">tether<span>.</span></div><a href="/">Conversation</a><a href="/board">Tasks</a><a href="/display" data-display-nav class="active" aria-current="page">Display</a><div class="grow"></div><select class="theme-picker" data-theme-picker aria-label="Color theme"></select></header>
+<main class="display-main">
+ <div class="display-heading"><h1>Display</h1><p id="display-status" role="status">Your calendar stays up to date while this view is open.</p></div>
+ <div class="display-toolbar" aria-label="Calendar controls">
+  <div class="display-period" role="group" aria-label="Calendar period"><button id="view-week" aria-pressed="true">Week</button><button id="view-month" aria-pressed="false">Month</button></div>
+  <div class="display-navigation"><button id="previous" aria-label="Previous period">‹</button><button id="today">Today</button><button id="next" aria-label="Next period">›</button></div>
+  <label class="display-date">Go to date <input id="display-date" type="date"></label>
+ </div>
+ <div class="display-quick" id="display-quick" aria-live="polite"></div>
+ <section class="display-calendar" aria-label="Task calendar"><iframe id="display-calendar" title="Week and month calendar"></iframe></section>
+ <p class="display-hint">Choose a task to open it. Hover or focus a date or task for a closer look.</p>
+ <p id="display-error" role="alert"></p>
+</main>
+<script src="/display.js"></script>
+</body>
+</html>

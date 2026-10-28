@@ -98,3 +98,27 @@ python -m pytest -q tests/test_browser_build.py
 The generated `web-dist/` is the Pages artifact; it is not the desktop package or a second copy of the source screens. Local root hosting can use `--base-path /`. Serve the output over HTTPS or localhost; Web Crypto, Web Locks, service workers, and installation require a secure browser context.
 
 On a normal development machine or hosted CI runner, install Playwright and Chromium and run `python scripts/check_web_ui.py` and `python scripts/check_assistant_ui.py`. This checks the real static build at a repository subpath, IndexedDB, desktop imports, scoped action notes, encrypted keys, navigation during AI calls, exports, mobile layout, and fresh offline loads with a synthetic provider. No real API key or user task database is used.
+
+## Work and Home
+
+Use the Work/Home selector to keep personal and work tasks, categories, conversations,
+reminder preferences, selected chat context, and Display settings separate on this device.
+Existing data stays in Work. Home begins empty; switching does not move or erase anything.
+The browser stores each workspace in a separate IndexedDB database and keeps its provider
+connection settings separate too. Desktop uses a separate Home SQLite file beside the
+original Work database and shares the existing desktop provider connection.
+
+This is an organization feature, not a login or security boundary. Anyone with access
+to the same browser profile or desktop app can select either workspace. Browser and
+desktop editions still do not synchronize automatically.
+
+Display is a persistent third tab with week/month navigation, fixed calendar cells,
+scrollable daily items, and date/task previews. It refreshes local data without provider
+calls. Choose **Use as chat context** in Tasks to pin a task to a conversation; remove
+its chip above the composer to dismiss it. Pins help disambiguate a request, but do not
+restrict the assistant's ordinary task tools to those tasks.
+
+Backups and imports apply to the selected workspace only. Back up both workspaces
+separately. Work database relocation retains Home at its prior local file, so changing
+the Work location does not silently detach existing Home data. See [Sharing](SHARING.md)
+for the options and limits of future multi-person use.

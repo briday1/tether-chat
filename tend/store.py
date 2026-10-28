@@ -7,7 +7,9 @@ from contextlib import contextmanager
 def now(): return datetime.now(timezone.utc).isoformat()
 def path():
     from .storage import active_path
-    return Path(os.environ["TEND_DB"]).expanduser() if os.environ.get("TEND_DB") else active_path()
+    from .workspaces import database_path
+    base = Path(os.environ["TEND_DB"]).expanduser() if os.environ.get("TEND_DB") else active_path()
+    return database_path(base)
 @contextmanager
 def conn():
     p=path();p.parent.mkdir(parents=True,exist_ok=True)

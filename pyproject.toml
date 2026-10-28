@@ -36,7 +36,7 @@ desktop = ["pywebview>=5,<7", "pystray>=0.19,<1"]
 include = ["tend*"]
 
 [tool.setuptools.package-data]
-tend = ["index.html", "board.html", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "speech.mjs", "updates.js", "notes.js", "notes.css", "provider-models.js", "preferences.js", "locations.js", "tool-models.json", "favicon.svg", "manifest.webmanifest"]
+tend = ["index.html", "board.html", "workspace.js", "display.html", "display.js", "display.css", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "speech.mjs", "updates.js", "notes.js", "notes.css", "provider-models.js", "preferences.js", "locations.js", "tool-models.json", "favicon.svg", "manifest.webmanifest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

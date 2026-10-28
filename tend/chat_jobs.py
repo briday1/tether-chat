@@ -1,6 +1,7 @@
 """Durable, serialized chat jobs. Browser navigation never owns a provider call."""
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from contextvars import copy_context
 from datetime import datetime, timezone
 import json
 import logging
@@ -53,7 +54,7 @@ def initialize():
             queued = [r['id'] for r in db.execute("SELECT id FROM chat_jobs WHERE status='queued' ORDER BY rowid")]
         _INITIALIZED.add(path)
         for job_id in queued:
-            _POOL.submit(_run, path, job_id)
+            _POOL.submit(copy_context().run, _run, path, job_id)
     return path
 
 
@@ -91,7 +92,7 @@ def submit(message, request_id=None, context=None):
             db.execute('INSERT INTO chat_jobs(id,message,context,status,progress,created_at,updated_at,user_message_id) VALUES(?,?,?,?,?,?,?,?)',
                        (request_id, message, encoded, 'queued', '[]', stamp, stamp, user_id))
             row = db.execute('SELECT * FROM chat_jobs WHERE id=?', (request_id,)).fetchone()
-        _POOL.submit(_run, path, request_id)
+        _POOL.submit(copy_context().run, _run, path, request_id)
     return public(row)
 
 
@@ -125,7 +126,8 @@ def _run(path, job_id):
         else:
             result = snapshot_respond(message)
             if result is None:
-                result = commands.execute(message) if message.startswith('/') else ai.chat(message, progress=status, history=history)
+                kwargs = {'task_context': job['context']['task_ids']} if job['context'].get('kind') == 'task_context' else {}
+                result = commands.execute(message) if message.startswith('/') else ai.chat(message, progress=status, history=history, **kwargs)
             if result is None:
                 raise ValueError('Unknown command. Type /help.')
         result = {**result, 'answer_html': render(result['answer'])}

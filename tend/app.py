@@ -17,10 +17,25 @@ from .ai import reflect
 app=FastAPI(title="tether-chat")
 app.add_middleware(TrustedHostMiddleware,allowed_hosts=["127.0.0.1","localhost","[::1]"])
 db.init()
+from threading import Lock
+_workspace_init_lock=Lock()
+_initialized_workspaces={str(db.path().absolute())}
 
 @app.middleware('http')
 async def fresh_desktop_assets(request,call_next):
-    response=await call_next(request)
+    from . import workspaces
+    from fastapi.responses import JSONResponse
+    mode=request.headers.get('X-Tether-Workspace',request.query_params.get('workspace','work'))
+    try:workspaces.normalize(mode)
+    except ValueError as exc:return JSONResponse({'detail':str(exc)},status_code=422)
+    with workspaces.use(mode):
+        if request.url.path.startswith('/api/'):
+            path=str(db.path().absolute())
+            if path not in _initialized_workspaces or not db.path().exists():
+                with _workspace_init_lock:
+                    if path not in _initialized_workspaces or not db.path().exists():
+                        db.init();_initialized_workspaces.add(path)
+        response=await call_next(request)
     if request.url.path.endswith(('.js','.mjs','.css')):
         response.headers['Cache-Control']='no-store'
     return response
@@ -109,6 +124,15 @@ def snapshot_png(start:str,end:str,category:str="",theme:str="sage",scale:int=2)
                                  "Cache-Control":"no-store"})
     except ValueError as exc:
         raise HTTPException(422,str(exc)) from None
+
+@app.get('/workspace.js')
+def workspace_script():return FileResponse(Path(__file__).with_name('workspace.js'),media_type='application/javascript')
+@app.get('/display.js')
+def display_script():return FileResponse(Path(__file__).with_name('display.js'),media_type='application/javascript')
+@app.get('/display.css')
+def display_style():return FileResponse(Path(__file__).with_name('display.css'),media_type='text/css')
+@app.get('/display')
+def display_page():return desktop_screen('display.html')
 
 @app.get("/board")
 def board_page():return desktop_screen('board.html')
@@ -253,7 +277,7 @@ def backup():
     except Exception:
         os.unlink(file.name)
         raise
-    return FileResponse(file.name,filename="tether-chat-backup.sqlite3",media_type="application/octet-stream",
+    return FileResponse(file.name,filename="tether-chat-"+__import__("tend.workspaces",fromlist=["current"]).current()+"-backup.sqlite3",media_type="application/octet-stream",
                         background=BackgroundTask(os.unlink,file.name))
 
 @app.get("/api/portable")
@@ -345,6 +369,8 @@ def chat_stream(data:Message):
     from fastapi.responses import StreamingResponse
     message=data.text.strip()
     if not message:raise HTTPException(422,"Message required")
+    from contextvars import copy_context
+    request_context=copy_context()
     def events():
         q=queue.Queue()
         def worker():
@@ -364,7 +390,7 @@ def chat_stream(data:Message):
                 # Do not send raw provider exceptions or traceback to clients.
                 q.put({"type":"error","message":str(exc) if isinstance(exc,ValueError) else "Assistant request failed. Check tether-chat server logs."})
             finally:q.put(None)
-        threading.Thread(target=worker,daemon=True).start()
+        threading.Thread(target=request_context.run,args=(worker,),daemon=True).start()
         while True:
             item=q.get()
             if item is None:break
