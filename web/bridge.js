@@ -24,7 +24,14 @@
     window.tetherProviderConfigured?.(c);
   }
   let loadingSettings=Promise.resolve(),pendingProvider=Promise.resolve();
-  window.tetherPrepareUpdate=()=>pendingProvider;
+  window.tetherPrepareUpdate=async()=>{
+    await pendingProvider;
+    if(document.querySelector('#voiceInput[aria-pressed="true"]'))return false;
+    // Keep unsaved forms and task/meeting-note editors open until the user closes them.
+    if([...document.querySelectorAll('#settings,#chatSelection,#actionDrawer,.panel')].some(el=>el.getClientRects().length))return false;
+    const input=$('#message');if(input)try{localStorage.setItem('tether-chat-draft',input.value)}catch(_){return false}
+    return true;
+  };
   window.tetherLoadSettings=()=>loadingSettings=(async()=>{
     await pendingProvider;
     const form=$('#provider'),controls=[...form.querySelectorAll('input,select,button')];
@@ -63,12 +70,6 @@
   document.addEventListener('DOMContentLoaded',()=>{
     if(!$('#provider'))return;
     status('#browserVersion','tether. '+config.version+' · Browser edition');
-    const updateStatus=()=>status('#appUpdateStatus',shell.tetherUpdateAvailable?'A new version is ready. Tap Update app to open it.':'');
-    updateStatus();window.addEventListener('tether:update-available',updateStatus);
-    $('#updateApp').onclick=async()=>{
-      const button=$('#updateApp');button.disabled=true;
-      try{await shell.tetherUpdateApp()}catch(error){status('#appUpdateStatus',error.message)}finally{button.disabled=false}
-    };
     const form=$('#provider');let providerBusy=false;
     function providerAction(action,validate=false){
       if(providerBusy)return pendingProvider;
