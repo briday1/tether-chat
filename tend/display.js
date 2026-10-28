@@ -36,7 +36,7 @@
       const {start,end}=range(),key=`${start}:${end}`;
       $('#display-date').value=anchor;
       $('#view-week').setAttribute('aria-pressed',String(view==='week'));$('#view-month').setAttribute('aria-pressed',String(view==='month'));
-      if(key!==lastRange){lastRange=key;frame.src='/snapshots?'+new URLSearchParams({start,end,embed:'1',workspace:mode()});}
+      if(key!==lastRange){lastRange=key;frame.contentWindow.location.replace('/snapshots?'+new URLSearchParams({start,end,embed:'1',workspace:mode()}));}
       else frame.contentWindow?.postMessage({type:'tend:snapshot-refresh'},location.origin);
       const response=await fetch('/api/snapshot?'+new URLSearchParams({start,end}));
       if(!response.ok)throw Error('Could not refresh this calendar. Your saved tasks have not changed.');

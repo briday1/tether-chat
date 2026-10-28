@@ -47,7 +47,7 @@
       });
       const spacer=header.querySelector('.grow');if(spacer)spacer.before(select);else header.append(select);
     }
-    for (const frame of document.querySelectorAll('iframe[src]')) frame.src = decorate(frame.src);
+    for (const frame of document.querySelectorAll('iframe[src]')) { const url=decorate(frame.src);if(url!==frame.src)frame.contentWindow.location.replace(url); }
     if (workspace === 'home') {
       const prompt = document.querySelector('#actionPrompt');
       if (prompt) prompt.placeholder = 'What should happen when this personal task is due?';
