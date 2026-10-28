@@ -1,0 +1,95 @@
+"""Shared Home/Work Display header regressions in a non-UTC browser timezone."""
+from datetime import datetime, timezone
+
+
+def check_display_header(page, screen):
+    from playwright.sync_api import expect
+    clock = screen.locator('#display-clock')
+    calendar = screen.frame_locator('#display-calendar')
+
+    def settled_today():
+        # The title/clock update before refresh's asynchronous snapshot request.
+        # Await its completion before skipping fake time, so the interval is not
+        # coalesced while refresh still has its in-flight guard set.
+        status = screen.locator('#display-status')
+        status.evaluate('(node)=>node.textContent=""')
+        screen.locator('#display-today').click()
+        expect(status).to_contain_text('Updated ')
+
+    expect(clock).to_have_text('Wednesday, October 28 - 5:28PM')
+    expect(screen.locator('#display-title')).to_have_text('October 2026')
+    expect(screen.locator('#display-sidebar')).to_be_hidden()
+    expect(screen.locator('#display-previous')).to_have_attribute('aria-label', 'Previous month')
+    expect(screen.locator('#display-next')).to_have_attribute('aria-label', 'Next month')
+    # Native buttons work with keyboard without opening settings or reloading the app.
+    screen.locator('body').evaluate('(node)=>node.dataset.headerTest="retained"')
+    screen.locator('#display-next').focus()
+    page.keyboard.press('Enter')
+    expect(screen.locator('#display-title')).to_have_text('November 2026')
+    expect(screen.locator('#display-date')).to_have_value('2026-11-01')
+    screen.locator('#display-next').click()
+    expect(screen.locator('#display-title')).to_have_text('December 2026')
+    screen.locator('#display-next').click()
+    expect(screen.locator('#display-title')).to_have_text('January 2027')
+    screen.locator('#display-previous').focus()
+    page.keyboard.press('Space')
+    expect(screen.locator('#display-title')).to_have_text('December 2026')
+    expect(screen.locator('body')).to_have_attribute('data-header-test', 'retained')
+    expect(screen.locator('#display-sidebar')).to_be_hidden()
+    screen.locator('#display-today').click()
+    expect(screen.locator('#display-title')).to_have_text('October 2026')
+    expect(screen.locator('#display-date')).to_have_value('2026-10-28')
+    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+    expect(calendar.locator('.today .day-date')).to_have_attribute('aria-current', 'date')
+    calendar.locator('[data-date="2026-10-29"] .day-date').click()
+    expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-29')
+    # Selected date does not steal actual Today's visual/accessible identity.
+    expect(calendar.locator('.today')).to_have_attribute('data-date', '2026-10-28')
+    expect(calendar.locator('[aria-current="date"]')).to_have_count(1)
+    screen.locator('#display-today').click()
+    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+    # Month navigation must not skip February when the starting date is the 31st.
+    screen.locator('#display-menu').click()
+    screen.locator('#display-date').fill('2028-01-31')
+    screen.locator('#display-date').dispatch_event('change')
+    screen.locator('#display-close').click()
+    screen.locator('#display-next').click()
+    expect(screen.locator('#display-title')).to_have_text('February 2028')
+    expect(calendar.locator('[data-date="2028-02-29"]')).to_have_count(1)
+    expect(calendar.locator('[data-date="2028-02-30"]')).to_have_count(0)
+    page.clock.fast_forward(16000)
+    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+    expect(screen.locator('#display-title')).to_have_text('February 2028')
+    screen.locator('#display-today').click()
+    expect(screen.locator('#display-title')).to_have_text('October 2026')
+    # Fit the complete clock and navigation at dock, portrait-tablet and phone sizes.
+    for width, height in [(1024, 600), (768, 1024), (390, 844), (320, 640)]:
+        page.set_viewport_size({'width': width, 'height': height})
+        assert screen.locator('body').evaluate('()=>document.documentElement.scrollWidth<=innerWidth'), (width, height)
+        for selector in ['#display-previous', '#display-title', '#display-next', '#display-today', '#display-clock']:
+            assert screen.locator(selector).evaluate('(node)=>{const b=node.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.top>=0&&b.bottom<=innerHeight&&node.scrollWidth<=node.clientWidth+1}'), (width, height, selector)
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.clock.set_system_time(datetime(2026, 10, 28, 21, 28, tzinfo=timezone.utc))
+    page.clock.fast_forward(75000)
+    expect(clock).to_have_text('Wednesday, October 28 - 5:29PM')
+    # UTC is already October 29; the UI still shows October 28 until local midnight.
+    page.clock.set_system_time(datetime(2026, 10, 29, 3, 59, 45, tzinfo=timezone.utc))
+    settled_today()
+    expect(clock).to_have_text('Wednesday, October 28 - 11:59PM')
+    page.clock.fast_forward(30000)
+    expect(clock).to_have_text('Thursday, October 29 - 12:00AM')
+    page.clock.fast_forward(61000)
+    expect(calendar.locator('.today')).to_have_attribute('data-date', '2026-10-29')
+    expect(calendar.locator('.today .day-date')).to_have_attribute('aria-current', 'date')
+    expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-29')
+    page.clock.set_system_time(datetime(2026, 11, 1, 3, 59, 45, tzinfo=timezone.utc))
+    settled_today()
+    expect(screen.locator('#display-title')).to_have_text('October 2026')
+    page.clock.fast_forward(90000)
+    expect(screen.locator('#display-title')).to_have_text('November 2026')
+    expect(calendar.locator('.today')).to_have_attribute('data-date', '2026-11-01')
+    # Restore the test fixture's original day for the remaining calendar scenarios.
+    page.clock.set_system_time(datetime(2026, 10, 28, 21, 28, tzinfo=timezone.utc))
+    screen.locator('#display-today').click()
+    expect(clock).to_have_text('Wednesday, October 28 - 5:28PM')
+    expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-28')

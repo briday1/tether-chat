@@ -23,8 +23,8 @@ def main():
         try:
             with sync_playwright() as pw:
                 browser = pw.chromium.launch(executable_path=os.environ.get('TETHER_TEST_CHROMIUM'), args=['--no-sandbox'])
-                page = browser.new_page(viewport={'width': 1280, 'height': 900}, has_touch=True, reduced_motion='reduce')
-                page.clock.install(time=datetime(2026, 10, 28, 12, tzinfo=timezone.utc))
+                page = browser.new_page(viewport={'width': 1280, 'height': 900}, has_touch=True, reduced_motion='reduce', timezone_id='America/New_York', locale='en-US')
+                page.clock.install(time=datetime(2026, 10, 28, 21, 28, tzinfo=timezone.utc))
                 errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
                 page.goto(base + '?view=display')
                 page.wait_for_function('!!window.tetherFetch')
@@ -39,8 +39,10 @@ def main():
                   for(let n=0;n<8;n++){const r=await runtime.fetch('/tether-chat/api/threads',{method:'POST',body:JSON.stringify({title:'Six row busy date '+n})});const task=await r.json();await runtime.fetch('/tether-chat/api/threads/'+task.id,{method:'PATCH',body:JSON.stringify({due_at:'2027-05-16'})})}
                   return {today,other};}''')
                 screen = page.frame_locator('#app-frame')
+                from display_ui_checks import check_display_header
+                check_display_header(page, screen)
                 screen.locator('#display-menu').click()
-                screen.get_by_role('button', name='Today', exact=True).click()
+                screen.locator('#today').click()
                 screen.locator('#display-close').click()
                 calendar = screen.frame_locator('#display-calendar')
                 expect(calendar.locator('#date-panel-title')).to_have_text('Today')
@@ -131,7 +133,7 @@ def main():
                 expect(week.locator('#date-panel-items .task')).to_have_count(7)
                 expect(week.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
                 # Midnight changes the default Today panel without requiring a reload.
-                page.clock.set_system_time(datetime(2026, 10, 29, 0, 1, tzinfo=timezone.utc))
+                page.clock.set_system_time(datetime(2026, 10, 29, 4, 1, tzinfo=timezone.utc))
                 page.clock.fast_forward(61000)
                 expect(week.locator('#date-panel-title')).to_have_text('Today')
                 expect(week.locator('#date-panel')).to_have_attribute('data-date', dates['other'])

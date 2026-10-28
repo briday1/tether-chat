@@ -56,7 +56,7 @@ def main():
             with sync_playwright() as pw:
                 executable=os.environ.get('TETHER_TEST_CHROMIUM')
                 browser=pw.chromium.launch(**({'executable_path':executable} if executable else {}))
-                page=browser.new_page(viewport={'width':1440,'height':900})
+                page=browser.new_page(viewport={'width':1440,'height':900}, timezone_id='America/New_York', locale='en-US')
                 errors=[];page.on('pageerror',lambda err:errors.append(str(err)))
                 if args.mock_api:
                     def route(request):
@@ -156,7 +156,11 @@ def main():
                     expect(calendar.locator('#date-panel-items')).to_contain_text('Check the draft attachment')
                     # A weekend task includes weekend columns, not a hidden sixth item.
                     expect(calendar.locator('#weekdays span')).to_have_count(7)
+                    from datetime import datetime, timezone
+                    from display_ui_checks import check_display_header
+                    page.clock.install(time=datetime(2026,10,28,21,28,tzinfo=timezone.utc))
                     page.goto(base+'/display?workspace=work',wait_until='networkidle')
+                    check_display_header(page, page)
                     calendar=page.frame_locator('#display-calendar')
                     expect(calendar.locator('#date-panel-title')).to_have_text('Today')
                     expect(page.locator('#view-week, #view-month')).to_have_count(0)
