@@ -17,6 +17,7 @@
 <body>
   <main data-version="__VERSION__">
     <h1>tether.</h1>
+    <p class="muted">Checking tether. __VERSION__ or newer</p>
     <p id="status" role="status">Checking for the latest version…</p>
     <p class="muted">Your tasks, notes, conversation, and saved connection stay on this device.</p>
     <button id="retry" type="button" hidden>Try again</button>
@@ -41,6 +42,33 @@
           transaction.oncomplete=()=>{db.close();resolve(active)};
           transaction.onerror=()=>{db.close();reject(Error('Could not check saved requests. Return to tether, then try updating again.'))};
         };
+      });
+    }
+    const expected=document.querySelector('main').dataset.version;
+    function atLeast(actual,minimum){
+      if(typeof actual!=='string'||!/^\d{4}\.\d+$/.test(actual))return false;
+      const [year,release]=actual.split('.').map(Number),[minYear,minRelease]=minimum.split('.').map(Number);
+      return year>minYear || year===minYear&&release>=minRelease;
+    }
+    async function installedVersion(){
+      const response=await fetch(new URL('app-config.js?update='+Date.now(),base),{cache:'no-store'});
+      if(!response.ok)throw Error('Could not verify the installed version. Check your connection and try again.');
+      const source=await response.text(),prefix='window.TETHER_CONFIG=';
+      let actual;try{if(!source.startsWith(prefix))throw Error();actual=JSON.parse(source.slice(prefix.length).trim().replace(/;$/,'')).version}catch(_){throw Error('Could not verify the installed version. Try again.')}
+      if(!atLeast(actual,expected))throw Error('This tab is still using '+actual+'. The available update is '+expected+'. Tap Try again to finish updating.');
+      return actual;
+    }
+    async function refreshOpenTabs(registration,version){
+      const worker=registration.active;
+      if(!worker)throw Error('The new version is not active yet. Tap Try again.');
+      return new Promise((resolve,reject)=>{
+        const channel=new MessageChannel();
+        const timeout=setTimeout(()=>{channel.port1.close();reject(Error('The new version downloaded, but open tabs could not be refreshed. Tap Try again.'))},20000);
+        channel.port1.onmessage=event=>{clearTimeout(timeout);channel.port1.close();const data=event.data;
+          if(data?.version!==version || data.error)reject(Error(data?.error||'The app version could not be verified. Try again.'));
+          else resolve(data);
+        };
+        worker.postMessage({type:'TETHER_FINISH_UPDATE',version},[channel.port2]);
       });
     }
     async function download(){
@@ -71,7 +99,11 @@
           worker.postMessage({type:'TETHER_ACTIVATE_UPDATE'});done();
         });
       }
-      status.textContent='Opening updated tether…';location.replace(base.href);
+      const version=await installedVersion();
+      status.textContent='Refreshing open tether tabs…';
+      const result=await refreshOpenTabs(registration,version);
+      if(result.failed)throw Error('Version '+version+' is ready here. Close any older tether tabs, then use Return to tether below.');
+      status.textContent='Verified tether. '+version+'. Opening updated app…';location.replace(base.href);
     }
     async function run(){
       retry.hidden=true;

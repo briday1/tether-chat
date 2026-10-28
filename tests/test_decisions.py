@@ -98,7 +98,7 @@ def test_snapshots_include_task_action_and_recurring_reminders(database):
 
 
 def test_model_list_only_advertises_compatible_tool_models():
-    models=[{'id':'gpt-4.1-mini'},{'id':'gpt-4.1-mini-2025-04-14'},{'id':'gpt-6-luna'},{'id':'gpt-6.1-sol'},{'id':'text-embedding-3-small'},{'id':'unknown-model'},{'id':'gpt-4o','capabilities':{'tool_calling':False}}]
+    models=[{'id':'gpt-4.1-mini'},{'id':'gpt-4.1-mini-2025-04-14'},{'id':'gpt-6-luna'},{'id':'gpt-6.1-sol'},{'id':'gpt-6.1-terra'},{'id':'text-embedding-3-small'},{'id':'unknown-model'},{'id':'gpt-4o','capabilities':{'tool_calling':False}}]
     assert compatible_models(models,'https://api.openai.com/v1')==['gpt-4.1-mini','gpt-4.1-mini-2025-04-14','gpt-6-luna']
     assert options('https://api.openai.com/v1','gpt-6-luna')=={'reasoning_effort':'none'}
     custom=[{'id':'unknown'},{'id':'supported','supported_parameters':['tools']},{'id':'capable','capabilities':{'function_calling':True}},{'id':'disabled','supports_tool_calling':False,'supported_parameters':['tools']}]

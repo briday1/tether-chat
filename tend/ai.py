@@ -62,10 +62,10 @@ def models(base_url=None,key=None):
     except HTTPError as exc:
         message,_=failure(exc.code,exc.read(16384),key,base)
         raise ValueError(message) from None
-    except (URLError,TimeoutError):raise ValueError('Could not load models. Check your network and provider URL, or enter a model ID manually.') from None
-    except ValueError:raise ValueError('This provider did not return a model list. You can enter a model ID manually.') from None
+    except (URLError,TimeoutError):raise ValueError('Could not load models. Check your network and provider URL, then refresh the list.') from None
+    except ValueError:raise ValueError('This provider did not return a model list. Check model-list access for this URL and key.') from None
     if not isinstance(result,dict) or not isinstance(result.get('data'),list):
-        raise ValueError('This provider does not expose a compatible model list. You can enter a model ID manually.')
+        raise ValueError('This provider does not expose a compatible model list. Check model-list access for this URL and key.')
     models=compatible_models(result['data'],base)
     return {'models':models,'hidden':len(result['data'])-len(models)}
 

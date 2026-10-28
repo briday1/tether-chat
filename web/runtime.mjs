@@ -51,13 +51,13 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       const response=await network(base_url+'/models',{method:'GET',mode:'cors',credentials:'omit',redirect:'error',cache:'no-store',
         headers:{Authorization:'Bearer '+key},signal:controller.signal});
       if(!response.ok){const failure=await providerFailure(response,key,base_url);throw new Problem(failure.message)}
-      let result;try{result=await response.json()}catch(_){throw new Problem('This provider did not return a model list. You can enter a model ID manually.')}
-      if(!Array.isArray(result.data))throw new Problem('This provider does not expose a compatible model list. You can enter a model ID manually.');
+      let result;try{result=await response.json()}catch(_){throw new Problem('This provider did not return a model list. Check model-list access for this URL and key.')}
+      if(!Array.isArray(result.data))throw new Problem('This provider does not expose a compatible model list. Check model-list access for this URL and key.');
       const models=compatibleModels(result.data,base_url,config.tool_models);return {models,hidden:result.data.length-models.length};
     }catch(error){
       if(error instanceof Problem)throw error;
-      throw new Problem(controller.signal.aborted?'Loading models timed out. Try again or enter a model ID manually.':
-        'Could not load models from this browser. Check the URL and browser access (CORS), or enter a model ID manually.');
+      throw new Problem(controller.signal.aborted?'Loading models timed out. Check your connection and refresh the list.':
+        'Could not load models from this browser. Check the URL and browser access (CORS), then refresh the list.');
     }finally{clearTimeout(timeout)}
   }
   async function saveSettings(body) {

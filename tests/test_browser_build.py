@@ -34,7 +34,7 @@ def test_build_reuses_screens_and_scopes_every_asset(tmp_path,base):
             path=asset.removeprefix(base) if asset.startswith(base) else asset.removeprefix('./')
             assert (output/path).is_file(),(page,asset)
     worker=(output/'sw.js').read_text(encoding='utf-8')
-    assert "event.data?.type!=='TETHER_ACTIVATE_UPDATE'" in worker and "event.request.method!=='GET'" in worker
+    assert "TETHER_ACTIVATE_UPDATE" in worker and "TETHER_FINISH_UPDATE" in worker and "event.request.method!=='GET'" in worker
     assert "source.pathname!==BASE+'update.html'" in worker
     assert "path===BASE+'update.html'" in worker
     update=(output/'update.html').read_text(encoding='utf-8')
