@@ -6,6 +6,16 @@ def check_display_header(page, screen):
     from playwright.sync_api import expect
     clock = screen.locator('#display-clock')
     calendar = screen.frame_locator('#display-calendar')
+
+    def settled_today():
+        # The title/clock update before refresh's asynchronous snapshot request.
+        # Await its completion before skipping fake time, so the interval is not
+        # coalesced while refresh still has its in-flight guard set.
+        status = screen.locator('#display-status')
+        status.evaluate('(node)=>node.textContent=""')
+        screen.locator('#display-today').click()
+        expect(status).to_contain_text('Updated ')
+
     expect(clock).to_have_text('Wednesday, October 28 - 5:28PM')
     expect(screen.locator('#display-title')).to_have_text('October 2026')
     expect(screen.locator('#display-sidebar')).to_be_hidden()
@@ -64,7 +74,7 @@ def check_display_header(page, screen):
     expect(clock).to_have_text('Wednesday, October 28 - 5:29PM')
     # UTC is already October 29; the UI still shows October 28 until local midnight.
     page.clock.set_system_time(datetime(2026, 10, 29, 3, 59, 45, tzinfo=timezone.utc))
-    screen.locator('#display-today').click()
+    settled_today()
     expect(clock).to_have_text('Wednesday, October 28 - 11:59PM')
     page.clock.fast_forward(30000)
     expect(clock).to_have_text('Thursday, October 29 - 12:00AM')
@@ -73,7 +83,7 @@ def check_display_header(page, screen):
     expect(calendar.locator('.today .day-date')).to_have_attribute('aria-current', 'date')
     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-29')
     page.clock.set_system_time(datetime(2026, 11, 1, 3, 59, 45, tzinfo=timezone.utc))
-    screen.locator('#display-today').click()
+    settled_today()
     expect(screen.locator('#display-title')).to_have_text('October 2026')
     page.clock.fast_forward(90000)
     expect(screen.locator('#display-title')).to_have_text('November 2026')

@@ -89,7 +89,8 @@
   });
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
   window.addEventListener('focus',()=>refresh());
-  const statusTimer=setInterval(()=>{clock();if(!document.hidden)syncStatus()},15000);
+  // A local midnight must advance Today even if the preceding data request is slow.
+  const statusTimer=setInterval(()=>{clock();if(!document.hidden){if(followingToday&&anchor!==iso(new Date()))refresh(true);syncStatus()}},15000);
   const timer=setInterval(()=>{if(!document.hidden)refresh()},60000);
   window.addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(statusTimer)},{once:true});
   fetch('/api/preferences').then(response=>response.ok?response.json():{}).then(preferences=>{weekStart=preferences.week_start??1;refresh(true)}).catch(()=>refresh(true));
