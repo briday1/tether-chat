@@ -29,7 +29,7 @@ def test_calendar_has_fixed_cells_and_accessible_detail_paths():
     assert "records.slice(0,3)" in page
     assert "$('#date-panel-items').addEventListener('scroll'" in page
     assert 'id="png"' not in page and 'id="svg"' not in page
-    assert "event.source===parent&&event.origin===location.origin" in page.replace(" ", "")
+    assert "event.source!==parent||event.origin!==location.origin" in page.replace(" ", "")
     assert "if(signature===lastSignature){renderPanel();return}" in page
 
 
@@ -62,3 +62,17 @@ def test_display_dashboard_fits_without_changing_chat_snapshots():
     assert 'Household updates delayed' in script
     assert "service.state()" in script and "service.start(" not in script
     assert 'display-sidebar' in css and 'display-backdrop' in css
+
+
+def test_display_header_navigation_and_local_date_clock():
+    page = (ROOT / 'tether/display.html').read_text()
+    script = (ROOT / 'tether/display.js').read_text()
+    snapshot = (ROOT / 'tether/snapshot.html').read_text()
+    for control in ['display-previous', 'display-next', 'display-today']:
+        assert f'id="{control}"' in page
+    assert 'aria-label="Previous month"' in page
+    assert 'aria-label="Next month"' in page
+    assert "weekday:'long',month:'long',day:'numeric'" in script
+    assert "hour12:true" in script
+    assert "tether:snapshot-today" in script and "tether:snapshot-today" in snapshot
+    assert "setAttribute('aria-current','date')" in snapshot

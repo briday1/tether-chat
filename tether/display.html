@@ -11,7 +11,7 @@
 <script src="/workspace.js"></script>
 </head>
 <body class="display-dashboard">
-<div class="display-bar"><button id="display-menu" aria-label="View settings and navigation" aria-controls="display-sidebar" aria-expanded="false">☰</button><h1 id="display-title">Calendar</h1><time id="display-clock"></time></div>
+<div class="display-bar"><button id="display-menu" aria-label="View settings and navigation" aria-controls="display-sidebar" aria-expanded="false">☰</button><div class="display-month-navigation" role="group" aria-label="Month navigation"><button id="display-previous" aria-label="Previous month">‹</button><h1 id="display-title" aria-live="polite">Calendar</h1><button id="display-next" aria-label="Next month">›</button><button id="display-today">Today</button></div><time id="display-clock"></time></div>
 <button id="display-backdrop" aria-label="Close view settings" hidden></button>
 <aside id="display-sidebar" role="dialog" aria-modal="true" aria-label="Display settings" hidden>
  <div class="sidebar-heading"><strong>Display</strong><button id="display-close" aria-label="Close view settings">✕</button></div>

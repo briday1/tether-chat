@@ -16,7 +16,7 @@
     if(event.key==='Escape'){event.preventDefault();sidebar(false)}
     if(event.key==='Tab'){const focusable=[...$('#display-sidebar').querySelectorAll('button,a,input,select')].filter(el=>!el.disabled);const first=focusable[0],last=focusable.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}}
   });
-  function clock(){const now=new Date();$('#display-clock').dateTime=now.toISOString();$('#display-clock').textContent=now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}
+  function clock(){const now=new Date();$('#display-clock').dateTime=now.toISOString();$('#display-clock').textContent=now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' - '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}).replace(/\s/g,'')}
   async function syncStatus(){
     const label=$('#display-sync');
     try{
@@ -73,8 +73,8 @@
     finally{if(request===revision)busy=false}
   }
   function step(direction){const date=new Date(anchor+'T12:00:00');if(view==='month'){date.setDate(1);date.setMonth(date.getMonth()+direction)}else date.setDate(date.getDate()+7*direction);anchor=iso(date);followingToday=false;refresh(true)}
-  $('#previous').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
-  $('#today').onclick=()=>{followingToday=true;refresh(true)};
+  $('#previous').onclick=$('#display-previous').onclick=()=>step(-1);$('#next').onclick=$('#display-next').onclick=()=>step(1);
+  $('#today').onclick=$('#display-today').onclick=()=>{followingToday=true;refresh(true);frame.contentWindow?.postMessage({type:'tether:snapshot-today'},location.origin)};
   $('#display-date').onchange=event=>{if(validDate(event.target.value)){anchor=event.target.value;followingToday=false;refresh(true)}};
   $('#display-density').onchange=event=>{density=event.target.value;refresh(true)};
   frame.addEventListener('load',theme);
