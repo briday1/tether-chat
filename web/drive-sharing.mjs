@@ -56,7 +56,7 @@ async function show(){
 }
 window.addEventListener('tether-provider-changed',()=>show().catch(()=>{}));
 service.changed=()=>show().catch(error=>status(error.message));
-async function run(fn){if(busy)return;busy=true;$('householdMessage').textContent='';try{await fn();await show()}catch(error){await show().catch(()=>{});status(error.message);$('householdMessage').textContent=error.message}finally{busy=false}}
+async function run(fn){if(busy)return;busy=true;$('householdMessage').textContent='';try{await fn();await show()}catch(error){service.status=error.message;await show().catch(()=>{});status(error.message);$('householdMessage').textContent=error.message}finally{busy=false}}
 function script(src){return new Promise((resolve,reject)=>{const node=document.createElement('script');node.src=src;node.onload=resolve;node.onerror=()=>reject(Error('Could not load Google sign-in. Check your connection.'));document.head.append(node)})}
 async function libraries(){if(!window.google?.accounts?.oauth2)await script('https://accounts.google.com/gsi/client');if(!window.gapi)await script('https://apis.google.com/js/api.js');if(!window.google?.picker)await new Promise((resolve,reject)=>gapi.load('picker',{callback:resolve,onerror:()=>reject(Error('Could not load Google Picker'))}))}
 $('origin').textContent='Allowed JavaScript origin: '+location.origin;
