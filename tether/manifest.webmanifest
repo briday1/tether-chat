@@ -1,7 +1,7 @@
 {
-  "name": "tether.",
-  "short_name": "tether.",
-  "description": "Local-first personal assistant",
+  "name": "tether-chat",
+  "short_name": "tether-chat",
+  "description": "Local-first Work task assistant",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

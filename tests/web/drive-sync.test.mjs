@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {makeChanges,mergeJournal,materialize,resolve,project,applyToState,validateRecords,registers} from '../../tether/drive-sync-core.mjs';
+import {makeChanges,mergeJournal,materialize,resolve,project,applyToState,validateRecords,registers} from '../../web/drive-sync-core.mjs';
 const when='2026-10-28T00:00:00.000Z',actor='device_12345';
 const task={id:'task1',title:'Milk',summary:'',state:'open',categories:['Groceries'],revisit_at:null,due_at:null,recurrence:null,next_occurrence:null,archived_at:null,created_at:when,updated_at:when};
 const initial={'task:task1':task};const start=makeChanges([],{},initial,actor,'operation_0001',when);

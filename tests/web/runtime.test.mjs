@@ -103,7 +103,7 @@ test('encrypted saved keys unlock explicitly and remain pinned to their provider
   assert.deepEqual(db.state.settings,previous);assert.equal((await api('/settings')).data.has_key,true);
   await api('/settings','POST',{base_url:'https://another-provider.test/v1',model:'test',api_key:'new-provider-key',remember:false});
   assert.equal((await api('/settings')).data.has_key,true);
-  assert.ok(!session.getItem('tether-chat-web-key:'+config.base).includes('secret-user-key'));
+  assert.ok(!session.getItem('tether-chat-web-key:'+config.base+':home').includes('secret-user-key'));
 });
 test('missing keys are caught before chat and a blank save cannot claim success',async t=>{
   const {api,db}=await setup(t);
@@ -273,7 +273,7 @@ test('explicit task context is request-scoped, validated, and dismissible',async
   assert.equal((await api('/chat/jobs','POST',{...body,request_id:'invalid-context-001',task_context:['missing']})).status,404);
   assert.equal(db.state.jobs.length,count);
 });
-test('Home runtime keeps local data and prompts separate without changing Work config',async t=>{
+test('Browser runtime is Home-only and keeps independent stores separate',async t=>{
   const requests=[];
   const home=await setup(t,async(_url,init)=>{requests.push(JSON.parse(init.body));return provider({content:'Home plan.'})},new MemoryDB(),new Locks(),{config:{...config,workspace:'home'}});
   const work=await setup(t);
@@ -290,8 +290,9 @@ test('Home runtime keeps local data and prompts separate without changing Work c
 });
 
 test('Drive local adapter is Home-only, transactional and excludes private fields',async t=>{
-  const work=await setup(t);await work.api('/threads','POST',{title:'Private work'});
-  assert.equal((await work.api('/drive-sync/local')).status,403);
+  const fixed=await setup(t,undefined,undefined,undefined,{config:{...config,workspace:'work'}});
+  assert.equal((await fixed.api('/portable')).data.workspace,'home');
+  assert.equal((await fixed.api('/threads?workspace=work')).status,403);
   const home=await setup(t,undefined,undefined,undefined,{config:{...config,workspace:'home'}});
   const task=(await home.api('/threads','POST',{title:'Milk'})).data;
   home.db.state.messages.push({id:'m',role:'user',body:'Private conversation',created_at:new Date().toISOString()});
@@ -305,4 +306,13 @@ test('Drive local adapter is Home-only, transactional and excludes private field
   const now=result.data;const injected=copy(now.records);injected['task:'+task.id].api_key='bad';
   assert.equal((await home.api('/drive-sync/local','POST',{expected:now.records,expected_revision:now.revision,records:injected,metadata:{}})).status,422);
   const backup=(await home.api('/portable')).data;assert.equal(JSON.stringify(backup).includes('queue'),false);
+});
+
+test('Work and unlabelled imports require explicit Home consent',async t=>{
+ const {api}=await setup(t);const portable=(await api('/portable')).data;
+ for(const workspace of ['work',undefined]){
+  const incoming={...portable,workspace};
+  assert.equal((await api('/import','POST',incoming)).status,409);
+  assert.equal((await api('/import','POST',{...incoming,home_import_confirmed:true})).status,200);
+ }
 });

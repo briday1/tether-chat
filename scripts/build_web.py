@@ -49,7 +49,7 @@ def paths(text, base):
 
 
 def screen(name, base):
-    page = (ROOT / 'tether' / name).read_text(encoding='utf-8')
+    page = (ROOT / ('web' if name=='drive-sharing.html' else 'tether') / name).read_text(encoding='utf-8')
     if name not in ('snapshot.html','display.html','drive-sharing.html'):
         page, changed = re.subn(r'<h2>AI connection</h2>.*?<a href="/api/backup"[^>]*>Download SQLite backup</a>',
                                lambda _: (ROOT / 'web/settings.html').read_text(encoding='utf-8'), page, flags=re.S)
@@ -65,6 +65,8 @@ def screen(name, base):
             raise ValueError('Desktop calendar download changed; update its browser adapter')
         page = page.replace('</html>', '<script type="module" src="./calendar-export.mjs"></script></html>')
     page = paths(page, base)
+    page = re.sub(r'<title>.*?</title>', '<title>tether-home · tether</title>', page, count=1)
+    # Product labels change, but legacy browser storage keys stay stable.
     bridge = f'<script src="{base}app-config.js"></script><script src="{base}bridge.js"></script><link rel="stylesheet" href="{base}browser.css">'
     # Place the bridge before every screen script, including synchronous calendar scripts.
     page = page.replace('<meta charset="utf-8">', '<meta charset="utf-8">' + bridge, 1)
@@ -91,31 +93,29 @@ def build(output, base='/'):
     marker.write_text('Generated browser edition; do not edit.\n', encoding='utf-8')
     version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     tools, system = shared_ai()
-    config = {'version': version, 'base': base, 'tools': tools, 'system': system,
+    config = {'version': version, 'base': base, 'product':'tether-home', 'workspace':'home', 'tools': tools, 'system': system,
               'tool_models':json.loads((ROOT/'tether/tool-models.json').read_text(encoding='utf-8'))}
     # The spaced assignment also makes legacy in-session pollers ignore this
     # release; only a new launch should switch an already-open older app.
     (output / 'app-config.js').write_text('window.TETHER_CONFIG = ' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
     for source in (ROOT / 'web').iterdir():
-        if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
+        if source.suffix in {'.js', '.mjs', '.css'} or source.name in {'index.html', 'privacy.html', 'terms.html'}:
             shutil.copy2(source, output / source.name)
-            if source.name=='runtime.mjs':
-                target=output/source.name;target.write_text(target.read_text().replace('../tether/drive-sync-core.mjs','./drive-sync-core.mjs'))
     # Keep recovery independent of cached scripts, styles and app configuration.
     (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
-    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'workspace.js', 'display.js', 'display.css','drive-sync-core.mjs','drive-sync-service.mjs','drive-journals.mjs','drive-setup.mjs','drive-sharing.mjs'):
+    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'display.js', 'display.css'):
         text = paths((ROOT / 'tether' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))
         (output / name).write_text(text, encoding='utf-8')
-    shutil.copy2(ROOT/'tether/drive-config.json',output/'drive-config.json')
+    shutil.copy2(ROOT/'web/drive-config.json',output/'drive-config.json')
     for original, target in [('index.html','conversation.html'),('board.html','board.html'),('snapshot.html','snapshots.html'),('display.html','display.html'),('drive-sharing.html','drive-sharing.html')]:
         (output / target).write_text(screen(original, base), encoding='utf-8')
     sys.path.insert(0, str(ROOT))
     from tether.windows_icon import raster
     (output / 'icon').mkdir()
     for size in (32,192,512): (output / f'icon/{size}.png').write_bytes(raster(size))
-    manifest = {'id':base,'name':'tether.','short_name':'tether.','description':'Your local-first task assistant',
+    manifest = {'id':base,'name':'tether-home','short_name':'tether-home','description':'Home tasks and household sharing by tether',
                 'start_url':base,'scope':base,'display':'standalone','background_color':'#f6f7f3','theme_color':'#f6f7f3',
                 'icons':[{'src':base+f'icon/{size}.png','sizes':f'{size}x{size}','type':'image/png','purpose':'any'} for size in (192,512)]}
     (output / 'manifest.webmanifest').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
@@ -126,7 +126,7 @@ def build(output, base='/'):
     worker = worker.replace('__CACHE__', json.dumps(f'tether-web:{base}:{version}:{digest}')).replace('__PREFIX__', json.dumps('tether-web:' + base + ':'))
     worker = worker.replace('__ASSETS__', json.dumps(assets)).replace('__BASE__', json.dumps(base)).replace('__VERSION__', json.dumps(version))
     (output / 'sw.js').write_text(worker, encoding='utf-8')
-    print(f'Built tether. {version} browser edition at {output} (base {base})')
+    print(f'Built tether-home {version} browser edition at {output} (base {base})')
     return output
 
 

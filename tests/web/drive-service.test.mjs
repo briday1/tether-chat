@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {HomeSync} from '../../tether/drive-sync-service.mjs';
-import {makeChanges,mergeJournal,stable,SyncError} from '../../tether/drive-sync-core.mjs';
+import {HomeSync} from '../../web/drive-sync-service.mjs';
+import {makeChanges,mergeJournal,stable,SyncError} from '../../web/drive-sync-core.mjs';
 const when='2026-10-28T00:00:00Z';
 const task={id:'task1',title:'Milk',summary:'',state:'open',categories:['Home'],revisit_at:null,due_at:null,recurrence:null,next_occurrence:null,archived_at:null,created_at:when,updated_at:when};
-const records={'task:task1':task},session={mode:'folder-records',folderId:'folder_12345',workspaceId:'space_12345'};
+const records={'task:task1':task},session={mode:'selected-sheet',spreadsheetId:'sheet_12345',workspaceId:'sheet_12345',sheetId:0,householdName:'Our Home'};
 const clone=v=>structuredClone(v);
 function localStore(initial=records){
   let state={records:clone(initial),metadata:{},revision:0};
@@ -117,4 +117,20 @@ test('same-workspace reconnection keeps previously selected peer files',async()=
   await f.service.configure(old,{publishExisting:true});await f.service.disconnect();
   await f.service.configure({...old,files:[{id:'own_file_123',name:'Mine again'}]},{publishExisting:true});
   assert.deepEqual(f.store.read().metadata.session.files,[{id:'own_file_123',name:'Mine again'},{id:'peer_file_123',name:'Spouse'}]);
+});
+
+
+test('polling honors quota cooldown and manual sync cannot bypass rate backoff',async()=>{
+ const f=fixture();await configure(f);f.transport.notBefore=Date.now()+60000;f.transport.retryAfterMs=60000;
+ await f.service.sync({force:true});assert.deepEqual(f.calls,[]);
+ f.transport.retryAfterMs=0;await f.service.sync();assert.deepEqual(f.calls,[]);
+ await f.service.sync({force:true});assert.deepEqual(f.calls,['pull','push']);
+});
+test('disconnect preserves selected Sheet references for explicit reconnect',async()=>{
+ const f=fixture();await configure(f);await f.service.sync();await f.service.disconnect();
+ assert.deepEqual(f.store.read().metadata.detached.session,session);
+ await f.service.configure(session,{publishExisting:true});assert.equal(f.store.read().metadata.session.spreadsheetId,session.spreadsheetId);
+});
+test('partial append batch remains visibly queued rather than claiming full sync',async()=>{
+ const f=fixture();await configure(f);f.transport.push=async()=>[];await f.service.sync();assert.match(f.service.status,/queued/);assert.equal(f.store.read().metadata.uploaded.length,0);
 });

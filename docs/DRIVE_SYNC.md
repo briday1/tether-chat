@@ -1,66 +1,60 @@
-# Home sharing through Google Drive
+# Household sharing through Google Drive and Sheets
 
-This backend-free implementation keeps each device's local database. Drive carries versioned change journals, **never a live SQLite database**. It uses the narrow `drive.file` scope; selecting a folder is not assumed to authorize all child files.
+**tether-home** is the Home-only browser application. **tether-chat** is the installed Work-only application and includes no Drive integration. Both belong to **tether**. The hosted URL stays unchanged for existing installations and OAuth.
 
-## Household setup
+Each browser keeps its own local database. One explicitly selected Google Sheet in Drive carries an append-only journal of immutable changes, **not a live SQL database or Google Calendar events**. The app uses only `drive.file`, not permission to browse your whole Drive.
 
-1. Connect your Google account in Home → Share Home. Each person uses their own Google account; there is no separate Tether account.
-2. Choose **Create shared household**, give it a name, and confirm sharing the existing Home data. Tether creates a clearly named Drive folder with this device's journal and an empty partner slot.
-3. Choose **Share with someone in Google Drive**, enter your partner's email as an Editor, and send Drive's invitation. Copy household link is optional and does not grant access by itself.
-4. Your partner chooses **Join shared household**, selects that folder, and selects its two Tether files in Google's picker. Tether conditionally claims the empty partner slot, merging their existing Home data without replacing it. The creator already has access to both files, so both directions sync without a second setup step on the creator's device.
-5. The app shows waiting-for-partner versus linked-device state, last successful sync, and unresolved conflicts. It checks about every 30 seconds while open. Expired Google authorization requires reconnecting; offline edits remain local.
-6. Extra phones/computers use **Another device** to create a new writer file, which existing devices must explicitly select once. No device may overwrite another device's assigned journal.
+## Set up a household
 
-The publisher configures Google once; ordinary household members should not need their own developer project. `tether/drive-config.json` supplies the public OAuth client ID, project number, and restricted browser Picker key for shipped builds. Empty defaults show App setup fields as a development fallback. Never put a client secret, service-account key, access token, or refresh token in that file.
+1. Open **Share Home → Connect Google Drive** using your own Google account. No separate tether account is needed.
+2. Confirm sharing your existing Home tasks and notes, then choose **Create shared household** and give it a name. A clearly named Sheet is created with a dedicated Journal tab.
+3. Choose **Share household in Google Drive**. In the Sheet, click **Share**, enter your partner’s email as an **Editor**, and send Google’s invitation. Copy household link is optional; a link alone does not grant access.
+4. Your partner connects their own Google account, chooses **Join shared household**, and selects that same Sheet in Google Picker. Existing local Home records are merged, not silently replaced. Each additional device joins the same way.
+5. Edits sync while the app is open. The screen shows last successful sync and any conflicts. “Connected” describes this device, not proof another person has connected. Expired Google authorization requires reconnecting; offline edits remain local.
 
-Desktop Google authorization happens in the **system browser**, not the embedded desktop webview. Open the sharing browser page from the app and leave it open to sync the same local Home database. Browser edition keeps sync in the shell when navigating between its screens. Closed apps do not continuously sync.
+Do not manually edit, sort or delete Journal rows. They contain change history rather than a readable task table. Drive Editors can alter the Sheet outside tether; this is not cryptographic tamper protection. Invalid or inconsistent data pauses sync instead of overwriting local work.
 
-## Privacy and shared data
+Setup progress is retained locally without tokens or task contents. **Resume setup** continues confirmed steps. An uncertain creation is never automatically repeated; check Drive before forgetting pending setup. Forgetting setup does not delete existing Sheets. Pause prevents further requests but cannot cancel a request already received by Google.
 
-Only Home tasks, categories, dates, statuses, task items, and action notes sync. Existing Home data requires explicit confirmation. Joining merges shared records into existing Home instead of replacing the database. Work, conversations, provider settings, API keys, AI instructions, notification claims, and activity records are excluded.
+## Data boundaries
 
-Anyone with Drive read access to the shared files can read their JSON task data. Home/Work organization is not encryption or protection against somebody with device access. Disconnect preserves local data and Drive files; revoke a person's access in Google Drive separately.
+Only Home tasks, categories, dates, statuses, task items and action notes sync. Work, conversations, provider settings, API keys, AI instructions, notification claims and activity records are excluded. Earlier browser Work data remains available through explicit Settings recovery/export; it is never silently moved into Home. Importing a Work or unlabelled backup into Home requires separate informed confirmation.
 
-Access tokens stay in memory. They are not stored in localStorage, SQLite, backups, or journals. Public app configuration and the device's writer binding are stored in that browser. The writer binding is never taken from a shared file, portable backup, or restored SQLite database. A new browser/device creates a new writer file; selecting a peer file does not make it writable by that device.
+Anyone with access to the Sheet can read its journal, including earlier task contents. Disconnect keeps local data and the Sheet; revoke another person’s access in Google separately. Deletion is a journal tombstone, not permanent erasure of all historical copies. Home/Work product separation does not prevent someone with device access from reading local data.
 
-## Safe journal updates
+Google access tokens remain only in memory. They are not stored in localStorage, databases, backups or the journal. Public app configuration, device identity and pending setup references are stored locally. Provider credentials never enter shared records.
 
-Each device writes only its own journal. A journal contains immutable operations with unique IDs and causal field versions. It also replicates operations learned from peers so history remains complete. Devices merge different-field edits; simultaneous edits to one field retain both values for the user to resolve. Deletion history prevents old offline copies from silently resurrecting removed tasks. Editing a child item also protects against concurrent deletion of its parent.
+## Append safety and limits
 
-Local snapshots and sync metadata use one compare-and-swap transaction. If tasks change during a network request, sync retries instead of replacing those edits. Local changes are journaled before network access. Duplicate deliveries and uncertain-upload retries are idempotent. Conflicts, missing history, corruption and oversized payloads pause sync without discarding local changes.
+Each operation has a unique ID and causal per-field versions. Different-field edits merge; concurrent edits to one field retain both values for explicit resolution. Tombstones prevent old offline copies from silently resurrecting deleted tasks. Local snapshots and sync metadata commit atomically with compare-and-swap, preserving local edits made during a request.
 
-Replacing a journal requires a fresh strong ETag and `If-Match`. Before any task data is uploaded, Tether probes a newly created **empty** journal using an intentionally wrong ETag and requires HTTP 412. If Google does not expose the ETag through CORS or does not enforce the precondition, uploads stay disabled. The probe does not run against a populated journal. Joining probes only the explicitly selected empty unclaimed partner slot, then claims it with a fresh conditional write so two devices cannot both acquire it. This check must be verified against real Google accounts before production readiness is claimed.
+Google Sheets `values.append`, with `RAW` and `INSERT_ROWS`, appends complete operations without computing row positions or replacing existing cells. Requests are atomic. Lost-response retries may create duplicate rows; exact duplicates are deduplicated by operation ID and chunk content. Conflicting duplicates, missing chunks, invalid records or missing causal history stop sync. The app never sorts, clears or updates existing journal rows.
 
-History is retained, not compacted automatically. Individual journals have an 8 MiB safety cap and bounded operation count. Hitting a limit pauses sync with local edits preserved; future compaction requires explicit acknowledgement rules across devices. No arbitrary last-writer-wins data loss is used.
+JSON operations are split into cells of at most 30,000 characters and bounded append requests. The app caps an individual operation at 1 MiB, journal responses at 8 MiB and grid size at 50,000 rows. It reads bounded pages, adapts polling to journal size, and backs off on quota responses. Limits pause sync while local edits remain safe; automatic history compaction is not implemented.
+
+The old mutable JSON-file/ETag transport is not used. No Google conditional media-update behavior is assumed.
 
 ## Publisher Google setup
 
-Use one dedicated Google Cloud project:
+Configure one dedicated project for all household users:
 
-1. Enable **Google Drive API** and **Google Picker API**.
-2. Configure OAuth consent and the non-sensitive `https://www.googleapis.com/auth/drive.file` scope. While in testing, add intended test accounts explicitly. Drive authorizations for an external app in Testing expire after seven days; production status and any required verification must be handled before promising persistent household use.
-3. Create an OAuth **Web application** client. Add exact authorized JavaScript origins, such as `https://briday1.github.io`, `http://localhost`, and `http://localhost:8765`. A desktop server running on another port needs that exact origin configured too. This token model uses no client secret or token-exchange backend.
-4. Obtain the Cloud **project number** for Picker `setAppId`.
-5. Create a browser API key restricted to the necessary APIs and website referrers. Google's Picker documentation requires the application referrers plus `https://docs.google.com/*`; use Google Picker API and Drive API restrictions as appropriate.
-6. Put only the public client ID/project number/restricted browser key into the public config through an authorized configuration step. Never paste secrets into chat or commit secret credentials.
+1. Enable **Google Drive API**, **Google Picker API**, and **Google Sheets API**.
+2. Configure OAuth consent with the non-sensitive `https://www.googleapis.com/auth/drive.file` scope. External apps in Testing need explicit test users and Drive authorizations expire after seven days; handle production status and any required verification appropriately.
+3. Create an OAuth **Web application** client for exact JavaScript origins, including `https://briday1.github.io`. For local browser development, configure `http://localhost` and the exact development port. No client secret or token-exchange backend is used.
+4. Configure the public client ID and project number in `web/drive-config.json`.
+5. Create a website-restricted Picker browser API key with the required app referrers and Google’s documented `https://docs.google.com/*` referrer. Restrict its API use to Picker. Sheets requests use the user’s OAuth bearer token, not this key.
+6. Save that key once as repository Actions secret **TETHER_GOOGLE_PICKER_API_KEY**. The Pages publication workflow injects it immediately before building. The resulting browser key is necessarily public, so publication requires approval and appropriate restrictions. The desktop package never receives it. Never put client secrets or tokens in frontend configuration.
 
-No project, grant, key, or folder is provisioned by the code changes themselves.
+PR tests never receive the publisher key. Missing configuration stops browser publication. Household members use the configured app and do not create Cloud projects or type keys; App setup is a development fallback.
 
-## Verification status
+## Verification
 
-Automated tests cover journal validation, merging, conflict resolution, deletion, local races, restart, revoked/expired access responses, uncertain writes, writer ownership, conditional updates, privacy, and explicit-file discovery. A hosted mock-Google/Picker UI test exercises connection, selection, consent, sync, navigation, reload, and disconnect without contacting Google.
+Automated tests cover immutable merge/conflicts/tombstones, offline and duplicate replay, chunk corruption, quota limits, Home-only privacy, interrupted setup, and a two-context mocked Google/Picker UI flow. **Mocks are not real Google verification.** Real two-account sign-in, Picker access, Sheets creation/append, revocation and concurrent devices still require a mediated test with configured Google accounts.
 
-Real two-account sign-in, Picker grants to spouse-owned files, CORS/ETag access, conditional media PATCH, revoked access and actual device behavior still require verification with configured OAuth. Do not describe mock tests as successful real Google integration.
-
-Primary documentation:
+Official documentation:
+- https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/append
+- https://developers.google.com/workspace/sheets/api/limits
+- https://developers.google.com/workspace/sheets/api/quickstart/js
 - https://developers.google.com/workspace/drive/picker/guides/web-picker
 - https://developers.google.com/workspace/drive/api/guides/api-specific-auth
-- https://developers.google.com/workspace/drive/api/guides/handle-errors
 - https://developers.google.com/identity/oauth2/web/guides/use-token-model
-- https://developers.google.com/identity/protocols/oauth2/native-app
-
-Setup progress is saved locally without tokens or task contents. **Resume setup**
-continues confirmed steps after a pause/reload. An uncertain file-creation result
-is never automatically repeated: check Drive before explicitly forgetting pending
-setup. Forgetting setup keeps already-created Drive files. Pause prevents further
-setup requests but cannot cancel a request Google has already received.

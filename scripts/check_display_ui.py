@@ -59,18 +59,17 @@ def main():
                 calendar.locator('#day-dialog .task').first.click()
                 expect(screen.get_by_role('button',name='Edit task',exact=True)).to_be_visible()
                 expect(screen.get_by_role('button',name='Use as chat context',exact=True)).to_be_visible()
-                # Switching workspaces must preserve this release and never expose Work data.
-                release=page.evaluate('window.TETHER_CONFIG.version')
-                screen.get_by_role('combobox',name='Work or Home').select_option('home')
-                expect(screen.get_by_role('combobox',name='Work or Home')).to_have_value('home')
+                # Browser is Home-only, including old Work routes and history.
+                expect(screen.get_by_role('combobox',name='Work or Home')).to_have_count(0)
                 screen.get_by_role('link',name='Display',exact=True).click()
-                expect(screen.locator('#display-quick')).to_contain_text('0 scheduled items')
-                assert page.evaluate('window.TETHER_CONFIG.version')==release
-                screen.get_by_role('combobox',name='Work or Home').select_option('work')
                 expect(screen.locator('#display-quick')).to_contain_text('9 scheduled items')
                 page.go_back()
-                expect(screen.get_by_role('combobox',name='Work or Home')).to_have_value('home')
-                expect(screen.locator('#display-quick')).to_contain_text('0 scheduled items')
+                expect(screen.get_by_role('button',name='Edit task',exact=True)).to_be_visible()
+                page.go_forward()
+                expect(screen.locator('#display-quick')).to_contain_text('9 scheduled items')
+                page.goto(f'http://127.0.0.1:{server.server_port}/tether-chat/?view=display&workspace=work')
+                expect(page.frame_locator('#app-frame').locator('#display-quick')).to_contain_text('9 scheduled items')
+                assert 'workspace=home' in page.url
                 assert not errors, errors
                 browser.close()
                 print('Display UI checks passed: fixed cells, overflow, previews, date dialog, persistent month, mobile, task navigation.')

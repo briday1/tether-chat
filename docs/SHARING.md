@@ -1,27 +1,16 @@
-# Sharing options (design exploration)
+# Household sharing
 
-Tether currently stores each Work/Home workspace locally. It does not provide a
-shared database, account invitations, cross-device synchronization, or permissions.
-Choosing Home is an organizational choice, not a security boundary.
+The Home-only **tether-home** browser application offers optional experimental
+Google Drive collaboration without a tether backend. The installed **tether-chat**
+application is Work-only and does not include this integration.
 
-For genuine simultaneous editing, the recommended design is an optional service
-that owns its database and exposes an authenticated API. Clients would share an
-explicitly selected workspace, with invitations and roles, stable record IDs,
-revision checks, conflict handling, deletion records, and backups. Existing local
-workspaces should remain local until their owner explicitly chooses to share.
-Provider credentials must not be included in shared task data.
+See [Drive sharing setup, safety checks and limitations](DRIVE_SYNC.md). Each
+device keeps local data and writes its own selected journal; the app merges
+immutable changes and preserves conflicts. Google sharing permissions remain
+under your control. No Google Calendar integration is included.
 
-Do not put the live SQLite database in a Google Drive synchronized folder for
-multi-user editing. File copying does not provide database locking or transaction
-coordination between computers, and competing copies can lose changes or corrupt
-the database. See [SQLite guidance on remote database files](https://www.sqlite.org/useovernet.html).
-
-Cloud storage could instead hold deliberate portable exports or a purpose-built
-sync format with version checks and conflict resolution. That would be a separate
-feature, not safe automatic sharing of the existing SQLite file. Today's portable
-export contains task and conversation data from the selected workspace, so review
-it before sending it to another person. It excludes provider credentials.
-
-No server, cloud storage grant, data upload, or sharing permission was created by
-this change. Before implementation, choose the recipients, workspace, read/edit
-permissions, hosting, and conflict behavior.
+Never place a live SQLite database in a Drive-synchronized folder for concurrent
+editing. Drive journals are a separate sync protocol, not database-file sharing.
+Portable backups can contain private conversation data; do not use them as shared
+household journals. Provider credentials are excluded from portable task backups
+and Drive task journals.

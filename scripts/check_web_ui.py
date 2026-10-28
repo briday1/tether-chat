@@ -50,11 +50,21 @@ def main():
                     }return response};""")
                 page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
                 page.goto(base);frame=page.frame_locator('#app-frame')
+                page.wait_for_function('!!window.tetherFetch')
+                page.evaluate("""async()=>{const {Database,Model}=await import('./store.mjs');const db=await new Database('tether-chat-web:/tether-chat/').open();await db.write(s=>{new Model(s).create('Private legacy Work');s.settings={base_url:'https://old.example',model:'old',encrypted_key:{ciphertext:'retained'}};s.jobs=[{id:'old-pending',status:'queued'}]});db.db.close();localStorage.setItem('tether-web-draft:/tether-chat/','Old private draft')}""")
                 check_dictation(page,frame)
                 frame.get_by_label('Message tether').fill('Keep this draft while I connect.')
                 frame.get_by_role('button',name='Send',exact=True).click()
                 expect(frame.get_by_role('dialog',name='Settings',exact=True)).to_be_visible()
                 check_settings_appearance(frame)
+                frame.get_by_role('button',name='Inspect earlier Work storage').click()
+                expect(frame.locator('#legacyStatus')).to_contain_text('1 tasks')
+                with page.expect_download() as recovered:
+                    frame.get_by_role('button',name='Download Work backup for tether-chat').click()
+                recovery=json.loads(Path(recovered.value.path()).read_text(encoding='utf-8'))
+                assert recovery['workspace']=='work' and recovery['data']['tasks'][0]['title']=='Private legacy Work'
+                assert page.evaluate("localStorage.getItem('tether-web-draft:/tether-chat/')")=='Old private draft'
+                assert page.evaluate("async()=>{const r=await (await window.tetherReady).fetch('/tether-chat/api/threads');return (await r.json()).length}")==0
                 expect(frame.locator('#connectionMode')).to_contain_text('Browser connection')
                 expect(frame.locator('#providerStatus')).to_contain_text('Your message is still in the draft')
                 expect(frame.get_by_label('Message tether')).to_have_value('Keep this draft while I connect.')
@@ -65,6 +75,7 @@ def main():
                 frame.get_by_label('Message tether').fill('/brief');frame.get_by_role('button',name='Send',exact=True).click()
                 expect(frame.get_by_role('heading',name='Daily brief')).to_be_visible(timeout=15000)
                 frame.get_by_role('button',name='Settings',exact=True).click()
+                page.once('dialog',lambda dialog:dialog.accept())
                 frame.locator('#importData').set_input_files(backup)
                 expect(frame.locator('#storageStatus')).to_contain_text('Imported 1 tasks')
                 frame.get_by_role('button',name='Close settings').click()

@@ -30,7 +30,7 @@
     if(document.querySelector('#voiceInput[aria-pressed="true"]'))return false;
     // Keep unsaved forms and task/meeting-note editors open until the user closes them.
     if([...document.querySelectorAll('#settings,#chatSelection,#actionDrawer,.panel')].some(el=>el.getClientRects().length))return false;
-    const input=$('#message');if(input)try{localStorage.setItem('tether-chat-draft',input.value)}catch(_){return false}
+    const input=$('#message');if(input)try{localStorage.setItem('tether-web-draft:'+config.base+':home',input.value)}catch(_){return false}
     return true;
   };
   window.tetherLoadSettings=()=>loadingSettings=(async()=>{
@@ -70,7 +70,8 @@
   };
   document.addEventListener('DOMContentLoaded',()=>{
     if(!$('#provider'))return;
-    status('#browserVersion','tether. '+config.version+' · Browser edition');
+    import('./legacy-recovery.mjs').then(module=>module.bindRecovery({base:config.base,document,download:window.tetherDownload}));
+    status('#browserVersion','tether-home · '+config.version+' · tether');
     const form=$('#provider');let providerBusy=false;
     function providerAction(action,validate=false){
       if(providerBusy)return pendingProvider;
@@ -104,7 +105,9 @@
     },true);
     $('#exportData').onclick=async()=>{try{const backup=await api('/backup');await window.tetherDownload(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),'tether-backup-'+new Date().toISOString().slice(0,10)+'.json');status('#storageStatus','Backup prepared. Save the downloaded file.')}catch(e){status('#storageStatus',e.message)}};
     $('#importData').onchange=async event=>{const file=event.target.files[0];if(!file)return;
-      try{if(file.size>20*1024*1024)throw Error('Choose a JSON backup smaller than 20 MB.');const result=await api('/import','POST',JSON.parse(await file.text()));
+      try{if(file.size>20*1024*1024)throw Error('Choose a JSON backup smaller than 20 MB.');const payload=JSON.parse(await file.text());
+        if(payload.workspace!=='home' && !confirm('This backup is Work or an older unlabelled backup. Copy its tasks into Home? Home tasks may be shared with your Drive collaborators. Cancel to keep Work separate and import this file in tether-chat instead.'))return;
+        payload.home_import_confirmed=true;const result=await api('/import','POST',payload);
         status('#storageStatus','Imported '+result.added.tasks+' tasks and '+result.added.messages+' messages. Existing records were retained.');
         if($('#board')){load()}else window.dispatchEvent(new Event('pageshow'));
       }catch(e){status('#storageStatus','Import did not finish: '+e.message)}finally{event.target.value=''}

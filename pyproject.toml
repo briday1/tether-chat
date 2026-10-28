@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # Distribution name; the application displays tether.
 name = "tether-chat"
-version = "2026.24"
+version = "2026.25"
 description = "Local-first task and action-item assistant"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -39,7 +39,7 @@ py-modules = ["tend"]
 include = ["tether*"]
 
 [tool.setuptools.package-data]
-tether = ["drive-config.json", "drive-sharing.html", "drive-sharing.mjs", "drive-sync-core.mjs", "drive-sync-service.mjs", "drive-journals.mjs", "drive-setup.mjs", "index.html", "board.html", "workspace.js", "display.html", "display.js", "display.css", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "speech.mjs", "updates.js", "notes.js", "notes.css", "provider-models.js", "preferences.js", "locations.js", "tool-models.json", "favicon.svg", "manifest.webmanifest"]
+tether = ["index.html", "board.html", "workspace.js", "display.html", "display.js", "display.css", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "speech.mjs", "updates.js", "notes.js", "notes.css", "provider-models.js", "preferences.js", "locations.js", "tool-models.json", "favicon.svg", "manifest.webmanifest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

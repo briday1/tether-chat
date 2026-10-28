@@ -18,6 +18,9 @@ def test_build_reuses_screens_and_scopes_every_asset(tmp_path,base):
     output=builder.build(tmp_path/'web',base)
     manifest=json.loads((output/'manifest.webmanifest').read_text(encoding='utf-8'))
     assert manifest['start_url']==manifest['scope']==base
+    assert manifest['name']=='tether-home'
+    assert "const workspace = 'home'" in (output/'workspace.js').read_text(encoding='utf-8')
+    assert (output/'legacy-recovery.mjs').is_file()
     config_text=(output/'app-config.js').read_text(encoding='utf-8')
     config=json.loads(config_text.split('=',1)[1].strip().rstrip(';'))
     assert config['version']==tomllib.loads((ROOT/'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
@@ -68,3 +71,15 @@ def test_desktop_portable_export_contains_data_and_excludes_credentials(tmp_path
     assert len(data['data']['messages'])==1
     assert 'settings' not in data['data'] and 'jobs' not in data['data']
     assert data['data']['tasks'][0]['created_at'].endswith('Z')
+
+
+def test_public_policy_pages_are_static_and_linked(tmp_path):
+    output=builder.build(tmp_path/'web','/tether-chat/')
+    index=(output/'index.html').read_text(encoding='utf-8')
+    for name in ('privacy.html','terms.html'):
+        page=(output/name).read_text(encoding='utf-8')
+        assert '<script' not in page
+        assert 'October 28, 2026' in page
+        assert 'href="./'+name+'"' in index
+        assert 'optional experimental integration' in page
+    assert 'drive.file' in (output/'privacy.html').read_text(encoding='utf-8')

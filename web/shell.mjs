@@ -4,25 +4,11 @@ const config=window.TETHER_CONFIG,frame=document.querySelector('#app-frame'),loa
 let current='',installPrompt=null;
 // The shell owns history. Child-frame replacements must not add joint entries.
 const navigateFrame=url=>frame.contentWindow.location.replace(url);
-let workspace=new URLSearchParams(location.search).get('workspace')==='home'?'home':'work';
-const runtimes=new Map();
-let workspaceRevision=0;
-function runtimeFor(mode){
-  if(!runtimes.has(mode))runtimes.set(mode,createRuntime({config:{...config,workspace:mode}}));
-  return runtimes.get(mode);
-}
-window.tetherSwitchWorkspace=async(mode,{historyChange=true}={})=>{
-  if(!['work','home'].includes(mode))return;
-  const revision=++workspaceRevision;navigateFrame('about:blank');
-  workspace=mode;
-  const url=new URL(location.href);url.searchParams.set('workspace',mode);url.hash='';url.searchParams.delete('discuss');url.searchParams.delete('task_context');
-  if(historyChange)history.pushState({},'',url);
-  window.tetherReady=runtimeFor(mode);
-  const runtime=await window.tetherReady;if(revision!==workspaceRevision)return;window.tetherFetch=runtime.fetch;window.tetherNotify=()=>runtime.notifications();
-  current=pageURL();navigateFrame(current);
-};
+const workspace='home';
+let homeRuntime;
+function runtimeFor(){return homeRuntime ||= createRuntime({config:{...config,workspace:'home'}});}
 // Pin this document and all of its screens to one installed bundle.
-const sessionURL=new URL(location.href);sessionURL.searchParams.set('release',config.version);
+const sessionURL=new URL(location.href);sessionURL.searchParams.set('release',config.version);sessionURL.searchParams.set('workspace','home');
 history.replaceState({},'',sessionURL.pathname+sessionURL.search+sessionURL.hash);
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event});
 window.tetherInstall=async()=>{if(!installPrompt)return false;await installPrompt.prompt();installPrompt=null;return true};
@@ -50,7 +36,7 @@ window.tetherSyncRoute=href=>{
   const next=url.pathname+url.search+url.hash;
   if(current!==next){current=next;history.replaceState({},'',shellURL(url))}
 };
-window.addEventListener('popstate',()=>{const mode=new URLSearchParams(location.search).get('workspace')==='home'?'home':'work';if(mode!==workspace){window.tetherSwitchWorkspace(mode,{historyChange:false});return}const next=pageURL();if(next!==current){current=next;navigateFrame(next)}});
+window.addEventListener('popstate',()=>{const url=new URL(location.href);url.searchParams.set('workspace','home');history.replaceState({},'',url);const next=pageURL();if(next!==current){current=next;navigateFrame(next)}});
 window.tetherReady=prepareLaunch(config).then(open=>open?runtimeFor(workspace):new Promise(()=>{}));
 try{
   const runtime=await window.tetherReady;window.tetherFetch=runtime.fetch;

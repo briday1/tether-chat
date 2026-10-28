@@ -17,11 +17,11 @@ def notify(reminder):
 
 def run():
     from . import workspaces
-    for mode in ('work','home'):
+    for mode in ('work',):
         with workspaces.use(mode):store.init()
     print("tether-chat attention worker running (no background AI calls)",flush=True)
     while True:
-        for mode in ('work','home'):
+        for mode in ('work',):
             with workspaces.use(mode):
                 for reminder in store.claim_notifications():
                     try:

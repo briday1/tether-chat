@@ -1,4 +1,4 @@
-import {project,applyToState,stable as syncStable,SyncError} from '../tether/drive-sync-core.mjs';
+import {project,applyToState,stable as syncStable,SyncError} from './drive-sync-core.mjs';
 import {Database, Model, Problem, required, now, uid, copy, snapshotRange} from './store.mjs';
 import {exportData, importData} from './portable.mjs';
 import {encryptKey, decryptKey} from './credentials.mjs';
@@ -18,7 +18,8 @@ const readOnlyTools=new Set(['list_threads','get_thread','overview','recurring_i
 const attentionRevision=task=>JSON.stringify([task.updated_at,task.title,task.summary,task.state,task.revisit_at,task.due_at,task.next_occurrence]);
 export async function createRuntime({config,db,network=globalThis.fetch.bind(globalThis),
   locks=globalThis.navigator?.locks,session=globalThis.sessionStorage,pause=sleep}={}) {
-  const workspace=config.workspace==='home'?'home':'work',workspaceSuffix=workspace==='home'?':home':'';
+  // Browser product is Home-only; old Work storage is accessible only by explicit recovery.
+  const workspace='home',workspaceSuffix=':home';
   config={...config,system:config.system+'\n'+(workspace==='home'?'You are in Home mode. Focus on chores, appointments, classes, groceries, and everyday plans. Do not introduce work status reports or meetings unless asked. Only this Home workspace is available.':'You are in Work mode. Only this Work workspace is available.')};
   db=db || await new Database('tether-chat-web:'+config.base+workspaceSuffix).open();
   const sessionName='tether-chat-web-key:'+config.base+workspaceSuffix;
@@ -296,7 +297,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       if(method==='GET')return read((m,s)=>({records:project(s),metadata:s.drive_sync?.metadata||{},revision:s.drive_sync?.revision||0}));
       if(method==='POST')return write((m,s)=>{const records=project(s),revision=s.drive_sync?.revision||0;if(revision!==body.expected_revision||syncStable(records)!==syncStable(body.expected))throw new Problem('Home changed during sync. Retry safely.',409);if(!body.metadata||Array.isArray(body.metadata)||typeof body.metadata!=='object'||JSON.stringify(body.metadata).length>8*1024*1024)throw new Problem('Invalid sync metadata');applyToState(s,body.records);s.drive_sync={metadata:body.metadata,revision:revision+1};return {records:project(s),metadata:s.drive_sync.metadata,revision:revision+1}});
     }
-    if(path==='/health')return {app:'tether',brand:'tether-chat',version:config.version,status:'ok',runtime:'browser'};
+    if(path==='/health')return {app:'tether',brand:'tether',product:'tether-home',version:config.version,status:'ok',runtime:'browser'};
     if(path==='/settings')return method==='POST'?saveSettings(body):read((m,s)=>publicSettings(s));
     if(path==='/preferences')return method==='POST'?write(m=>m.setPreferences(body)):read(m=>m.preferences());
     if(path==='/settings/models' && method==='POST')return models(body);
@@ -319,6 +320,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     if(path==='/backup' || path==='/portable')return read((m,s)=>({...exportData(s),workspace}));
     if(path==='/import' && method==='POST')return write((m,s)=>{
       if(s.jobs.some(j=>['running','queued'].includes(j.status)))throw new Problem('Wait for current requests to finish before importing');
+      if(body.workspace!=='home' && body.home_import_confirmed!==true)throw new Problem('Confirm copying Work or unlabelled data into Home; Home tasks may be shared through Drive',409);
       return importData(s,body);
     });
     if(path==='/storage')return {current:'This browser',pending:null,environment_override:false};
@@ -370,6 +372,8 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     if(url.origin!==origin || !(url.pathname===prefix || url.pathname.startsWith(prefix+'/')))return network(input,options);
     const method=(options.method||input.method||'GET').toUpperCase();
     try{
+      const requested=url.searchParams.get('workspace')||new Headers(options.headers||(input instanceof Request?input.headers:undefined)).get('X-Tether-Workspace');
+      if(requested && requested!=='home')throw new Problem('tether-home is Home-only. Use Settings to recover earlier browser Work data.',403);
       if(url.pathname===prefix+'/voice/transcribe' && method==='POST')throw new Problem('Voice input now runs on this device. Reload tether to update the microphone.',410);
       let body={};if(options.body)body=JSON.parse(options.body);else if(input instanceof Request && !['GET','HEAD'].includes(method))body=await input.clone().json();
       const result=await route(url.pathname.slice(prefix.length),method,body,url.searchParams);

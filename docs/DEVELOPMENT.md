@@ -265,3 +265,14 @@ credential-vault service name, and saved browser theme keys keep their historica
 identifiers. This avoids losing tasks, API settings, or themes on upgrade.
 A small `tend.py` compatibility loader keeps older `python -m tend.native`
 shortcuts working until they are recreated; no `tend` executable is installed.
+
+## Installed Work-only boundary
+
+`tether-chat` is the installed Work product under the shared tether brand. It
+rejects Home workspace requests at the API and storage context boundaries,
+including forged query parameters or headers. Its notification worker processes
+Work only. The package includes no Drive synchronization adapter, Google OAuth
+configuration, Picker key, or Home sharing routes. These belong to the separate
+`tether-home` browser build. Existing local Work paths remain unchanged; any
+legacy Home database file is left untouched for deliberate recovery, not opened
+or uploaded by the installed app.

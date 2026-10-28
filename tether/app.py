@@ -25,10 +25,11 @@ _initialized_workspaces={str(db.path().absolute())}
 async def fresh_desktop_assets(request,call_next):
     from . import workspaces
     from fastapi.responses import JSONResponse
-    mode=request.headers.get('X-Tether-Workspace',request.query_params.get('workspace','work'))
-    try:workspaces.normalize(mode)
+    try:
+        workspaces.normalize(request.headers.get('X-Tether-Workspace','work'))
+        workspaces.normalize(request.query_params.get('workspace','work'))
     except ValueError as exc:return JSONResponse({'detail':str(exc)},status_code=422)
-    with workspaces.use(mode):
+    with workspaces.use('work'):
         if request.url.path.startswith('/api/'):
             path=str(db.path().absolute())
             if path not in _initialized_workspaces or not db.path().exists():
@@ -424,40 +425,3 @@ def retired_voice_transcribe():
 
 from .chat_api import router as chat_router
 app.include_router(chat_router)
-
-@app.get('/drive-sharing')
-def drive_sharing_page():return desktop_screen('drive-sharing.html')
-
-@app.get('/drive-sync-core.mjs')
-@app.get('/drive-sync-service.mjs')
-@app.get('/drive-journals.mjs')
-@app.get('/drive-setup.mjs')
-@app.get('/drive-sharing.mjs')
-async def drive_sync_asset(request:__import__('fastapi').Request):
-    return FileResponse(Path(__file__).with_name(request.url.path.rsplit('/',1)[-1]),media_type='text/javascript')
-
-@app.get('/api/drive-sync/local')
-def drive_local_snapshot():
-    from . import drive_sync
-    try:return drive_sync.snapshot()
-    except drive_sync.SyncError as exc:raise HTTPException(exc.status,str(exc))
-
-@app.post('/api/drive-sync/local')
-def drive_local_apply(body:dict,request:__import__('fastapi').Request):
-    if request.headers.get('origin') != str(request.base_url).rstrip('/'):raise HTTPException(403,'Use the local Home sharing page')
-    from . import drive_sync
-    try:return drive_sync.apply(body.get('expected'),body.get('records'),body.get('metadata'),body.get('expected_revision'))
-    except drive_sync.SyncError as exc:raise HTTPException(exc.status,str(exc))
-
-@app.post('/api/drive-sync/open-browser')
-def drive_open_browser(request:__import__('fastapi').Request):
-    if request.headers.get('origin') != str(request.base_url).rstrip('/'):raise HTTPException(403,'Use the local Home sharing page')
-    from .workspaces import current
-    if current()!='home':raise HTTPException(403,'Drive sharing is available only in Home')
-    import webbrowser
-    from .ports import web_port
-    webbrowser.open('http://localhost:'+str(web_port())+'/drive-sharing?workspace=home&external=1')
-    return {'ok':True}
-
-@app.get('/drive-config.json')
-def drive_public_config():return FileResponse(Path(__file__).with_name('drive-config.json'),media_type='application/json',headers={'Cache-Control':'no-store'})

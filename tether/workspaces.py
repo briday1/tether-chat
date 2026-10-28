@@ -1,35 +1,23 @@
-from . import environment
-"""Local Work/Home datasets. A workspace is organization, not an access boundary."""
-from contextvars import ContextVar
+"""Installed tether-chat is Work-only; household data lives in tether-home."""
 from contextlib import contextmanager
 
-_workspace = ContextVar('tether_workspace', default='work')
-
 def current():
-    return _workspace.get()
+    return 'work'
 
 def normalize(value):
-    if value not in ('work', 'home'):
-        raise ValueError('Choose Work or Home')
-    return value
+    if value != 'work':
+        raise ValueError('tether-chat supports Work only. Open tether-home for household tasks.')
+    return 'work'
 
 @contextmanager
 def use(value):
-    token = _workspace.set(normalize(value))
-    try:
-        yield
-    finally:
-        _workspace.reset(token)
+    normalize(value)
+    yield
 
 def database_path(base):
-    if current() == 'work':return base
-    import os
-    from pathlib import Path
-    from .storage import load
-    saved=load().get('home') if not environment.get('TETHER_DB') else None
-    return Path(saved).expanduser() if saved else base.with_name(base.stem + '.home' + base.suffix)
+    # Existing Work database path is unchanged. Legacy Home files are left intact
+    # but are never opened or uploaded by the installed application.
+    return base
 
 def guidance():
-    if current() == 'home':
-        return 'You are in Home mode. Focus on personal chores, appointments, classes, grocery lists, and everyday plans. Do not introduce work status reports or meetings unless the user asks. Only this Home workspace is available.'
-    return 'You are in Work mode. Only this Work workspace is available. Keep personal Home tasks separate.'
+    return 'You are using tether-chat for Work tasks. Only this Work database is available. Household tasks belong in the separate tether-home browser app.'

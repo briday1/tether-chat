@@ -29,6 +29,7 @@ assert files("tether").joinpath("provider-models.js").is_file()
 assert files("tether").joinpath("preferences.js").is_file()
 assert files("tether").joinpath("locations.js").is_file()
 assert files("tether").joinpath("tool-models.json").is_file()
+assert not any(item.name.startswith("drive") for item in files("tether").iterdir())
 for name in ("index.html","board.html"):
     page=files("tether").joinpath(name).read_text(encoding="utf-8")
     assert '<span class="brand-word">tether<span>.</span></span>' in page

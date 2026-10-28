@@ -37,3 +37,14 @@ def test_new_environment_names_prefer_and_legacy_names_work(monkeypatch):
     monkeypatch.setenv('TETHER_WEB_PORT', '9988')
     assert ports.web_port() == 9988
     assert environment.snapshot()['TETHER_WEB_PORT'] == '9988'
+
+
+def test_desktop_package_declares_no_google_sharing_assets():
+    config = tomllib.loads((ROOT / 'pyproject.toml').read_text())
+    assets = config['tool']['setuptools']['package-data']['tether']
+    assert not any(name.startswith('drive') for name in assets)
+    assert not (ROOT / 'tether/drive_sync.py').exists()
+    assert not (ROOT / 'tether/drive-config.json').exists()
+    workflow = (ROOT / '.github/workflows/publish-pypi.yml').read_text()
+    assert 'TETHER_GOOGLE_PICKER_API_KEY' not in workflow
+    assert 'configure_google_picker.py' not in workflow

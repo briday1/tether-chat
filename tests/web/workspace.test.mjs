@@ -11,5 +11,6 @@ test('workspace routes never corrupt blob downloads or external links',()=>{
    const link={href};handlers.click({target:{closest:()=>link}});assert.equal(link.href,href);
  }
  const link={href:'https://tether.test/api/backup'};handlers.click({target:{closest:()=>link}});
- assert.equal(link.href,'https://tether.test/api/backup?workspace=home');
+ assert.equal(link.href,'https://tether.test/api/backup?workspace=work');
+ assert.equal(window.tetherWorkspace,'work');
 });
