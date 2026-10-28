@@ -25,9 +25,9 @@ def test_discovery_uses_typed_credentials_without_saving_and_keeps_provider_boun
     calls=[]
     def network(req,timeout):
         calls.append(req)
-        return response({'data':[{'id':'tool-mini'},{'id':'tool-mini'},{'id':'another'},{'id':None}]})
+        return response({'data':[{'id':'tool-mini','supported_parameters':['tools']},{'id':'tool-mini','supported_parameters':['tools']},{'id':'another','capabilities':{'tool_calling':True}},{'id':None}]})
     monkeypatch.setattr(ai,'urlopen',network)
-    assert ai.models('https://provider.test/v1/',' typed-key ')=={'models':['another','tool-mini']}
+    assert ai.models('https://provider.test/v1/',' typed-key ')['models']==['another','tool-mini']
     assert calls[0].get_method()=='GET' and calls[0].full_url=='https://provider.test/v1/models'
     assert calls[0].get_header('Authorization')=='Bearer typed-key'
     assert not ai.config_path().exists() and connection=={}
@@ -87,12 +87,24 @@ def test_model_discovery_route_and_connection_test_use_the_current_fields(connec
     calls=[]
     def network(req,timeout):
         calls.append(req)
-        if req.get_method()=='GET':return response({'data':[{'id':'tool-mini'}]})
+        if req.get_method()=='GET':return response({'data':[{'id':'tool-mini','supported_parameters':['tools']}]})
         assert 'max_tokens' not in json.loads(req.data)
         assert req.get_header('Authorization')=='Bearer new-key'
         return response({'choices':[{'message':{'content':'OK'}}]})
     monkeypatch.setattr(ai,'urlopen',network)
-    assert client.post('/api/settings/models',json={'base_url':'https://provider.test/v1','api_key':'new-key'}).json()=={'models':['tool-mini']}
+    assert client.post('/api/settings/models',json={'base_url':'https://provider.test/v1','api_key':'new-key'}).json()['models']==['tool-mini']
     assert client.post('/api/settings',json={'base_url':'https://provider.test/v1','model':'tool-mini','api_key':'new-key'}).json()['has_key']
     assert client.post('/api/settings/test').status_code==200
     assert len(calls)==2
+
+
+@pytest.mark.parametrize('model',['gpt-5.4','gpt-6-sol','gpt-6-luna'])
+def test_compatible_chat_models_send_required_reasoning_option(connection,monkeypatch,model):
+    ai.save('https://api.openai.com/v1',model,'synthetic-key')
+    def network(req,timeout):
+        body=json.loads(req.data)
+        assert body['model']==model and body['reasoning_effort']=='none'
+        assert body['tools'] and body['tool_choice']=='auto'
+        return response({'choices':[{'message':{'content':'OK'}}]})
+    monkeypatch.setattr(ai,'urlopen',network)
+    assert ai.request([{'role':'user','content':'Hi'}])['choices']

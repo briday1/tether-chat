@@ -10,7 +10,7 @@ def _month_offset(today, offset):
     year,month=divmod(index,12)
     return date(year,month+1,1),date(year,month+1,monthrange(year,month+1)[1])
 
-def resolve(message, today=None):
+def resolve(message, today=None,week_start=1):
     text=message.strip().lower()
     text=re.sub(r"^/snapshot\s+(week|month)\s*$",r"/snapshot this \1",text)
     text=re.sub(r"^/snapshot\s+day\s*$","/snapshot today",text)
@@ -28,7 +28,7 @@ def resolve(message, today=None):
         match=re.search(r"\b(last|previous|this|current|next)\s+(week|month)\b",text)
         offset={"last":-1,"previous":-1,"this":0,"current":0,"next":1}[match[1]]
         if match[2]=="week":
-            start=today-timedelta(days=today.weekday())+timedelta(weeks=offset)
+            start=today-timedelta(days=((today.weekday()+1)%7-week_start+7)%7)+timedelta(weeks=offset)
             end=start+timedelta(days=6)
         else:start,end=_month_offset(today,offset)
     elif m:=re.search(r"\b(next|past|last)\s+(\d{1,3})\s+(days?|weeks?)\b",text):
@@ -39,13 +39,14 @@ def resolve(message, today=None):
     elif m:=re.search(r"\b(\d{4}-\d{2}-\d{2})\b",text):
         start=end=date.fromisoformat(m[1])
     else:
-        start=today-timedelta(days=today.weekday())
+        start=today-timedelta(days=((today.weekday()+1)%7-week_start+7)%7)
         end=start+timedelta(days=6)
     if end<start or (end-start).days>365:raise ValueError("Snapshot date range must be 1–366 days")
     return start.isoformat(),end.isoformat()
 
 def respond(message,today=None):
-    dates=resolve(message,today)
+    from . import store
+    dates=resolve(message,today,store.preferences()['week_start'])
     if dates is None:return None
     start,end=dates
     snapshot(start,end)  # Validate and keep errors deterministic, without a provider request.

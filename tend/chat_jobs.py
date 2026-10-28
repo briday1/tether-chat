@@ -154,4 +154,5 @@ def state():
             (SELECT id FROM conversation ORDER BY rowid DESC LIMIT 200) ORDER BY rowid''')]
     for row in messages:
         row['html'] = render(row['body']) if row['role'] == 'assistant' else None
-    return {'messages': messages, 'jobs': jobs}
+    from .locations import requests
+    return {'messages': messages, 'jobs': jobs, 'locations': requests()}

@@ -1,0 +1,41 @@
+{
+  "openai": {
+    "gpt-4.1": {},
+    "gpt-4.1-mini": {},
+    "gpt-4.1-nano": {},
+    "gpt-4o": {},
+    "gpt-4o-mini": {},
+    "gpt-6-luna": {
+      "reasoning_effort": "none"
+    },
+    "gpt-5": {},
+    "gpt-5-mini": {},
+    "gpt-5-nano": {},
+    "gpt-5.1": {},
+    "gpt-5.2": {},
+    "gpt-5.4": {
+      "reasoning_effort": "none"
+    },
+    "gpt-5.6-terra": {
+      "reasoning_effort": "none"
+    },
+    "gpt-6-sol": {
+      "reasoning_effort": "none"
+    }
+  },
+  "sources": [
+    "https://developers.openai.com/api/docs/models/gpt-4.1-mini",
+    "https://developers.openai.com/api/docs/guides/latest-model?model=gpt-4.1",
+    "https://developers.openai.com/api/docs/models/gpt-4o",
+    "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+    "https://developers.openai.com/api/docs/models/gpt-6-luna",
+    "https://developers.openai.com/api/docs/models/gpt-5",
+    "https://developers.openai.com/api/docs/models/gpt-5-mini",
+    "https://developers.openai.com/api/docs/models/gpt-5-nano",
+    "https://developers.openai.com/api/docs/models/gpt-5.1",
+    "https://developers.openai.com/api/docs/models/gpt-5.2",
+    "https://developers.openai.com/api/docs/models/gpt-5.4",
+    "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+    "https://developers.openai.com/api/docs/models/gpt-6-sol"
+  ]
+}

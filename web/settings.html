@@ -17,6 +17,7 @@
   <p class="web-note">Test connection saves the fields above before testing. Changing the provider URL requires entering your key again.</p>
   <div id="providerStatus" class="status" role="status"></div>
 </form>
+<h2>Reminder preferences</h2><p>For open-ended reminders, choose the first day of the period and a time using these defaults.</p><form id="reminderPreferences"><label for="weekStart">First day of the week</label><select id="weekStart"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select><label for="morningTime">Morning</label><input id="morningTime" type="time" value="09:00" required><label for="nightTime">Night</label><input id="nightTime" type="time" value="21:00" required><button type="submit" class="primary">Save preferences</button><div id="preferencesStatus" class="status" role="status"></div></form>
 <h2>Data on this device</h2>
 <p>Tasks and conversations stay in this browser. They are separate from the desktop app and do not sync automatically. Clearing website data removes them.</p>
 <div class="web-buttons"><button type="button" class="secondary" id="exportData">Download backup</button><label class="secondary web-file">Import backup<input id="importData" type="file" accept="application/json,.json"></label></div>
