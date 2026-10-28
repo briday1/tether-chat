@@ -83,7 +83,7 @@ def main():
                 from provider_ui_checks import check_provider_settings
                 check_provider_settings(page)
                 expect(page.locator('.brand-word')).to_have_text('tether.')
-                assert page.title()=='tether.'
+                assert page.title()=='tether-chat'
                 assert page.locator('#chatCategories').count()==0
                 category=page.locator('#chat a[href="/board#category/Projects"]')
                 expect(category).to_have_count(1)
