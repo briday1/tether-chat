@@ -52,7 +52,7 @@ def screen(name, base):
     page = (ROOT / ('web' if name=='drive-sharing.html' else 'tether') / name).read_text(encoding='utf-8')
     if name not in ('snapshot.html','display.html','drive-sharing.html'):
         page, changed = re.subn(r'<h2>AI connection</h2>.*?<a href="/api/backup"[^>]*>Download SQLite backup</a>',
-                               lambda _: (ROOT / 'web/sharing-settings.html').read_text(encoding='utf-8') + (ROOT / 'web/settings.html').read_text(encoding='utf-8'), page, flags=re.S)
+                               lambda _: (ROOT / 'web/settings.html').read_text(encoding='utf-8').replace('__HOUSEHOLD_SHARING__', (ROOT / 'web/sharing-settings.html').read_text(encoding='utf-8')), page, flags=re.S)
         if changed != 1:
             raise ValueError('Desktop settings changed; update the browser settings adapter for ' + name)
         page = page.replace('</body>', '<script type="module" src="./drive-sharing.mjs"></script></body>')
@@ -74,6 +74,8 @@ def screen(name, base):
     # Load browser adjustments after the shared screen styles.
     if '</head>' in page:
         page = page.replace('</head>', f'<link rel="stylesheet" href="{base}browser.css"></head>', 1)
+    # The browser brand opens About; desktop branding/navigation is unchanged.
+    page = page.replace('</body>', f'<script type="module" src="{base}about.mjs"></script></body>')
     # Browser storage must not collide with a desktop server on the same origin.
     page = page.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base))
     page = page.replace("'tether-chat-draft'", repr('tether-web-draft:' + base))

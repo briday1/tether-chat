@@ -1,6 +1,6 @@
 /* Pin each window to one local workspace, including every API request and route. */
 (() => {
-  // Browser application is always Home; legacy Work is recovery-only.
+  // Browser application is always Home; legacy storage is never opened.
   const workspace = 'home';
   window.tetherWorkspace = workspace;
   window.tetherWorkspaceURL = href => { const url=new URL(href,location.href);url.searchParams.set('workspace',workspace);return url.href; };
@@ -10,7 +10,7 @@
     if (url.origin === location.origin && /\/api(?:\/|$)/.test(url.pathname)) {
       const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
       const requested=url.searchParams.get('workspace')||headers.get('X-Tether-Workspace');
-      if(requested && requested!=='home')return Promise.resolve(Response.json({detail:'tether-home is Home-only. Recover earlier Work data in Settings.'},{status:403}));
+      if(requested && requested!=='home')return Promise.resolve(Response.json({detail:'tether-home is Home-only.'},{status:403}));
       headers.set('X-Tether-Workspace', workspace);
       init = {...init, headers};
     }
@@ -26,12 +26,10 @@
     if (link) link.href = decorate(link.href);
   }, true);
   document.addEventListener('DOMContentLoaded', () => {
-    // The browser adds a recovery notice: chat must size its scroller from the
-    // remaining viewport, not the desktop's fixed header-only subtraction.
+    // Size the chat scroller from the available viewport.
     if(document.querySelector('#chat'))document.body.classList.add('home-chat-layout');
     const header = document.querySelector('header');
     if (header) {
-      const notice=document.createElement('p');notice.id='home-product-notice';notice.className='web-note';notice.style.cssText='margin:8px 16px;font-size:12px';notice.textContent='tether-home · Home only. Earlier browser Work data is retained: Settings → Earlier browser Work data.';header.after(notice);
       if (!header.querySelector('[data-display-nav]')) {
         const tasks = [...header.querySelectorAll('a')].find(a => a.textContent.trim() === 'Tasks');
         const display = document.createElement('a'); display.textContent = 'Display'; display.dataset.displayNav = '';

@@ -17,35 +17,43 @@ def main():
  with tempfile.TemporaryDirectory(prefix='tether-drive-ui-') as temp:
   builder.build(Path(temp)/'tether-chat','/tether-chat/')
   server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=temp));threading.Thread(target=server.serve_forever,daemon=True).start()
-  rows=[];writes=[];errors=[];created=False
+  rows=[];writes=[];errors=[];created=False;ai_rows=[];ai_properties=None;google_requests=[];provider_requests=[]
   def google(route):
-   nonlocal created
-   request=route.request;url=request.url
+   nonlocal created,ai_properties
+   request=route.request;url=request.url;google_requests.append((request.method,url))
    from urllib.parse import unquote
    headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization,Content-Type','Access-Control-Allow-Methods':'GET,POST,OPTIONS'}
    if request.method=='OPTIONS':route.fulfill(status=204,headers=headers);return
    if request.headers.get('authorization')=='Bearer fake-denied-token':
     route.fulfill(status=403,json={'error':{'code':403,'message':'Permission denied'}},headers=headers);return
+   if request.method=='POST' and ':batchUpdate' in url:
+    data=json.loads(request.post_data);assert created and ai_properties is None
+    assert len(data['requests'])==2
+    ai_properties={**data['requests'][0]['addSheet']['properties'],'sheetType':'GRID'};assert ai_properties['title']=='Household AI'
+    update=data['requests'][1]['updateCells'];assert update['start']['sheetId']==ai_properties['sheetId']
+    ai_rows.extend([[cell['userEnteredValue']['stringValue'] for cell in row['values']] for row in update['rows']])
+    route.fulfill(json={'spreadsheetId':'sheet_123456'},headers=headers);return
    if request.method=='POST' and '/values/' not in url:
     data=json.loads(request.post_data);assert not created;created=True
     rows.extend([[cell['userEnteredValue']['stringValue'] for cell in row['values']] for row in data['sheets'][0]['data'][0]['rowData']]);route.fulfill(json={'spreadsheetId':'sheet_123456'},headers=headers);return
    assert created and '/sheet_123456' in url
    if '/values/' not in url:
-    route.fulfill(json={'spreadsheetId':'sheet_123456','properties':{'title':'Tether · Our Home'},'sheets':[{'properties':{'sheetId':0,'title':'Journal','sheetType':'GRID','gridProperties':{'rowCount':max(1000,len(rows)),'columnCount':5}}}]},headers=headers);return
+    route.fulfill(json={'spreadsheetId':'sheet_123456','properties':{'title':'Tether · Our Home'},'sheets':[{'properties':{'sheetId':0,'title':'Journal','sheetType':'GRID','gridProperties':{'rowCount':max(1000,len(rows)),'columnCount':5}}}]+([{'properties':ai_properties}] if ai_properties else [])},headers=headers);return
+   target=ai_rows if "'Household AI'!" in unquote(url) else rows
    if request.method=='POST':
     assert ':append?' in url and 'valueInputOption=RAW' in url and 'insertDataOption=INSERT_ROWS' in url
-    values=json.loads(request.post_data)['values'];rows.extend(values);writes.append(request.headers.get('authorization'));route.fulfill(json={'spreadsheetId':'sheet_123456','updates':{'updatedRows':len(values)}},headers=headers);return
+    values=json.loads(request.post_data)['values'];target.extend(values);writes.append(request.headers.get('authorization'));route.fulfill(json={'spreadsheetId':'sheet_123456','updates':{'updatedRows':len(values)}},headers=headers);return
    assert request.method=='GET'
    import re
    match=re.search(r'A(\d+):E(\d+)',unquote(url));assert match,url
-   values=rows[int(match[1])-1:int(match[2])];route.fulfill(json={'majorDimension':'ROWS','values':values},headers=headers)
+   values=target[int(match[1])-1:int(match[2])];route.fulfill(json={'majorDimension':'ROWS','values':values},headers=headers)
   try:
    with sync_playwright() as pw:
     browser=pw.chromium.launch(executable_path=os.environ.get('TETHER_TEST_CHROMIUM'),args=['--no-sandbox'])
     def open_device(token,invite_url=None):
-     context=browser.new_context();page=context.new_page();page.add_init_script(MOCK.replace('TOKEN',token));page.route('https://sheets.googleapis.com/**',google);page.route('https://www.googleapis.com/**',lambda r:r.abort());page.route('https://accounts.google.com/**',lambda r:r.abort());page.route('https://apis.google.com/**',lambda r:r.abort());page.on('pageerror',lambda error:errors.append(str(error)))
+     context=browser.new_context();context.route('https://household-provider.invalid/**',lambda r:(provider_requests.append(r.request.url),r.abort()));page=context.new_page();page.add_init_script(MOCK.replace('TOKEN',token));page.route('https://sheets.googleapis.com/**',google);page.route('https://www.googleapis.com/**',lambda r:r.abort());page.route('https://accounts.google.com/**',lambda r:r.abort());page.route('https://apis.google.com/**',lambda r:r.abort());page.on('pageerror',lambda error:errors.append(str(error)))
      page.goto(invite_url or f'http://127.0.0.1:{server.server_port}/tether-chat/?workspace=home&view=sharing');page.wait_for_function('!!window.tetherFetch')
-     screen=page.frame_locator('#app-frame');expect(screen.locator('#settings')).to_be_visible();expect(screen.get_by_role('link',name='Share Home',exact=True)).to_have_count(0);expect(screen.locator('#sharingSettings')).to_have_attribute('open','');screen.get_by_text('App setup',exact=True).click();screen.locator('#clientId').fill('test-client.apps.googleusercontent.com');screen.locator('#projectNumber').fill('123456789');screen.locator('#pickerKey').fill('fake-restricted-browser-key');screen.locator('#connect').click();expect(screen.locator('#syncStatus')).to_contain_text('Google connected');return page,screen
+     screen=page.frame_locator('#app-frame');expect(screen.locator('#settings')).to_be_visible();expect(screen.get_by_role('link',name='Share Home',exact=True)).to_have_count(0);expect(screen.locator('#sharingSettings')).to_have_attribute('open','');screen.locator('#syncAdvanced').evaluate('(e)=>e.open=true');screen.get_by_text('App setup',exact=True).click();screen.locator('#clientId').fill('test-client.apps.googleusercontent.com');screen.locator('#projectNumber').fill('123456789');screen.locator('#pickerKey').fill('fake-restricted-browser-key');screen.locator('#connect').click();expect(screen.locator('#syncStatus')).to_contain_text('Google connected');return page,screen
     def api(page,path,method='GET',data=None):return page.evaluate("async args=>{const runtime=await window.tetherReady;const response=await runtime.fetch('/tether-chat/api'+args.path,{method:args.method,body:args.data===null?undefined:JSON.stringify(args.data)});return response.json()}",{'path':path,'method':method,'data':data})
     def sync(page):page.evaluate('async()=>await window.tetherHomeSync.sync({force:true})')
     owner,screen=open_device('fake-owner-token');milk=api(owner,'/threads','POST',{'title':'Buy milk','categories':['Groceries']});screen.locator('#consent').check();screen.locator('#createHousehold').click();expect(screen.locator('#syncStatus')).to_contain_text('Synced');expect(screen.locator('#connectionStatus')).to_contain_text('does not confirm');expect(screen.locator('#shareHousehold')).to_have_attribute('href','https://docs.google.com/spreadsheets/d/sheet_123456/edit')
@@ -57,8 +65,30 @@ def main():
      if api(partner,'/threads/'+milk['id'])['title']=='Automatic after navigation':break
      owner.wait_for_timeout(200);sync(partner)
     assert api(partner,'/threads/'+milk['id'])['title']=='Automatic after navigation'
-    screen.locator('#navsettings').click();screen.locator('#sharingSettings>summary').click();expect(screen.locator('#householdStatus')).to_contain_text('Our Home')
-    owner.reload();screen=owner.frame_locator('#app-frame');screen.locator('#navsettings').click();screen.locator('#sharingSettings>summary').click();expect(screen.locator('#householdStatus')).to_contain_text('Our Home');screen.locator('#connect').click();expect(screen.locator('#syncStatus')).to_contain_text('Synced');owner.on('dialog',lambda d:d.accept());screen.locator('#disconnect').click();expect(screen.locator('#syncStatus')).to_contain_text('Disconnected');assert len(api(owner,'/threads'))==2;owner.goto(f'http://127.0.0.1:{server.server_port}/tether-chat/drive-sharing.html');screen=owner.frame_locator('#app-frame');expect(screen.locator('#settings')).to_be_visible();expect(screen.locator('#sharingSettings')).to_have_attribute('open','');expect(screen.get_by_role('link',name='Share Home',exact=True)).to_have_count(0);owner.set_viewport_size({'width':390,'height':844});expect(screen.locator('#closeSettings')).to_be_visible();screen.locator('#closeSettings').click();expect(screen.locator('#settings')).not_to_be_visible();assert not errors,errors
+    screen.locator('#navsettings').click();screen.locator('#sharingSettings>summary').click();screen.locator('#syncAdvanced').evaluate('(e)=>e.open=true');expect(screen.locator('#householdStatus')).to_contain_text('Our Home')
+    owner.reload();screen=owner.frame_locator('#app-frame');screen.locator('#navsettings').click();screen.locator('#sharingSettings>summary').click();screen.locator('#syncAdvanced').evaluate('(e)=>e.open=true');expect(screen.locator('#householdStatus')).to_contain_text('Our Home');screen.locator('#connect').click();expect(screen.locator('#syncStatus')).to_contain_text('Synced');owner.on('dialog',lambda d:d.accept());screen.locator('#disconnect').click();expect(screen.locator('#syncStatus')).to_contain_text('Disconnected');assert len(api(owner,'/threads'))==2;owner.goto(f'http://127.0.0.1:{server.server_port}/tether-chat/drive-sharing.html');screen=owner.frame_locator('#app-frame');expect(screen.locator('#settings')).to_be_visible();expect(screen.locator('#sharingSettings')).to_have_attribute('open','');expect(screen.get_by_role('link',name='Share Home',exact=True)).to_have_count(0);owner.set_viewport_size({'width':390,'height':844});expect(screen.locator('#closeSettings')).to_be_visible();screen.locator('#closeSettings').click();expect(screen.locator('#settings')).not_to_be_visible();assert not errors,errors
+    # Share only synthetic AI material. Missing consent must make no Google request.
+    synthetic_key='synthetic-household-credential-not-a-real-key'
+    passphrase='synthetic test words only 12345'
+    endpoint='https://household-provider.invalid/v1'
+    saved=api(partner,'/settings','POST',{'base_url':endpoint,'model':'synthetic-model','api_key':synthetic_key,'remember':False})
+    assert saved['has_key'] and not saved.get('household_active')
+    peer.locator('#publishHouseholdAI').evaluate('(e)=>e.open=true')
+    def fill_share():
+     peer.locator('#householdSharePassphrase').fill(passphrase);peer.locator('#householdSharePassphraseAgain').fill(passphrase)
+    fill_share();before_requests=len(google_requests);peer.locator('#publishHouseholdKey').click()
+    expect(peer.locator('#syncStatus')).to_contain_text('Confirm uploading')
+    assert len(google_requests)==before_requests and not ai_rows
+    fill_share();peer.locator('#shareHouseholdKeyConsent').check();peer.locator('#publishHouseholdKey').click()
+    expect(peer.locator('#sharedAIStatus')).to_contain_text('encrypted and shared',timeout=30000)
+    assert len(ai_rows)==2 and ai_rows[0]==['tether-household-ai','1','revision','parents','ciphertext']
+    ciphertext=ai_rows[1][3];assert len(ciphertext.split('.'))==5
+    for sensitive in [synthetic_key,passphrase]:
+     assert sensitive not in json.dumps(rows) and sensitive not in json.dumps(ai_rows)
+    assert ciphertext not in json.dumps(rows)
+    assert not api(partner,'/settings').get('household_active')
+    expect(peer.locator('#householdSharePassphrase')).to_have_value('')
+    expect(peer.locator('#householdSharePassphraseAgain')).to_have_value('')
     # Invitations must identify an exact Sheet without granting access or autojoining.
     peer.locator('#copyInvite').click()
     expect(peer.locator('#syncStatus')).to_contain_text('copied')
@@ -68,6 +98,7 @@ def main():
     assert parse_qs(parsed.query)['settings']==['sharing']
     assert payload=={'v':1,'id':'sheet_123456','name':'Tether · Our Home'},payload
     assert 'token' not in invite_url.lower() and 'fake-' not in invite_url
+    assert all(value not in invite_url for value in [synthetic_key,passphrase,ciphertext,endpoint])
     invited,inv=open_device('fake-invited-token',invite_url)
     expect(inv.locator('#householdInvitation')).to_be_visible()
     expect(inv.locator('#householdInvitation')).to_contain_text('Our Home')
@@ -101,8 +132,47 @@ def main():
     expect(inv.locator('#syncStatus')).to_contain_text('Synced')
     assert api(invited,'/drive-sync/local')['metadata']['session']['spreadsheetId']=='sheet_123456'
     assert len(api(invited,'/threads'))==2
+    # Joining never applies or unlocks the AI connection automatically.
+    assert not api(invited,'/settings').get('household_active') and not api(invited,'/settings')['has_key']
+    inv.locator('#householdUnlockPassphrase').fill('wrong synthetic passphrase');inv.locator('#unlockHouseholdAI').click()
+    expect(inv.locator('#syncStatus')).to_contain_text('passphrase',timeout=30000)
+    expect(inv.locator('#householdAIReview')).not_to_be_visible()
+    assert not api(invited,'/settings').get('household_active')
+    inv.locator('#householdUnlockPassphrase').fill(passphrase);inv.locator('#unlockHouseholdAI').click()
+    expect(inv.locator('#householdAIReview')).to_be_visible(timeout=30000)
+    expect(inv.locator('#householdProviderReview')).to_contain_text(endpoint)
+    assert not api(invited,'/settings').get('household_active')
+    inv.locator('#useHouseholdAI').click();expect(inv.locator('#syncStatus')).to_contain_text('confirm')
+    assert not api(invited,'/settings').get('household_active')
+    # Closing Settings discards an unfinished approval and clears every passphrase.
+    inv.locator('#householdUnlockPassphrase').fill(passphrase)
+    inv.locator('#publishHouseholdAI').evaluate('(e)=>e.open=true')
+    inv.locator('#householdSharePassphrase').fill(passphrase);inv.locator('#householdSharePassphraseAgain').fill(passphrase)
+    inv.locator('#closeSettings').click();inv.locator('#navsettings').click()
+    assert invited.evaluate('async()=>!(await (await window.tetherHouseholdAIReady).status()).pending')
+    for field in ['householdUnlockPassphrase','householdSharePassphrase','householdSharePassphraseAgain']:
+     expect(inv.locator('#'+field)).to_have_value('')
+    inv.locator('#householdUnlockPassphrase').fill(passphrase);inv.locator('#unlockHouseholdAI').click()
+    expect(inv.locator('#householdAIReview')).to_be_visible(timeout=30000)
+    inv.locator('#trustHouseholdProvider').check();inv.locator('#useHouseholdAI').click()
+    expect(inv.locator('#sharedAIStatus')).to_contain_text('Unlocked for this session')
+    selected=api(invited,'/settings');assert selected['household_active'] and selected['base_url']==endpoint
+    # The recipient stores neither plaintext key/passphrase nor encrypted bundle in backups/task state.
+    stored=invited.evaluate('()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}})')
+    backup=json.dumps(api(invited,'/backup'));local=json.dumps(api(invited,'/drive-sync/local'))
+    for sensitive in [synthetic_key,passphrase,ciphertext]:
+     assert all(sensitive not in value for value in [stored,backup,local,json.dumps(rows)])
+    inv.locator('#lockHouseholdAI').click();expect(inv.locator('#sharedAIStatus')).to_contain_text('locked')
+    assert not api(invited,'/settings').get('household_active') and not api(invited,'/settings')['has_key']
+    inv.locator('#householdUnlockPassphrase').fill(passphrase);inv.locator('#unlockHouseholdAI').click()
+    expect(inv.locator('#householdAIReview')).to_be_visible(timeout=30000)
+    inv.locator('#trustHouseholdProvider').check();inv.locator('#useHouseholdAI').click()
+    expect(inv.locator('#sharedAIStatus')).to_contain_text('Unlocked for this session')
+    invited.reload();invited.wait_for_function('!!window.tetherFetch')
+    assert not api(invited,'/settings').get('household_active') and not api(invited,'/settings')['has_key']
     other_url=invite_url.split('#')[0]+'#'+urlencode({'tetherInvite':json.dumps({'v':1,'id':'other_sheet','name':'Another Home'})})
     invited.goto(other_url);inv=invited.frame_locator('#app-frame')
+    inv.locator('#syncAdvanced').evaluate('(e)=>e.open=true')
     expect(inv.locator('#householdInvitation')).to_contain_text('Another Home')
     inv.locator('#connect').click();expect(inv.locator('#syncStatus')).to_contain_text('Synced')
     inv.locator('#consent').check();before=len(rows)
@@ -129,6 +199,7 @@ def main():
     expect(denied_ui.locator('#householdInvitation')).to_be_visible()
     assert len(api(denied,'/threads'))==1
     assert not errors,errors
-    browser.close();print('Sheets mock UI passed: Create/Join, consent, bilateral sync, append-only Sheet, conflicts, navigation/reload, disconnect and explicit exact-Sheet invitations. Real Google remains unverified.')
+    assert not provider_requests,'Setup must never send an AI request automatically'
+    browser.close();print('Sheets mock UI passed: Create/Join, consent, bilateral sync, append-only Sheet, conflicts, navigation/reload, disconnect explicit exact-Sheet invitations, encrypted AI publish/unlock/endpoint consent/lock and secret isolation. Real Google remains unverified.')
   finally:server.shutdown()
 if __name__=='__main__':main()

@@ -2,6 +2,7 @@ import {project,applyToState,stable as syncStable,SyncError} from './drive-sync-
 import {Database, Model, Problem, required, now, uid, copy, snapshotRange} from './store.mjs';
 import {exportData, importData} from './portable.mjs';
 import {encryptKey, decryptKey} from './credentials.mjs';
+import {sealHouseholdBundle, normalizeEndpoint} from './household-ai-crypto.mjs';
 import {renderMarkdown} from './render.mjs';
 import {taskNote,checkInNote} from './notes.mjs';
 import {providerFailure, retryDelay,compatibleModels,modelOptions} from './provider.mjs';
@@ -23,21 +24,27 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
   config={...config,system:config.system+'\n'+(workspace==='home'?'You are in Home mode. Focus on chores, appointments, classes, groceries, and everyday plans. Do not introduce work status reports or meetings unless asked. Only this Home workspace is available.':'You are in Work mode. Only this Work workspace is available.')};
   db=db || await new Database('tether-chat-web:'+config.base+workspaceSuffix).open();
   const sessionName='tether-chat-web-key:'+config.base+workspaceSuffix;
-  let apiKey='',keyBase='',draining=false,closed=false,notificationTimer=null;
+  let apiKey='',keyBase='',householdConnection=null,householdGeneration=0,draining=false,closed=false,notificationTimer=null;
   try {const saved=JSON.parse(session?.getItem(sessionName)||'{}');apiKey=saved.key||'';keyBase=saved.base||'';}catch(_){}
   const read=fn=>db.read(s=>fn(new Model(s),s)),write=fn=>db.write(s=>fn(new Model(s),s));
   const markdown=text=>renderMarkdown(text,config);
   const rememberSession=()=>{try{if(apiKey)session?.setItem(sessionName,JSON.stringify({key:apiKey,base:keyBase}));else session?.removeItem(sessionName)}catch(_){}};
-  const publicSettings=s=>{
+  const personalSettings=s=>{
     const base_url=s.settings.base_url||'https://api.openai.com/v1',has_key=!!(apiKey && keyBase===base_url);
     return {base_url,model:s.settings.model||'gpt-4.1-mini',has_key,has_saved_key:!!s.settings.encrypted_key,
       locked:!!s.settings.encrypted_key && !has_key,remember:!!s.settings.encrypted_key};
   };
+  const householdValid=s=>householdConnection && s.drive_sync?.metadata?.session?.spreadsheetId===householdConnection.household_id;
+  const publicSettings=s=>householdValid(s)?{base_url:householdConnection.base_url,model:householdConnection.model,has_key:true,has_saved_key:false,locked:false,remember:false,household_active:true}:personalSettings(s);
+  async function checkHouseholdConnection(c){
+    if(c.household_id && !await read((m,s)=>householdValid(s)&&householdConnection.revision===c.revision&&householdConnection.key===c.key))
+      throw new Problem('Household AI is locked or changed. Unlock and confirm it in Settings.',401);
+  }
   async function connection() {
     return read((m,s)=>{
       const c=publicSettings(s);
       if(!c.has_key)throw new Problem(c.locked?'Unlock your saved API key in Settings.':'Enter your API key in Settings, then save or test the connection.',401);
-      return {...c,key:apiKey};
+      return householdValid(s)?{...c,...householdConnection}:{...c,key:apiKey};
     });
   }
   function providerBase(value) {
@@ -47,7 +54,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     return base.href.replace(/\/+$/,'');
   }
   async function models(body) {
-    const saved=await read((m,s)=>({...publicSettings(s),key:apiKey})),base_url=providerBase(body.base_url||saved.base_url);
+    const saved=await read((m,s)=>({...publicSettings(s),key:householdValid(s)?householdConnection.key:apiKey})),base_url=providerBase(body.base_url||saved.base_url);
     const key=body.api_key?.trim() || (base_url===saved.base_url && saved.has_key ? saved.key : '');
     if(!key)throw new Problem(base_url!==saved.base_url?'Enter your API key for this provider URL.':saved.locked?'Unlock your saved API key to load models.':'Enter your API key to load models.',401);
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
@@ -65,6 +72,8 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     }finally{clearTimeout(timeout)}
   }
   async function saveSettings(body) {
+    const generation=++householdGeneration;
+    const ensureActive=()=>{if(closed||generation!==householdGeneration)throw new Problem('Connection changed while saving. Review and save it again.');};
     const base_url=providerBase(body.base_url),model=required(body.model,'Model',200);
     const previous=await read((m,s)=>s.settings),sameBase=base_url===(previous.base_url||'https://api.openai.com/v1');
     const supplied=body.api_key ? required(body.api_key,'API key',10000) : '';
@@ -79,13 +88,16 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       else if(nextKey)encrypted=await encryptKey(nextKey,body.passphrase);
       else throw new Problem('Enter or unlock your key before saving it on this device');
     }
-    await write((m,s)=>{s.settings={base_url,model,encrypted_key:encrypted};return null});
-    apiKey=nextKey;keyBase=base_url;rememberSession();return read((m,s)=>publicSettings(s));
+    ensureActive();
+    await write((m,s)=>{ensureActive();s.settings={base_url,model,encrypted_key:encrypted};return null});
+    ensureActive();
+    householdConnection=null;apiKey=nextKey;keyBase=base_url;rememberSession();return read((m,s)=>publicSettings(s));
   }
   async function request(messages,{tools=true,maxTokens,connection:provided,progress=async()=>{}}={}) {
     const c=provided || await connection(),body={model:c.model,messages,...modelOptions(c.base_url,c.model,config.tool_models)};
     if(tools){body.tools=config.tools;body.tool_choice='auto'}if(maxTokens)body.max_tokens=maxTokens;
     for(let attempt=0;attempt<3;attempt++){
+      await checkHouseholdConnection(c);
       const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),60000);
       let response;
       try{
@@ -302,11 +314,15 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     if(path==='/preferences')return method==='POST'?write(m=>m.setPreferences(body)):read(m=>m.preferences());
     if(path==='/settings/models' && method==='POST')return models(body);
     if(path==='/settings/unlock'){
-      const encrypted=await read((m,s)=>s.settings.encrypted_key);if(!encrypted)throw new Problem('There is no saved key');
-      const key=await decryptKey(encrypted,body.passphrase),c=await read((m,s)=>publicSettings(s));
-      apiKey=key;keyBase=c.base_url;rememberSession();return read((m,s)=>publicSettings(s));
+      const generation=householdGeneration;
+      const original=await read((m,s)=>({encrypted:s.settings.encrypted_key,base:personalSettings(s).base_url}));
+      if(!original.encrypted)throw new Problem('There is no saved key');
+      const key=await decryptKey(original.encrypted,body.passphrase);
+      const current=await read((m,s)=>({encrypted:s.settings.encrypted_key,base:personalSettings(s).base_url}));
+      if(closed||generation!==householdGeneration||original.base!==current.base||JSON.stringify(original.encrypted)!==JSON.stringify(current.encrypted))throw new Problem('Connection changed while unlocking. Unlock the current connection again.');
+      householdGeneration++;householdConnection=null;apiKey=key;keyBase=original.base;rememberSession();return read((m,s)=>publicSettings(s));
     }
-    if(path==='/settings/lock'){apiKey='';rememberSession();return {ok:true}}
+    if(path==='/settings/lock'){householdGeneration++;householdConnection=null;apiKey='';rememberSession();return {ok:true}}
     if(path==='/settings/test'){await request([{role:'user',content:'Respond with OK.'}],{tools:false});return {ok:true,message:'Connection successful'}}
     if(path==='/chat/preflight'){
       if(!body.attention && !await localResponse(String(body.text||'')))await connection();
@@ -398,7 +414,32 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
   const timer=setInterval(()=>{if(!closed)read((m,s)=>s.jobs.some(j=>['queued','running'].includes(j.status))).then(pending=>{if(pending)drain()})},2000);
   notificationTimer=setInterval(()=>notifications().catch(()=>{}),30000);
   drain();
-  return {fetch:handle,notifications,close(){closed=true;clearInterval(timer);clearInterval(notificationTimer)},
+  return {fetch:handle,notifications,
+    householdAI:{
+      async seal(passphrase,context){
+        const generation=householdGeneration;
+        const c=await read((m,s)=>({...personalSettings(s),key:apiKey,selected:s.drive_sync?.metadata?.session?.spreadsheetId}));
+        if(c.selected!==context.householdId)throw new Problem('Select the intended household before sharing AI settings.');
+        if(closed||generation!==householdGeneration)throw new Problem('AI connection changed. Review and share it again.');
+        if(!c.has_key)throw new Problem('Save or unlock your own AI connection before sharing it.',401);
+        const ciphertext=await sealHouseholdBundle({base_url:c.base_url,model:c.model,api_key:c.key},passphrase,context);
+        if(closed||generation!==householdGeneration)throw new Problem('AI connection changed. Review and share it again.');
+        return ciphertext;
+      },
+      async use(bundle,context){
+        const generation=++householdGeneration;
+        const selected=await read((m,s)=>s.drive_sync?.metadata?.session?.spreadsheetId);
+        if(selected!==context.householdId||!context.confirmed)throw new Problem('Confirm the selected household and AI provider first.');
+        const base_url=normalizeEndpoint(bundle.base_url);
+        if(typeof bundle.api_key!=='string'||!bundle.api_key||bundle.api_key.length>10000||typeof bundle.model!=='string'||!bundle.model||bundle.model.length>200)throw new Problem('Invalid household AI configuration');
+        if(closed||generation!==householdGeneration||context.isActive?.()===false)throw new Problem('Household unlock was cancelled.');
+        householdConnection={base_url,model:bundle.model,key:bundle.api_key,household_id:context.householdId,revision:context.revisionId};
+        return read((m,s)=>publicSettings(s));
+      },
+      lock(){householdGeneration++;householdConnection=null},
+      async status(){return read((m,s)=>({active:!!householdValid(s),revision:householdValid(s)?householdConnection.revision:null,personal:personalSettings(s)}))}
+    },
+    close(){closed=true;householdGeneration++;householdConnection=null;clearInterval(timer);clearInterval(notificationTimer)},
     // The shell uses this to notify the user before closing an active request.
     pending:()=>read((m,s)=>s.jobs.some(j=>['queued','running'].includes(j.status)))};
 }

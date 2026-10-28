@@ -54,7 +54,8 @@ def main():
                 expect(frame.locator('select#model')).to_be_visible();expect(frame.locator('#model option')).to_have_count(1)
                 expect(frame.locator('input#model, datalist#modelOptions')).to_have_count(0)
                 if os.environ.get('TETHER_MODEL_PICKER_SCREENSHOT'):frame.locator('#provider').screenshot(path=os.environ['TETHER_MODEL_PICKER_SCREENSHOT'])
-                frame.get_by_role('button',name='Save connection',exact=True).click();expect(frame.locator('#providerStatus')).to_contain_text('saved')
+                frame.get_by_role('button',name='Save AI connection',exact=True).click();expect(frame.locator('#providerStatus')).to_contain_text('saved')
+                frame.locator('#otherSettings > summary').click()
                 frame.get_by_label('First day of the week').select_option('0');frame.get_by_label('Morning',exact=True).fill('10:30');frame.get_by_label('Night',exact=True).fill('22:15');frame.get_by_role('button',name='Save preferences',exact=True).click();expect(frame.locator('#preferencesStatus')).to_contain_text('saved')
                 frame.get_by_role('button',name='Close settings',exact=True).click();page.reload()
                 assert api('/preferences')=={'week_start':0,'morning_time':'10:30','night_time':'22:15'}

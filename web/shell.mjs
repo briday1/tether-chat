@@ -1,6 +1,7 @@
 import {createRuntime} from './runtime.mjs';
 import {HomeSync,uuid} from './drive-sync-service.mjs';
 import {DriveSheets} from './drive-sheets.mjs';
+import {HouseholdAI} from './household-ai-service.mjs';
 import {parseHouseholdInvite} from './household-invite.mjs';
 import {prepareLaunch} from './launch.mjs';
 const config=window.TETHER_CONFIG,frame=document.querySelector('#app-frame'),loading=document.querySelector('#loading');
@@ -61,6 +62,8 @@ window.tetherHomeSyncReady=window.tetherReady.then(runtime=>{
   const local=async(method,body)=>{const response=await runtime.fetch(apiBase+'/drive-sync/local',{method,headers:{'Content-Type':'application/json','X-Tether-Workspace':'home'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json();if(!response.ok){const error=Error(result.detail||'Local sync failed');error.status=response.status;throw error}return result};
   return window.tetherHomeSync=new HomeSync({local,transport:new DriveSheets(window.fetch.bind(window)),actor,scheduler:window});
 });
+
+window.tetherHouseholdAIReady=Promise.all([window.tetherReady,window.tetherHomeSyncReady]).then(([runtime,sync])=>new HouseholdAI({runtime,sync}));
 
 try{
   const runtime=await window.tetherReady;window.tetherFetch=runtime.fetch;

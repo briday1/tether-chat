@@ -1,6 +1,6 @@
-<h2>AI connection</h2>
-<p class="connection-mode" id="connectionMode">Browser connection · Installed browser apps use browser networking too. Providers must allow browser access; the Python desktop edition uses a local service instead.</p>
-<p>Use your own key and a model that supports tool calling. Requests go directly to your provider, which must allow browser access.</p>
+<section id="householdSettings"><h2>Household</h2><p>Set up your household here. Use it on this device, or share it with someone.</p><label for="householdName">Household name</label><input id="householdName" value="Our Home" maxlength="80"><h3>AI connection</h3><p id="householdAIOverview" role="status"></p><div id="householdPersonalProvider">
+<p class="connection-mode" id="connectionMode">Requests go directly to your AI provider. Choose one that supports browser access.</p>
+
 <form id="provider">
   <label for="base">Provider API base URL</label><input id="base" type="url" required placeholder="https://api.openai.com/v1">
   <label for="model">Model</label><select id="model" required><option value="" disabled selected>Connect to load tool-calling models</option></select>
@@ -8,29 +8,26 @@
   <button type="button" class="secondary" id="refreshModels">Refresh models</button>
   <div id="modelStatus" class="status" role="status"></div>
   <label for="key">API key</label><input id="key" type="password" autocomplete="off" placeholder="Leave blank to keep the unlocked key">
-  <label class="web-checkbox"><input id="rememberKey" type="checkbox"> Save encrypted key on this device</label>
+  <details id="providerAdvanced"><summary>Key storage and connection options</summary><label class="web-checkbox"><input id="rememberKey" type="checkbox"> Save encrypted key on this device</label>
   <label for="keyPassphrase">Unlock passphrase</label><input id="keyPassphrase" type="password" autocomplete="off" minlength="8" placeholder="For saving or unlocking an encrypted key">
   <p class="web-note">Without a saved key, your key lasts for this browser session. A saved key needs its passphrase when you reopen tether.</p>
   <div id="keyStatus" class="status" role="status"></div>
-  <button class="primary" type="submit">Save connection</button>
-  <div class="web-buttons"><button type="button" class="secondary" id="unlockKey">Unlock saved key</button><button type="button" class="secondary" id="lockKey">Lock key</button><button type="button" class="secondary" id="forgetKey">Forget key</button></div>
+  </details><button class="primary" type="submit">Save AI connection</button>
+  <details id="providerActions"><summary>Unlock, test or change the saved key</summary><div class="web-buttons"><button type="button" class="secondary" id="unlockKey">Unlock saved key</button><button type="button" class="secondary" id="lockKey">Lock key</button><button type="button" class="secondary" id="forgetKey">Forget key</button></div>
   <button type="button" class="secondary" id="testConnection">Test connection</button>
   <p class="web-note">Test connection saves the fields above before testing. Changing the provider URL requires entering your key again.</p>
-  <div id="providerStatus" class="status" role="status"></div>
-</form>
+  </details><div id="providerStatus" class="status" role="status"></div>
+</form></div>
+__HOUSEHOLD_SHARING__
+</section>
+<details id="otherSettings"><summary>Other settings</summary>
 <h2>Reminder preferences</h2><p>For open-ended reminders, choose the first day of the period and a time using these defaults.</p><form id="reminderPreferences"><label for="weekStart">First day of the week</label><select id="weekStart"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select><label for="morningTime">Morning</label><input id="morningTime" type="time" value="09:00" required><label for="nightTime">Night</label><input id="nightTime" type="time" value="21:00" required><button type="submit" class="primary">Save preferences</button><div id="preferencesStatus" class="status" role="status"></div></form>
 <h2>Data on this device</h2>
-<p>Tasks and conversations stay in this browser. They are separate from the desktop app and do not sync automatically. Clearing website data removes them.</p>
+<p>Tasks and conversations stay in this browser. They are separate from the desktop app. Connecting a shared household syncs Home tasks automatically; conversations stay local. Clearing website data removes them.</p>
 <div class="web-buttons"><button type="button" class="secondary" id="exportData">Download backup</button><label class="secondary web-file">Import backup<input id="importData" type="file" accept="application/json,.json"></label></div>
 <p class="web-note">Portable JSON backups include tasks, action notes, activity, and conversations. They exclude API keys. Imports merge new records and preserve existing data.</p>
 <button type="button" class="secondary" id="persistData">Protect local storage</button>
 <div id="storageStatus" class="status" role="status"></div>
-<h2>Earlier browser Work data</h2>
-<p>tether-home now contains Home only. Earlier browser Work data, drafts and saved connection settings are retained on this device, but never opened as a chat runtime or shared automatically. Recover a Work backup for tether-chat, or explicitly import it into Home using Import backup above. Keep Work private unless you deliberately choose otherwise.</p>
-<button type="button" class="secondary" id="inspectLegacy">Inspect earlier Work storage</button>
-<div id="legacyStatus" class="status" role="status"></div>
-<div class="web-buttons"><button type="button" class="secondary" id="exportLegacy" hidden>Download Work backup for tether-chat</button><button type="button" class="secondary" id="exportLegacyPrivate" hidden>Download private recovery file</button></div>
-<p class="web-note">The private recovery file also preserves your old draft, pending outbox and encrypted connection settings. It does not contain session API keys and is not imported or synced into Home. Keep it private. Re-enter your provider connection in Home Settings; the original Work settings remain untouched.</p>
 <h2>Use as an app</h2>
 <p>On iPhone: open tether in Safari, then Share → Add to Home Screen. After the first visit, saved tasks and calendars work offline. AI chat needs internet.</p>
 <button type="button" class="secondary" id="installApp">Install app</button>
@@ -39,3 +36,5 @@
 <div id="notificationStatus" class="status" role="status"></div>
 <p class="web-note" id="browserVersion"></p>
 <p class="web-note">New releases load when you launch tether. An open session stays on its current version. Saved tasks remain available offline.</p>
+
+</details>

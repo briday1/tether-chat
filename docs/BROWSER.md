@@ -125,3 +125,15 @@ remove the chip to dismiss it. Pins do not restrict ordinary task tools.
 For optional household collaboration, use **Settings → Share Home**. Each person connects
 their own Google account; the publisher configures Google once. Read
 [Drive setup and limitations](DRIVE_SYNC.md). Do not sync a live SQLite file.
+
+### Tablet Display
+
+Display opens a viewport-fitted month calendar suitable for a landscape household
+ tablet. The menu button opens view/date/text/theme controls and links back to
+Conversation and Tasks. A day’s item count opens the full list on touchscreens;
+long lists do not expand the month beyond the viewport. Portrait remains supported.
+The calendar rereads local data every minute while visible and follows the current
+date unless another date is selected. This does not call an AI provider or reload
+software. Shared updates still depend on an open, connected household session;
+Display shows offline, paused, reconnect, conflict, or stale-sync warnings rather
+than treating a refreshed local calendar as proof of a recent remote sync.

@@ -75,12 +75,13 @@ def test_desktop_portable_export_contains_data_and_excludes_credentials(tmp_path
 
 def test_public_policy_pages_are_static_and_linked(tmp_path):
     output=builder.build(tmp_path/'web','/tether-chat/')
-    index=(output/'index.html').read_text(encoding='utf-8')
+    about=(output/'about.mjs').read_text(encoding='utf-8')
+    assert 'about.mjs' in (output/'conversation.html').read_text(encoding='utf-8')
     for name in ('privacy.html','terms.html'):
         page=(output/name).read_text(encoding='utf-8')
         assert '<script' not in page
         assert 'October 28, 2026' in page
-        assert 'href="./'+name+'"' in index
+        assert "'"+name+"'" in about
         assert 'optional experimental integration' in page
     assert 'drive.file' in (output/'privacy.html').read_text(encoding='utf-8')
 
@@ -89,7 +90,10 @@ def test_household_sharing_is_inside_settings_not_navigation(tmp_path):
     output=builder.build(tmp_path/'web','/tether-chat/')
     for name in ('conversation.html','board.html'):
         text=(output/name).read_text(encoding='utf-8')
-        assert text.index('id="settings"') < text.index('id="sharingSettings"') < text.index('<h2>AI connection</h2>')
+        assert text.index('id="settings"') < text.index('id="householdSettings"') < text.index('id="provider"') < text.index('id="sharingSettings"')
+        assert 'Earlier browser Work data' not in text
+        assert 'id="inspectLegacy"' not in text
+        assert 'id="householdAIReview"' in text
         assert 'type="module" src="./drive-sharing.mjs"' in text
         assert 'Create shared household' in text
         assert 'id="householdInvitation"' in text

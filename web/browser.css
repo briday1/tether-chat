@@ -9,7 +9,6 @@
 /* Keep the visible recovery notice in flow without pushing chat below the viewport. */
 body.home-chat-layout{display:flex;flex-direction:column;height:100dvh;min-height:0;overflow:hidden}
 body.home-chat-layout>.app{height:auto!important;flex:1 1 0;min-height:0}
-body.home-chat-layout>#home-product-notice{flex:0 0 auto;overflow-wrap:anywhere}
 @media(max-width:600px){body.home-chat-layout>.topnav{height:auto!important;min-height:66px;flex-wrap:wrap;padding-top:5px!important;padding-bottom:5px!important;row-gap:3px!important}}
 
 /* Household sharing belongs to Settings, not primary navigation. */
@@ -23,3 +22,6 @@ body.home-chat-layout>#home-product-notice{flex:0 0 auto;overflow-wrap:anywhere}
 .settings .sharing-settings .conflict{padding:10px 0;border-top:1px solid var(--line)}
 .settings .sharing-settings .conflict button{display:block;white-space:pre-wrap;overflow-wrap:anywhere}
 .settings #syncStatus{white-space:pre-wrap}
+
+/* Quiet, keyboard-accessible browser About panel. */
+.about-trigger{font:inherit;color:inherit;cursor:pointer;background:transparent;border:0;padding:0;text-align:left}.about-trigger:focus-visible{outline:2px solid var(--accent);outline-offset:5px;border-radius:4px}.tether-about{color:var(--text,#263d30);background:var(--paper,#f6f7f3);border:1px solid var(--line,#d5e0d3);border-radius:16px;padding:26px;max-width:min(420px,calc(100vw - 32px));box-shadow:0 15px 70px #0003}.tether-about::backdrop{background:#0005}.tether-about h2{margin:0 0 14px}.tether-about nav{display:flex;flex-wrap:wrap;gap:16px;margin:24px 0}.tether-about a{color:var(--accent,#336345)}.tether-about button{cursor:pointer;padding:9px 18px;border:1px solid var(--line,#d5e0d3);border-radius:9px;background:var(--panel,white);color:inherit}.tether-about :focus-visible{outline:2px solid var(--accent,#336345);outline-offset:3px}
