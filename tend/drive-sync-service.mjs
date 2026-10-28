@@ -1,5 +1,15 @@
 import {mergeJournal,makeChanges,materialize,resolve,SyncError,stable} from './drive-sync-core.mjs';
 export const uuid=()=>crypto.randomUUID().replaceAll('-','');
+// Retain causal history locally while disconnected, without an active session,
+// credentials, connection generation, or recursively nested detached copies.
+function detachedHistory(metadata){
+  const source=metadata.session?metadata:metadata.detached?.session?metadata.detached:null;
+  if(!source)return {};
+  const kept={};for(const key of ['log','baseline','actor','uploaded','conflicts','lastSync'])if(Object.hasOwn(source,key))kept[key]=structuredClone(source[key]);
+  kept.session={};for(const key of ['mode','workspaceId','folderId','folderName'])if(Object.hasOwn(source.session,key))kept.session[key]=source.session[key];
+  if(Array.isArray(source.session.files))kept.session.files=source.session.files.map(file=>({id:file.id,...(typeof file.name==='string'?{name:file.name}:{})}));
+  return {detached:kept};
+}
 export class HomeSync {
   constructor({local,transport,actor=uuid(),changed=()=>{},locks=globalThis.navigator?.locks}){this.local=local;this.transport=transport;this.actor=actor;this.changed=changed;this.locks=locks;this.running=false;this.generation=0;this.token='';this.timer=null;this.status='Disconnected';}
   async state(){return this.local('GET')}
@@ -7,15 +17,20 @@ export class HomeSync {
   async configure(settings,{publishExisting=false}={}){
     const s=await this.state();if(s.metadata.session&&stable(s.metadata.session)!==stable(settings))throw new SyncError('Disconnect this shared Home before choosing another.');
     if(!s.metadata.session){
-      if(Object.keys(s.records).length&&!publishExisting)throw new SyncError('Confirm sharing the existing Home tasks and notes first.');
-      await this.commit(s,s.records,{...s.metadata,session:settings,connection:uuid(),actor:this.actor,log:[],baseline:{},conflicts:[],uploaded:[]});
+      const detached=detachedHistory(s.metadata).detached;
+      const resume=typeof settings?.workspaceId==='string'&&detached?.session?.workspaceId===settings.workspaceId;
+      if((resume||Object.keys(s.records).length)&&!publishExisting)throw new SyncError('Confirm sharing the existing Home tasks, notes, and changes first.');
+      let session=structuredClone(settings);
+      if(resume&&Array.isArray(detached.session.files)&&Array.isArray(settings.files))session.files=[...new Map([...detached.session.files,...settings.files].map(file=>[file.id,file])).values()];
+      const history=resume?detached:{actor:this.actor,log:[],baseline:{},conflicts:[],uploaded:[]};
+      await this.commit(s,s.records,{...history,session,connection:uuid()});
     }
   }
   async disconnect(){
     this.stop();this.token='';
     // A local edit or an already-started commit may race the disconnect CAS.
     for(let attempt=0;attempt<5;attempt++){
-      const s=await this.state();try{await this.commit(s,s.records,{});break}catch(error){if(error.status!==409||attempt===4)throw error}
+      const s=await this.state();try{await this.commit(s,s.records,detachedHistory(s.metadata));break}catch(error){if(error.status!==409||attempt===4)throw error}
     }
     this.status='Disconnected; local Home data was kept';this.changed(this);
   }

@@ -59,13 +59,13 @@ test('disconnect during pull prevents later push, state resurrection and Synced 
   const f=fixture();await configure(f);const pending=deferred(),entered=deferred();
   f.transport.pull=async()=>{entered.resolve();return pending.promise};const run=f.service.sync();await entered.promise;
   await f.service.disconnect();pending.resolve([]);await run;
-  assert.deepEqual(f.store.read().metadata,{});assert.equal(f.remote.length,0);assert.equal(f.service.token,'');assert.match(f.service.status,/Disconnected/);
+  assert.ok(f.store.read().metadata.detached);assert.equal(f.store.read().metadata.session,undefined);assert.equal(f.remote.length,0);assert.equal(f.service.token,'');assert.match(f.service.status,/Disconnected/);
 });
 test('disconnect during upload cannot resurrect local sync metadata',async()=>{
   const f=fixture();await configure(f);const pending=deferred(),entered=deferred();
   f.transport.push=async()=>{entered.resolve();return pending.promise};const run=f.service.sync();await entered.promise;
   await f.service.disconnect();pending.resolve(['already_in_flight']);await run;
-  assert.deepEqual(f.store.read().metadata,{});assert.match(f.service.status,/Disconnected/);
+  assert.ok(f.store.read().metadata.detached);assert.equal(f.store.read().metadata.session,undefined);assert.match(f.service.status,/Disconnected/);
 });
 test('resolving remote conflict preserves unrelated unsynced local edits',async()=>{
   const f=fixture();await configure(f);await f.service.sync();const root=f.remote[0];
@@ -86,10 +86,35 @@ test('a second controller disconnect during upload does not restore shared setti
   const f=fixture();await configure(f);const pending=deferred(),entered=deferred();
   f.transport.push=async()=>{entered.resolve();return pending.promise};const run=f.service.sync();await entered.promise;
   const other=new HomeSync({local:f.store.local,transport:f.transport,actor:'device_other1',locks:null});await other.disconnect();pending.resolve(['sent_before_disconnect']);await run;
-  assert.deepEqual(f.store.read().metadata,{});
+  assert.ok(f.store.read().metadata.detached);assert.equal(f.store.read().metadata.session,undefined);
 });
 test('stop exposes inactive state to transport and prevents further commits',async()=>{
   const f=fixture();await configure(f);const pending=deferred(),entered=deferred();let control;
   f.transport.pull=async(token,settings,options)=>{control=options;entered.resolve();return pending.promise};const run=f.service.sync();await entered.promise;
   assert.equal(control.isActive(),true);f.service.stop();assert.equal(control.isActive(),false);const before=f.store.read();pending.resolve([]);await run;assert.deepEqual(f.store.read(),before);
+});
+test('deletion while disconnected resumes as a tombstone instead of resurrection',async()=>{
+  const f=fixture();await configure(f);await f.service.sync();const firstConnection=f.store.read().metadata.connection;
+  await f.service.disconnect();assert.equal(f.store.read().metadata.session,undefined);assert.equal(f.store.read().metadata.detached.log.length,1);
+  f.store.edit(rows=>delete rows['task:task1']);await assert.rejects(f.service.configure(session),/Confirm/);
+  await configure(f);assert.notEqual(f.store.read().metadata.connection,firstConnection);assert.equal(f.store.read().metadata.detached,undefined);
+  f.service.token='reconnected';await f.service.sync();assert.deepEqual(f.store.read().records,{});assert.equal(f.remote.length,2);assert.ok(f.remote.some(op=>op.changes.some(change=>change.key==='task:task1'&&change.field==='$exists'&&change.value===false)));
+});
+test('a different shared workspace starts a new journal without old operations',async()=>{
+  const f=fixture();await configure(f);await f.service.sync();const priorIds=f.store.read().metadata.log.map(op=>op.id);
+  await f.service.disconnect();f.store.edit(rows=>rows['task:task1'].title='Only current visible content');
+  const other={...session,workspaceId:'different_space',folderId:'different_folder'};
+  await f.service.configure(other,{publishExisting:true});assert.deepEqual(f.store.read().metadata.log,[]);assert.deepEqual(f.store.read().metadata.baseline,{});assert.equal(f.store.read().metadata.detached,undefined);
+  f.remote.splice(0);f.service.token='newtoken';await f.service.sync();assert.equal(f.remote.length,1);assert.ok(f.remote.every(op=>!priorIds.includes(op.id)));assert.equal(f.store.read().records['task:task1'].title,'Only current visible content');
+});
+test('disconnect stays idempotent and excludes tokens and nested metadata',async()=>{
+  const f=fixture();await configure(f);await f.service.sync();let state=await f.store.local('GET');
+  await f.store.local('POST',{expected:state.records,records:state.records,expected_revision:state.revision,metadata:{...state.metadata,token:'secret',session:{...session,access_token:'secret'},detached:{detached:{bad:true}}}});
+  await f.service.disconnect();const once=f.store.read().metadata;await f.service.disconnect();assert.deepEqual(f.store.read().metadata,once);assert.equal(JSON.stringify(once).includes('secret'),false);assert.equal(once.detached.detached,undefined);assert.equal(once.connection,undefined);
+});
+test('same-workspace reconnection keeps previously selected peer files',async()=>{
+  const f=fixture();const old={...session,mode:'selected-journals',files:[{id:'own_file_123',name:'Mine'},{id:'peer_file_123',name:'Spouse'}]};
+  await f.service.configure(old,{publishExisting:true});await f.service.disconnect();
+  await f.service.configure({...old,files:[{id:'own_file_123',name:'Mine again'}]},{publishExisting:true});
+  assert.deepEqual(f.store.read().metadata.session.files,[{id:'own_file_123',name:'Mine again'},{id:'peer_file_123',name:'Spouse'}]);
 });

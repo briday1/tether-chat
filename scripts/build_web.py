@@ -103,7 +103,7 @@ def build(output, base='/'):
                 target=output/source.name;target.write_text(target.read_text().replace('../tend/drive-sync-core.mjs','./drive-sync-core.mjs'))
     # Keep recovery independent of cached scripts, styles and app configuration.
     (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
-    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'workspace.js', 'display.js', 'display.css','drive-sync-core.mjs','drive-sync-service.mjs','drive-journals.mjs','drive-sharing.mjs'):
+    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'workspace.js', 'display.js', 'display.css','drive-sync-core.mjs','drive-sync-service.mjs','drive-journals.mjs','drive-setup.mjs','drive-sharing.mjs'):
         text = paths((ROOT / 'tend' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))

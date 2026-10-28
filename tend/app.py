@@ -431,6 +431,7 @@ def drive_sharing_page():return desktop_screen('drive-sharing.html')
 @app.get('/drive-sync-core.mjs')
 @app.get('/drive-sync-service.mjs')
 @app.get('/drive-journals.mjs')
+@app.get('/drive-setup.mjs')
 @app.get('/drive-sharing.mjs')
 async def drive_sync_asset(request:__import__('fastapi').Request):
     return FileResponse(Path(__file__).with_name(request.url.path.rsplit('/',1)[-1]),media_type='text/javascript')

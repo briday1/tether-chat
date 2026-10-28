@@ -14,3 +14,7 @@ def test_drive_local_routes_require_home_and_same_origin(tmp_path,monkeypatch):
         assert client.post('/api/drive-sync/local',headers={**headers,'Origin':'http://localhost'},json=body).status_code==200
         assert client.get('/drive-sharing?workspace=home').status_code==200
         assert client.get('/drive-sync-core.mjs').status_code==200
+        assert client.get('/drive-setup.mjs').status_code==200
+        config=client.get('/drive-config.json').json()
+        assert set(config)=={'clientId','projectNumber','pickerKey'}
+        assert all(isinstance(value,str) for value in config.values())

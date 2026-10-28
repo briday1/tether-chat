@@ -73,3 +73,8 @@ test('derived updated_at compares absolute instants rather than timezone strings
   const a=structuredClone(initial);a['task:task1'].title='Bread';const x=makeChanges([start],initial,a,actor,'operation_0401','2026-10-28T01:00:00-04:00');
   assert.equal(materialize([start,x]).records['task:task1'].updated_at,'2026-10-28T01:00:00-04:00');
 });
+
+test('plain records from the same-origin parent frame are accepted',async()=>{
+ const vm=await import('node:vm');const foreign=vm.runInNewContext('JSON.parse('+JSON.stringify(JSON.stringify(initial))+')');
+ const op=makeChanges([],{},foreign,actor,'operation_foreign',when);assert.equal(materialize([op]).records['task:task1'].title,'Milk');
+});

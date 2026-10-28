@@ -86,3 +86,52 @@ test('probe refuses existing or nonempty journals and inaccessible ETag',async()
 test('old binding without explicit successful capability verification cannot push',async()=>{
   const f=fixture();delete f.transport.binding.conditionalVerified;await assert.rejects(f.transport.push('secret',session,[start],device,[]),/not verified/);assert.equal(f.requests.length,0);
 });
+function slotServer({writer='unclaimed',operations=[],ignoreConditions=false}={}){
+  let stored=envelope(writer,operations),version=1;const requests=[];
+  const fetcher=async(url,options)=>{
+    requests.push({url,options});const etag='"revision'+version+'"';
+    if(options.method==='PATCH'){
+      if(!ignoreConditions&&options.headers['If-Match']!==etag)return response({},412,etag);
+      stored=JSON.parse(options.body);version++;return response({id:file},200,'"revision'+version+'"');
+    }
+    return response(stored,200,etag);
+  };
+  return {fetcher,requests,read:()=>structuredClone(stored)};
+}
+test('partner slot is conditionally claimed only after empty-file safety probe',async()=>{
+  const server=slotServer(),transport=new DriveJournals(server.fetcher);
+  const binding=await transport.claimSlot('secret',file,workspace,device);
+  assert.deepEqual(binding,{fileId:file,deviceId:device,conditionalVerified:true});assert.equal(server.read().writer,device);assert.deepEqual(server.read().operations,[]);assert.equal(transport.binding,null);
+  const patches=server.requests.filter(request=>request.options.method==='PATCH');assert.equal(patches.length,2);assert.match(patches[0].options.headers['If-Match'],/precondition-probe/);assert.equal(patches[1].options.headers['If-Match'],'"revision1"');
+});
+test('two simultaneous claimants cannot both own one partner slot',async()=>{
+  const server=slotServer(),a=new DriveJournals(server.fetcher),b=new DriveJournals(server.fetcher);
+  const results=await Promise.allSettled([a.claimSlot('token-a',file,workspace,'device_first'),b.claimSlot('token-b',file,workspace,'device_second')]);
+  assert.equal(results.filter(result=>result.status==='fulfilled').length,1);assert.equal(results.filter(result=>result.status==='rejected').length,1);assert.ok(['device_first','device_second'].includes(server.read().writer));
+});
+test('claim rejects populated and assigned journals without any writes',async()=>{
+  for(const options of [{writer:'device_peer1'}, {operations:[start]}]){
+    const server=slotServer(options),transport=new DriveJournals(server.fetcher);await assert.rejects(transport.claimSlot('secret',file,workspace,device),/already assigned|contains tasks/);assert.equal(server.requests.length,1);
+  }
+});
+test('claim fails closed when backend ignores conditional writes',async()=>{
+  const server=slotServer({ignoreConditions:true}),transport=new DriveJournals(server.fetcher);
+  await assert.rejects(transport.claimSlot('secret',file,workspace,device),/did not enforce/);assert.equal(server.read().writer,'unclaimed');assert.deepEqual(server.read().operations,[]);assert.equal(transport.binding,null);
+});
+test('claim rechecks assignment after capability probe before writing',async()=>{
+  let reads=0;const requests=[];const transport=new DriveJournals(async(url,options)=>{
+    requests.push(options);if(options.method==='PATCH')return response({},412);reads++;return response(envelope(reads===1?'unclaimed':'device_other'));
+  });
+  await assert.rejects(transport.claimSlot('secret',file,workspace,device),/Another device/);assert.equal(requests.filter(options=>options.method==='PATCH').length,1);
+});
+test('human-readable creation name and participant status contain no account identity',async()=>{
+  const f=fixture();let chosen;f.transport.create=async(token,folder,name)=>{chosen=name;return {id:'new_journal_123',name}};
+  await f.transport.createPartnerSlot('secret','folder_12345',workspace,{name:'Home - Partner.json'});assert.equal(chosen,'Home - Partner.json');
+  f.remote.set(peerFile,envelope('unclaimed'));await f.transport.pull('secret',session);assert.deepEqual(f.transport.lastParticipants,[{fileId:file,writer:device},{fileId:peerFile,writer:'unclaimed'}]);
+  await assert.rejects(f.transport.createPartnerSlot('secret','folder_12345',workspace,{name:'bad\nname'}),/filename/);
+});
+test('setup recovery verifies only exact-device empty journals without adopting data',async()=>{
+  const server=slotServer({writer:device}),transport=new DriveJournals(server.fetcher);
+  const binding=await transport.resumeClaim('secret',file,workspace,device);assert.equal(binding.conditionalVerified,true);assert.equal(transport.binding,null);
+  for(const options of [{writer:'device_other'},{writer:device,operations:[start]}]){const bad=slotServer(options);await assert.rejects(new DriveJournals(bad.fetcher).resumeClaim('secret',file,workspace,device),/empty journal/);assert.equal(bad.requests.length,1)}
+});

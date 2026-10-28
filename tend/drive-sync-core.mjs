@@ -9,7 +9,7 @@ export const stable=v=>JSON.stringify(canonical(v));
 function canonical(v){return Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v}
 export class SyncError extends Error {constructor(message,status=422){super(message);this.status=status}}
 const own=(object,key)=>Object.hasOwn(object,key);
-const plain=value=>!!value&&typeof value==='object'&&!Array.isArray(value)&&[Object.prototype,null].includes(Object.getPrototypeOf(value));
+const plain=value=>!!value&&typeof value==='object'&&!Array.isArray(value)&&(Object.getPrototypeOf(value)===null||Object.getPrototypeOf(Object.getPrototypeOf(value))===null);
 const idPattern=/^[A-Za-z0-9_-]{1,128}$/;
 const historyId=/^[A-Za-z0-9_-]{8,100}$/;
 const nullableDates=new Set(['due_at','revisit_at','next_occurrence','archived_at']);
