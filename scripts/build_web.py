@@ -59,12 +59,6 @@ def screen(name, base):
         start = page.index('async function loadSettings(){')
         end = page.index('function navigateBoardHash(){', start) if name == 'board.html' else page.index('</script>', start)
         page = page[:start] + 'const loadSettings=window.tetherLoadSettings,loadStorage=window.tetherLoadStorage;\n' + page[end:]
-    elif name == 'snapshot.html':
-        page, changed = re.subn(r'function download\(format\)\{.*?\n\}',
-                               'function download(format){window.tetherExportCalendar(last,format)}', page, flags=re.S)
-        if changed != 1:
-            raise ValueError('Desktop calendar download changed; update its browser adapter')
-        page = page.replace('</html>', '<script type="module" src="./calendar-export.mjs"></script></html>')
     page = paths(page, base)
     page = re.sub(r'<title>.*?</title>', '<title>tether-home · tether</title>', page, count=1)
     # Product labels change, but legacy browser storage keys stay stable.

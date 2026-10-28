@@ -21,12 +21,16 @@ def test_display_uses_shared_calendar_and_workspace():
 
 def test_calendar_has_fixed_cells_and_accessible_detail_paths():
     page=(ROOT/'tether/snapshot.html').read_text()
-    assert '.day{height:136px' in page
-    assert '.day-items{min-height:0;overflow:auto' in page
-    assert "button.addEventListener('focus'" in page
-    assert 'dialog.showModal()' in page
-    assert "event.source===parent && event.origin===location.origin" in page
-    assert "if(signature===lastSignature)return" in page
+    assert 'height:108px;overflow:hidden' in page
+    assert '.day-items{min-height:0;overflow:hidden' in page
+    assert "dateButton.onclick=dateButton.onfocus" in page
+    assert 'dialog.showModal()' not in page
+    assert 'id="date-panel"' in page and '15000' in page
+    assert "records.slice(0,3)" in page
+    assert "$('#date-panel-items').addEventListener('scroll'" in page
+    assert 'id="png"' not in page and 'id="svg"' not in page
+    assert "event.source===parent&&event.origin===location.origin" in page.replace(" ", "")
+    assert "if(signature===lastSignature){renderPanel();return}" in page
 
 
 def test_browser_build_has_display_assets(tmp_path):
@@ -49,9 +53,10 @@ def test_display_dashboard_fits_without_changing_chat_snapshots():
     page=(ROOT/'tether/snapshot.html').read_text()
     assert '100dvh' in css and 'minmax(0,1fr)' in css
     assert "layout:'display'" in script
-    assert "(dashboard||weekends)?7:5" in page
+    assert "(compact||weekends)?7:5" in page
     assert 'grid-template-rows:repeat(var(--rows,1),minmax(0,1fr))' in page
-    assert "more.onclick=()=>showDate(iso,d)" in page
+    assert "more.onclick=more.onfocus=()=>selectDate(iso)" in page
+    assert "id=\"view-week\"" not in (ROOT/'tether/display.html').read_text()
     assert "frame.style.height=" not in script
     assert 'Reconnect Google in Settings' in script
     assert 'Household updates delayed' in script

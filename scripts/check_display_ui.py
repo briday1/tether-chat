@@ -1,102 +1,146 @@
-"""Persistent Display and fixed calendar regressions with synthetic browser data."""
+"""Shared Display date panel: tablet, touch, inactivity and real chat snapshots."""
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from datetime import datetime, timezone
 import importlib.util
 import os
 import tempfile
 import threading
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
     from playwright.sync_api import sync_playwright, expect
-    spec=importlib.util.spec_from_file_location('build_web',ROOT/'scripts/build_web.py')
-    builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
+    spec = importlib.util.spec_from_file_location('build_web', ROOT / 'scripts/build_web.py')
+    builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
     with tempfile.TemporaryDirectory(prefix='tether-display-') as temp:
-        builder.build(Path(temp)/'tether-chat','/tether-chat/')
-        server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=temp))
-        threading.Thread(target=server.serve_forever,daemon=True).start()
+        builder.build(Path(temp) / 'tether-chat', '/tether-chat/')
+        server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=temp))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f'http://127.0.0.1:{server.server_port}/tether-chat/'
         try:
             with sync_playwright() as pw:
-                browser=pw.chromium.launch(executable_path=os.environ.get('TETHER_TEST_CHROMIUM'),args=['--no-sandbox'])
-                page=browser.new_page(viewport={'width':1280,'height':900})
-                page.add_init_script("const originalInterval=window.setInterval;window.setInterval=(fn,ms,...args)=>originalInterval(fn,ms===60000?250:ms,...args)")
-                errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
-                page.goto(f'http://127.0.0.1:{server.server_port}/tether-chat/?view=display')
+                browser = pw.chromium.launch(executable_path=os.environ.get('TETHER_TEST_CHROMIUM'), args=['--no-sandbox'])
+                page = browser.new_page(viewport={'width': 1280, 'height': 900}, has_touch=True, reduced_motion='reduce')
+                page.clock.install(time=datetime(2026, 10, 28, 12, tzinfo=timezone.utc))
+                errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
+                page.goto(base + '?view=display')
                 page.wait_for_function('!!window.tetherFetch')
-                page.evaluate('''async()=>{const runtime=await window.tetherReady;
-                  const date=new Date(),today=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');
+                dates = page.evaluate('''async()=>{const runtime=await window.tetherReady;
+                  const format=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+                  const date=new Date(),today=format(date);date.setDate(date.getDate()+1);const other=format(date);
                   for(let n=0;n<9;n++){
-                    const response=await runtime.fetch('/tether-chat/api/threads',{method:'POST',body:JSON.stringify({title:'Calendar item '+n,categories:['Personal']})});const task=await response.json();
+                    const r=await runtime.fetch('/tether-chat/api/threads',{method:'POST',body:JSON.stringify({title:'Calendar item '+n,categories:['Personal']})});const task=await r.json();
                     await runtime.fetch('/tether-chat/api/threads/'+task.id,{method:'PATCH',body:JSON.stringify({due_at:today})});
-                  }}''')
-                screen=page.frame_locator('#app-frame')
-                screen.get_by_role('button',name='View settings and navigation').click()
-                screen.get_by_role('button',name='Today',exact=True).click()
-                screen.locator('#display-close').click()
-                expect(screen.locator('#display-quick')).to_contain_text('9 scheduled items')
-                calendar=screen.frame_locator('#display-calendar')
-                expect(calendar.locator('.task')).to_have_count(9)
-                heights=calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>n.getBoundingClientRect().height)')
-                assert max(heights)-min(heights)<=1,heights
-                calendar.locator('.task').first.hover()
-                expect(calendar.locator('#calendar-preview')).to_be_visible()
-                expect(calendar.locator('.today .day-more')).to_have_text('9 items')
-                calendar.locator('.today .day-date').click()
-                expect(calendar.locator('#day-dialog')).to_be_visible()
-                expect(calendar.locator('#day-dialog .task')).to_have_count(9)
-                calendar.get_by_role('button',name='Close date details').click()
+                  }
+                  for(let n=0;n<7;n++){const r=await runtime.fetch('/tether-chat/api/threads',{method:'POST',body:JSON.stringify({title:'Other date '+n+' '+('Long task text '.repeat(8))})});const task=await r.json();await runtime.fetch('/tether-chat/api/threads/'+task.id,{method:'PATCH',body:JSON.stringify({due_at:other})})}
+                  for(let n=0;n<8;n++){const r=await runtime.fetch('/tether-chat/api/threads',{method:'POST',body:JSON.stringify({title:'Six row busy date '+n})});const task=await r.json();await runtime.fetch('/tether-chat/api/threads/'+task.id,{method:'PATCH',body:JSON.stringify({due_at:'2027-05-16'})})}
+                  return {today,other};}''')
+                screen = page.frame_locator('#app-frame')
                 screen.locator('#display-menu').click()
-                screen.get_by_role('button',name='Month',exact=True).click()
-                expect(screen.locator('#view-month')).to_have_attribute('aria-pressed','true')
-                page.reload()
-                screen=page.frame_locator('#app-frame')
-                expect(screen.locator('#view-month')).to_have_attribute('aria-pressed','true')
-                # A six-row month fits in landscape tablets, including an expanded date drawer.
+                screen.get_by_role('button', name='Today', exact=True).click()
+                screen.locator('#display-close').click()
+                calendar = screen.frame_locator('#display-calendar')
+                expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                expect(calendar.locator('#date-panel-items .task')).to_have_count(9)
+                expect(calendar.locator('.today .task-marker')).to_have_count(3)
+                expect(calendar.locator('.today .day-more')).to_have_text('+6 more')
+                expect(screen.locator('#view-week, #view-month')).to_have_count(0)
+                expect(calendar.locator('.downloads, #png, #svg')).to_have_count(0)
+                heights = calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>n.getBoundingClientRect().height)')
+                assert max(heights) - min(heights) <= 1, heights
+                # Hovering a busy date updates only the fixed sidebar; all seven items are available.
+                other = calendar.locator('[data-date="'+dates['other']+'"] .day-date')
+                if other.count():
+                    before = calendar.locator('#grid').bounding_box()
+                    other.hover()
+                    expect(calendar.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
+                    expect(calendar.locator('#date-panel-items .task')).to_have_count(7)
+                    expect(calendar.locator('[data-date="'+dates['other']+'"] .day-more')).to_have_text('+4 more')
+                    assert calendar.locator('#grid').bounding_box() == before
+                    expect(calendar.locator('#calendar-preview:visible, #day-dialog:visible, #details:visible')).to_have_count(0)
+                    page.clock.fast_forward(10000)
+                    calendar.locator('#date-panel-items').dispatch_event('scroll')
+                    page.clock.fast_forward(10000)
+                    expect(calendar.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
+                    page.clock.fast_forward(6000)
+                    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                    expect(calendar.locator('#date-panel-items .task')).to_have_count(9)
+                    # Keyboard selection and sidebar interaction preserve an active reading session.
+                    other.focus()
+                    expect(calendar.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
+                    calendar.locator('#date-panel').dispatch_event('keydown', {'key': 'ArrowDown'})
+                    page.clock.fast_forward(16000)
+                    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                # Six-row historical month stays fixed, while Today is fetched outside its range.
                 screen.locator('#display-menu').click()
                 screen.locator('#display-date').fill('2027-05-15')
                 screen.locator('#display-date').dispatch_event('change')
                 screen.locator('#display-close').click()
-                calendar=screen.frame_locator('#display-calendar')
+                calendar = screen.frame_locator('#display-calendar')
                 expect(calendar.locator('.day')).to_have_count(42)
-                for size in [{'width':1024,'height':768},{'width':1180,'height':820},{'width':768,'height':1024}]:
+                expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                expect(calendar.locator('#date-panel-items .task')).to_have_count(9)
+                for size in [{'width':1024,'height':600},{'width':1024,'height':768},{'width':1180,'height':820},{'width':768,'height':1024}]:
                     page.set_viewport_size(size)
                     assert screen.locator('body').evaluate('(node)=>node.scrollHeight<=innerHeight+1 && node.scrollWidth<=innerWidth'), size
                     assert calendar.locator('#grid').evaluate('(node)=>node.getBoundingClientRect().bottom<=innerHeight+1'), size
-                    heights=calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>Math.round(n.getBoundingClientRect().height))')
-                    assert max(heights)-min(heights)<=1,heights
+                    heights = calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>Math.round(n.getBoundingClientRect().height))')
+                    assert max(heights)-min(heights)<=1, heights
+                    busy=calendar.locator('.day[data-date="2027-05-16"]')
+                    expect(busy.locator('.task-marker')).to_have_count(3)
+                    expect(busy.locator('.day-more')).to_have_text('+5 more')
+                    assert busy.evaluate('(day)=>{const box=day.getBoundingClientRect(),items=day.querySelector(".day-items").getBoundingClientRect();return [...day.querySelectorAll(".task-marker")].every(node=>node.getBoundingClientRect().bottom<=items.bottom+1)&&day.querySelector(".day-more").getBoundingClientRect().bottom<=box.bottom+1}'), size
+                calendar.locator('[data-date="2027-05-15"] .day-date').click()
+                expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2027-05-15')
+                expect(calendar.locator('#date-panel-items')).to_contain_text('No scheduled items')
+                page.clock.fast_forward(16000)
+                expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                # Existing stored week preference cannot put Display back in week mode.
+                page.reload()
+                screen = page.frame_locator('#app-frame')
+                calendar = screen.frame_locator('#display-calendar')
+                expect(calendar.locator('.day')).to_have_count(42)
+                expect(screen.locator('#view-week')).to_have_count(0)
+                # Chat week/month embeds use the same date panel, with expanded week cards.
                 screen.locator('#display-menu').click()
-                screen.get_by_role('button',name='Today',exact=True).click()
-                screen.locator('#display-close').click()
-                # New local/synced data appears on the automatic refresh without interaction.
-                page.evaluate('''async()=>{const runtime=await window.tetherReady;const date=new Date();const today=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');const r=await runtime.fetch('/tether-chat/api/threads',{method:'POST',body:JSON.stringify({title:'Automatic refresh item'})});const t=await r.json();await runtime.fetch('/tether-chat/api/threads/'+t.id,{method:'PATCH',body:JSON.stringify({due_at:today})})}''')
-                expect(screen.locator('#display-quick')).to_contain_text('10 scheduled items')
+                screen.get_by_role('link', name='Conversation', exact=True).click()
+                expect(screen.get_by_label('Message tether')).to_be_visible()
+                def snapshot(command):
+                    screen.get_by_label('Message tether').fill(command)
+                    screen.get_by_role('button', name='Send', exact=True).click()
+                    return screen.frame_locator('.snapshot-frame').last
+                # Explicit dates avoid assumptions about model calls or current week preferences.
+                first=dates['today'][:8]+'01'
+                last=page.evaluate('(s)=>{const d=new Date(s+"T12:00:00");d.setMonth(d.getMonth()+1,0);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-")}', first)
+                month=snapshot('/snapshot '+first+' to '+last)
+                expect(month.locator('.today .task-marker')).to_have_count(3)
+                expect(month.locator('.today .day-more')).to_have_text('+6 more')
+                expect(month.locator('#date-panel-items .task')).to_have_count(9)
+                expect(month.locator('#png, #svg')).to_have_count(0)
                 page.set_viewport_size({'width':390,'height':844})
-                calendar=screen.frame_locator('#display-calendar')
-                expect(calendar.locator('.task')).to_have_count(10)
-                assert screen.locator('body').evaluate('(node)=>node.scrollWidth<=innerWidth'), 'Display overflows mobile width'
-                calendar.locator('.today .day-date').click()
-                expect(calendar.locator('#day-dialog')).to_be_visible()
-                calendar.locator('#day-dialog .task').first.click()
-                expect(screen.get_by_role('button',name='Edit task',exact=True)).to_be_visible()
-                expect(screen.get_by_role('button',name='Use as chat context',exact=True)).to_be_visible()
-                # Browser is Home-only, including old Work routes and history.
-                expect(screen.get_by_role('combobox',name='Work or Home')).to_have_count(0)
-                screen.get_by_role('link',name='Display',exact=True).click()
-                expect(screen.locator('#display-quick')).to_contain_text('10 scheduled items')
-                page.go_back()
-                expect(screen.get_by_role('button',name='Edit task',exact=True)).to_be_visible()
-                page.go_forward()
-                expect(screen.locator('#display-quick')).to_contain_text('10 scheduled items')
-                page.goto(f'http://127.0.0.1:{server.server_port}/tether-chat/?view=display&workspace=work')
-                expect(page.frame_locator('#app-frame').locator('#display-quick')).to_contain_text('10 scheduled items')
-                assert 'workspace=home' in page.url
+                month.locator('.today .day-date').tap()
+                expect(month.locator('#date-panel-title')).to_have_text('Today')
+                assert month.locator('body').evaluate('()=>document.documentElement.scrollWidth<=innerWidth'), 'Chat month horizontal overflow'
+                week=snapshot('/snapshot '+dates['today']+' to '+dates['other'])
+                expect(week.locator('.today .day-items .task')).to_have_count(9)
+                expect(week.locator('.today .task-marker')).to_have_count(0)
+                week.locator('[data-date="'+dates['other']+'"] .day-date').click()
+                expect(week.locator('#date-panel-items .task')).to_have_count(7)
+                expect(week.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
+                # Midnight changes the default Today panel without requiring a reload.
+                page.clock.set_system_time(datetime(2026, 10, 29, 0, 1, tzinfo=timezone.utc))
+                page.clock.fast_forward(61000)
+                expect(week.locator('#date-panel-title')).to_have_text('Today')
+                expect(week.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
+                expect(week.locator('#date-panel-items .task')).to_have_count(7)
                 assert not errors, errors
                 browser.close()
-                print('Display UI checks passed: fixed cells, overflow, previews, date dialog, persistent month, mobile, task navigation.')
-        finally:server.shutdown()
+                print('Month Display and chat snapshots passed: fixed markers, all sidebar items, 15s return, navigation, tablet/phone, no exports/popups.')
+        finally:
+            server.shutdown(); server.server_close()
 
 
-if __name__=='__main__':main()
+if __name__ == '__main__': main()
