@@ -30,6 +30,7 @@ function appendSnapshot(target,html){
  const url=new URL(anchor.getAttribute('href'),location.origin);
  if(url.origin!==location.origin||!/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('start')||'')||!/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('end')||''))return;
  url.searchParams.set('embed','1');
+ if(window.TETHER_CONFIG)url.searchParams.set('release',window.TETHER_CONFIG.version);
  const frame=el('iframe','snapshot-frame');frame.addEventListener('load',()=>syncSnapshotTheme(frame));frame.src=url.pathname+url.search;frame.title='Interactive tether calendar snapshot';frame.loading='lazy';
  target.replaceChildren(frame);target.classList.add('snapshot-answer');
 }

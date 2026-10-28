@@ -10,9 +10,9 @@ On iPhone, open the app in Safari and use **Share → Add to Home Screen**. Othe
 
 ## App updates
 
-The browser edition loads current app files when online and uses the installed bundle offline. It checks for new releases when opened or resumed and refreshes automatically once active chats, microphone input, and open editors are finished. Tasks, notes, conversations, drafts, and saved credentials stay on this device. No update button is needed.
+The browser edition checks for a new release only when launched or reloaded. Each open session keeps its current bundle: focus, resuming, reconnecting, and continued use do not refresh it. Opening a newer release in another window does not replace the first window’s scripts, fields, or draft. Tasks, notes, conversations, drafts, and saved credentials stay on this device, and the installed bundle works offline. No update button is needed.
 
-If an older release stays cached, open [Update tether](https://briday1.github.io/tether-chat/update.html) in the same browser where you use tether. This independent update page works while other tether tabs remain open. It waits for an active chat to finish, downloads the latest interface, verifies the installed version, notifies other open tabs to refresh when safe, and opens the updated app. If installed files still report an older version, it shows that version and offers Try again instead of reporting success. Keep using the same browser and origin to retain your existing local data.
+If an older release stays cached, open [Update tether](https://briday1.github.io/tether-chat/update.html) in the same browser where you use tether. This independent update page works while other tether tabs remain open. It waits for an active chat to finish, downloads the latest interface, verifies the installed version, preserves other open tabs on their existing release, and opens the updated app. If installed files still report an older version, it shows that version and offers Try again instead of reporting success. Keep using the same browser and origin to retain your existing local data.
 
 ## AI connection
 
@@ -84,7 +84,7 @@ The existing `publish-pypi.yml` continues producing the desktop wheel and source
 
 For initial repository setup, GitHub Pages must use **GitHub Actions** as its publishing source. The workflow attempts to enable Pages automatically. If the repository token lacks permission to enable Pages, set **Settings → Pages → Source → GitHub Actions**, then rerun **Browser app and GitHub Pages**. No API keys belong in the workflow or static output.
 
-Service-worker caches contain only bundled public application assets. Provider requests, API keys, and task data are never cached as HTTP responses. New releases activate automatically; each open tab waits for a safe time to refresh. The independent recovery page above remains available for older cached installations.
+Service-worker caches contain public app bundles and local release-routing metadata. Provider requests, API keys, and task data are never cached as HTTP responses. New releases are adopted at launch; existing tabs remain pinned to their launch bundle. The independent recovery page above remains available for older cached installations.
 
 ## Build and check
 

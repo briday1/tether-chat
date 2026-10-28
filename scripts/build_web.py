@@ -91,7 +91,9 @@ def build(output, base='/'):
     tools, system = shared_ai()
     config = {'version': version, 'base': base, 'tools': tools, 'system': system,
               'tool_models':json.loads((ROOT/'tend/tool-models.json').read_text(encoding='utf-8'))}
-    (output / 'app-config.js').write_text('window.TETHER_CONFIG=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
+    # The spaced assignment also makes legacy in-session pollers ignore this
+    # release; only a new launch should switch an already-open older app.
+    (output / 'app-config.js').write_text('window.TETHER_CONFIG = ' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
     for source in (ROOT / 'web').iterdir():
         if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
             shutil.copy2(source, output / source.name)

@@ -1,12 +1,23 @@
-/* Only the app's public static assets are cached. Provider calls and data are excluded. */
+/* Public bundles only; each open app keeps its launch release until it closes. */
 const CACHE=__CACHE__,PREFIX=__PREFIX__,ASSETS=__ASSETS__,BASE=__BASE__,VERSION=__VERSION__;
+const PINS=BASE+'__release_pins__';
+const valid=value=>typeof value==='string'&&/^\d{4}\.\d+$/.test(value);
+let pinState=null,pinWrites=Promise.resolve();
+async function pins(){
+  if(!pinState)pinState=(async()=>{try{return await (await (await caches.open(CACHE)).match(PINS)).json()}catch(_){return {}}})();
+  return pinState;
+}
+async function pinClient(id,version){
+  if(!id||!valid(version))return;
+  const state=await pins();if(state[id]===version)return;state[id]=version;
+  pinWrites=pinWrites.then(async()=>{await (await caches.open(CACHE)).put(PINS,Response.json(state))});await pinWrites;
+}
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
   await cache.addAll(ASSETS.map(url=>new Request(url,{cache:'reload'})));
+  // Activate cache routing silently; pinned app documents keep their old bundle.
   await self.skipWaiting();
 })()));
-// New assets activate automatically. Open app documents choose a safe time to refresh.
-// A fresh, uncached update page also recovers older releases with no update control.
 self.addEventListener('message',event=>{
   if(!['TETHER_ACTIVATE_UPDATE','TETHER_FINISH_UPDATE'].includes(event.data?.type) || !event.source?.url)return;
   const source=new URL(event.source.url);
@@ -15,33 +26,45 @@ self.addEventListener('message',event=>{
   event.waitUntil((async()=>{
     const reply=event.ports?.[0];if(!reply)return;
     if(event.data.version!==VERSION){reply.postMessage({error:'The installed app version could not be verified. Try updating again.'});return}
-    // The update page holds the chat queue lock and has checked saved requests.
-    // Notify other tabs; each protects its own requests and unsaved editors.
-    await self.clients.claim();let refreshed=0,failed=0;
-    for(const client of await self.clients.matchAll({type:'window',includeUncontrolled:true})){
-      if(client.id===event.source.id || !['top-level','auxiliary'].includes(client.frameType))continue;
-      const url=new URL(client.url);
-      if(url.origin!==self.location.origin || !['','index.html','conversation.html','board.html','snapshots.html'].some(path=>url.pathname===BASE+path))continue;
-      client.postMessage({type:'TETHER_RELEASE_AVAILABLE',version:VERSION});refreshed++;
-    }
-    reply.postMessage({version:VERSION,refreshed,failed});
+    try{
+      const response=await fetch(BASE+'app-config.js',{cache:'no-store'}),text=await response.clone().text();
+      const match=text.match(/^\s*window\.TETHER_CONFIG\s*=\s*(\{[\s\S]*\})\s*;?\s*$/);
+      if(!response.ok||!match||JSON.parse(match[1]).version!==VERSION)throw Error();
+      // Repair a stale cached config without replacing another tab's bundle.
+      await (await caches.open(CACHE)).put(BASE+'app-config.js',response);
+      await self.clients.claim();reply.postMessage({version:VERSION,refreshed:0,failed:0});
+    }catch(_){reply.postMessage({error:'The available release changed or could not be verified. Try again.'})}
   })());
 });
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
-  for(const key of await caches.keys())if(key.startsWith(PREFIX)&&key!==CACHE)await caches.delete(key);
+  const keys=(await caches.keys()).filter(key=>key.startsWith(PREFIX)),inherited={};
+  for(const key of keys)try{Object.assign(inherited,await (await (await caches.open(key)).match(PINS)).json())}catch(_){}
+  const versions=keys.filter(key=>key!==CACHE).map(key=>key.slice(PREFIX.length).split(':')[0]).filter(valid)
+    .sort((a,b)=>{const x=a.split('.').map(Number),y=b.split('.').map(Number);return y[0]-x[0]||y[1]-x[1]});
+  const state={};
+  for(const client of await self.clients.matchAll({type:'window',includeUncontrolled:true})){
+    const url=new URL(client.url);if(url.origin!==self.location.origin||!url.pathname.startsWith(BASE)||url.pathname===BASE+'update.html')continue;
+    const release=url.searchParams.get('release');state[client.id]=valid(release)?release:inherited[client.id]||versions[0]||VERSION;
+  }
+  pinState=Promise.resolve(state);await (await caches.open(CACHE)).put(PINS,Response.json(state));
+  const keep=new Set([VERSION,...Object.values(state)]);
+  for(const key of keys)if(key!==CACHE&&!keep.has(key.slice(PREFIX.length).split(':')[0]))await caches.delete(key);
   await self.clients.claim();
-  for(const client of await self.clients.matchAll({type:'window'}))client.postMessage({type:'TETHER_RELEASE_AVAILABLE',version:VERSION});
 })()));
 self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin||!url.pathname.startsWith(BASE))return;
   const path=url.pathname===BASE?BASE+'index.html':url.pathname;
-  if(path===BASE+'update.html')return;
+  if(path===BASE+'update.html'||path===BASE+'app-config.js'&&(url.searchParams.has('launch')||url.searchParams.has('update')))return;
   if(!ASSETS.includes(path))return;
   event.respondWith((async()=>{
-    // Online requests get current files; the installed bundle is an offline fallback.
-    try{const response=await fetch(new Request(event.request,{cache:'no-store'}));if(response.ok)return response}catch(_){}
-    const cached=await (await caches.open(CACHE)).match(path);
-    return cached||Response.error();
+    const client=event.clientId?await self.clients.get(event.clientId):null;
+    const explicit=url.searchParams.get('release'),parent=client?new URL(client.url).searchParams.get('release'):null;
+    const release=event.request.mode==='navigate'&&path===BASE+'index.html'?VERSION:
+      valid(explicit)?explicit:(await pins())[event.clientId]||(valid(parent)?parent:VERSION);
+    if(event.request.mode==='navigate')await pinClient(event.resultingClientId,release);
+    const key=(await caches.keys()).find(key=>key.startsWith(PREFIX+release+':'))||CACHE;
+    const cached=await (await caches.open(key)).match(path);
+    return cached||fetch(event.request);
   })());
 });
 self.addEventListener('notificationclick',event=>{

@@ -53,8 +53,8 @@
     async function installedVersion(){
       const response=await fetch(new URL('app-config.js?update='+Date.now(),base),{cache:'no-store'});
       if(!response.ok)throw Error('Could not verify the installed version. Check your connection and try again.');
-      const source=await response.text(),prefix='window.TETHER_CONFIG=';
-      let actual;try{if(!source.startsWith(prefix))throw Error();actual=JSON.parse(source.slice(prefix.length).trim().replace(/;$/,'')).version}catch(_){throw Error('Could not verify the installed version. Try again.')}
+      const source=await response.text(),match=source.match(/^\s*window\.TETHER_CONFIG\s*=\s*(\{[\s\S]*\})\s*;?\s*$/);
+      let actual;try{if(!match)throw Error();actual=JSON.parse(match[1]).version}catch(_){throw Error('Could not verify the installed version. Try again.')}
       if(!atLeast(actual,expected))throw Error('This tab is still using '+actual+'. The available update is '+expected+'. Tap Try again to finish updating.');
       return actual;
     }
