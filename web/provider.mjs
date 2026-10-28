@@ -9,7 +9,7 @@ export function compatibleModels(items,base,catalog={}){
     if(/embed|whisper|tts|audio|realtime|transcrib|moderation|dall-e|image|video|sora/i.test(id))return false;
     const declared=Array.isArray(item.supported_parameters)?item.supported_parameters.some(p=>['tools','function_calling'].includes(p)):null;
     if(declared===false)return false;
-    return new URL(base).hostname==='api.openai.com'?Object.hasOwn(catalog.openai||{},baseModel(id)):flags.some(value=>value===true)||declared===true;
+    return new URL(base).hostname==='api.openai.com'?Object.hasOwn(catalog.openai||{},baseModel(id)):Object.hasOwn(catalog.openai||{},baseModel(id))||flags.some(value=>value===true)||declared===true;
   }).map(item=>item.id))].sort();
 }
 export function retryDelay(header,attempt=0,now=Date.now()) {

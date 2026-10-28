@@ -20,6 +20,7 @@ def main():
     from voice_ui_checks import MOCKS,check_dictation,check_recording
     from attention_ui_checks import check_attention_updates
     from note_ui_checks import check_note_replies
+    from provider_ui_checks import check_settings_appearance
     spec=importlib.util.spec_from_file_location('build_web',ROOT/'scripts/build_web.py')
     builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
     with tempfile.TemporaryDirectory(prefix='tether-web-ui-') as temp:
@@ -52,6 +53,8 @@ def main():
                 frame.get_by_label('Message tether').fill('Keep this draft while I connect.')
                 frame.get_by_role('button',name='Send',exact=True).click()
                 expect(frame.get_by_role('dialog',name='Settings',exact=True)).to_be_visible()
+                check_settings_appearance(frame)
+                expect(frame.locator('#connectionMode')).to_contain_text('Browser connection')
                 expect(frame.locator('#providerStatus')).to_contain_text('Your message is still in the draft')
                 expect(frame.get_by_label('Message tether')).to_have_value('Keep this draft while I connect.')
                 expect(frame.locator('.bubble.user')).to_have_count(0)

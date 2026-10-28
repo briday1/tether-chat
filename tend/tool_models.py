@@ -25,6 +25,6 @@ def compatible_models(items,base):
         parameters=item.get('supported_parameters')
         if isinstance(parameters,list) and not any(value in parameters for value in ('tools','function_calling')):continue
         if urlparse(base).hostname=='api.openai.com':supported=base_id(id) in catalog()['openai']
-        else:supported=any(value is True for value in flags) or isinstance(parameters,list) and any(value in parameters for value in ('tools','function_calling'))
+        else:supported=base_id(id) in catalog()['openai'] or any(value is True for value in flags) or isinstance(parameters,list) and any(value in parameters for value in ('tools','function_calling'))
         if supported:result.append(id)
     return sorted(set(result))
