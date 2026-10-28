@@ -8,6 +8,12 @@ Open <https://briday1.github.io/tether-chat/>. No Python, desktop process, or te
 
 On iPhone, open the app in Safari and use **Share → Add to Home Screen**. Other supported browsers offer **Install app** in their browser menu. The app caches its interface after the first online visit, so tasks, notes, activity, deterministic slash commands, and calendars remain available offline. AI chat requires internet.
 
+## App updates
+
+Use **Settings → Update app** to load the latest browser release. It checks for an active chat before switching versions and preserves local tasks, notes, conversations, drafts, and saved credentials. The app checks for new releases when you return to it and shows an available update in Settings.
+
+If an older release stays cached, open [Update tether](https://briday1.github.io/tether-chat/update.html) in the same browser where you use tether. This independent update page works while other tether tabs remain open. It waits for an active chat to finish, downloads the latest interface, and opens the updated app. Keep using the same browser and origin to retain your existing local data.
+
 ## AI connection
 
 Use an HTTPS OpenAI-compatible chat-completions endpoint with tool calling. The provider must permit the app's origin through CORS, including the Authorization and Content-Type headers. A provider that works with the desktop Python client may reject browser requests. Test the connection in Settings. The browser edition includes no proxy, and never sends your key to GitHub or a tether backend.

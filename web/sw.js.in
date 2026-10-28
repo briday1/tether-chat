@@ -1,7 +1,14 @@
 /* Only the app's public static assets are cached. Provider calls and data are excluded. */
 const CACHE=__CACHE__,PREFIX=__PREFIX__,ASSETS=__ASSETS__,BASE=__BASE__;
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS.map(url=>new Request(url,{cache:'reload'}))))));
-// Do not skipWaiting: open app sessions keep one consistent release until closed.
+// Activate a downloaded update only after the update page has checked for active chat.
+// A fresh, uncached update page also recovers older releases with no update control.
+self.addEventListener('message',event=>{
+  if(event.data?.type!=='TETHER_ACTIVATE_UPDATE' || !event.source?.url)return;
+  const source=new URL(event.source.url);
+  if(source.origin!==self.location.origin || source.pathname!==BASE+'update.html')return;
+  event.waitUntil(self.skipWaiting());
+});
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
   for(const key of await caches.keys())if(key.startsWith(PREFIX)&&key!==CACHE)await caches.delete(key);
   await self.clients.claim();
@@ -9,6 +16,7 @@ self.addEventListener('activate',event=>event.waitUntil((async()=>{
 self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin||!url.pathname.startsWith(BASE))return;
   const path=url.pathname===BASE?BASE+'index.html':url.pathname;
+  if(path===BASE+'update.html')return;
   if(!ASSETS.includes(path))return;
   event.respondWith(caches.open(CACHE).then(async cache=>(await cache.match(path))||fetch(event.request)));
 });

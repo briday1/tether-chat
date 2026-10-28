@@ -92,6 +92,8 @@ def build(output, base='/'):
     for source in (ROOT / 'web').iterdir():
         if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
             shutil.copy2(source, output / source.name)
+    # Keep recovery independent of cached scripts, styles and app configuration.
+    (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
     for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js'):
         text = paths((ROOT / 'tend' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
@@ -108,7 +110,7 @@ def build(output, base='/'):
                 'icons':[{'src':base+f'icon/{size}.png','sizes':f'{size}x{size}','type':'image/png','purpose':'any'} for size in (192,512)]}
     (output / 'manifest.webmanifest').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     (output / '.nojekyll').touch()
-    assets = sorted(base + str(file.relative_to(output)).replace('\\', '/') for file in output.rglob('*') if file.is_file() and not file.name.startswith('.'))
+    assets = sorted(base + str(file.relative_to(output)).replace('\\', '/') for file in output.rglob('*') if file.is_file() and not file.name.startswith('.') and file.name!='update.html')
     digest = hashlib.sha256(b''.join(file.read_bytes() for file in sorted(output.rglob('*')) if file.is_file())).hexdigest()[:16]
     worker = (ROOT / 'web/sw.js.in').read_text(encoding='utf-8')
     worker = worker.replace('__CACHE__', json.dumps(f'tether-web:{base}:{version}:{digest}')).replace('__PREFIX__', json.dumps('tether-web:' + base + ':'))
