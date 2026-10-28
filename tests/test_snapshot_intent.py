@@ -1,6 +1,6 @@
 """Natural-language tether-chat snapshot requests must bypass AI and resolve correct ranges."""
 from datetime import date
-from tend.snapshot_intent import resolve
+from tether.snapshot_intent import resolve
 
 def test_next_week_full_calendar():
     assert resolve("give me my next week snapshot",date(2026,10,22))==("2026-10-26","2026-11-01")

@@ -2,11 +2,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 import pytest
-from tend import store, workspaces
+from tether import store, workspaces
 
 @pytest.fixture
 def local_db(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'existing.sqlite3'))
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'existing.sqlite3'))
     store.init()
     return tmp_path
 
@@ -37,7 +37,7 @@ def test_parallel_requests_and_worker_context(local_db):
 
 def test_api_mode_scope_and_invalid_mode(local_db):
     from fastapi.testclient import TestClient
-    from tend.app import app
+    from tether.app import app
     with TestClient(app,base_url='http://localhost') as client:
         client.post('/api/threads',json={'title':'Work'})
         client.post('/api/threads',json={'title':'Home'},headers={'X-Tether-Workspace':'home'})
@@ -46,7 +46,7 @@ def test_api_mode_scope_and_invalid_mode(local_db):
         assert client.get('/api/threads',headers={'X-Tether-Workspace':'../escape'}).status_code==422
 
 def test_portable_export_identifies_only_selected_workspace(local_db):
-    from tend.portable import export_data
+    from tether.portable import export_data
     store.create('Private work')
     with workspaces.use('home'):
         store.init();store.create('Home')
@@ -55,8 +55,8 @@ def test_portable_export_identifies_only_selected_workspace(local_db):
         assert [t['title'] for t in data['data']['tasks']]==['Home']
 
 def test_work_relocation_keeps_existing_home_attached(tmp_path,monkeypatch):
-    from tend import storage
-    monkeypatch.delenv('TEND_DB',raising=False)
+    from tether import storage
+    monkeypatch.delenv('TETHER_DB',raising=False)
     monkeypatch.setattr(storage,'config_path',lambda:tmp_path/'storage.json')
     old=tmp_path/'work.sqlite3';new=tmp_path/'new.sqlite3'
     storage._write({'active':str(old)})
@@ -72,5 +72,5 @@ def test_work_relocation_keeps_existing_home_attached(tmp_path,monkeypatch):
 
 def test_dynamic_conversation_snapshot_has_workspace():
     from pathlib import Path
-    source=(Path(__file__).parents[1]/'tend/index.html').read_text(encoding='utf-8')
+    source=(Path(__file__).parents[1]/'tether/index.html').read_text(encoding='utf-8')
     assert "url.searchParams.set('workspace',window.tetherWorkspace||'work');frame.src=" in source

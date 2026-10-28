@@ -1,4 +1,5 @@
 """Local provider settings and bounded OpenAI-compatible tool calling."""
+from . import environment
 import json, os, time, re
 from pathlib import Path
 from urllib.parse import urlparse
@@ -11,7 +12,7 @@ from .decisions import decision_followup,reminder_intent,resolve_reminder
 from .tool_models import compatible_models,options as model_options
 
 def config_path():
-    return Path(os.environ.get("TEND_CONFIG",str(Path.home()/".tend"/"provider.json"))).expanduser()
+    return Path(environment.get("TETHER_CONFIG",str(Path.home()/".tend"/"provider.json"))).expanduser()
 
 def _write_config(c):
     target=config_path()
@@ -39,8 +40,8 @@ def load():
 
 def public_config():
     c=load()
-    return {"base_url":os.environ.get("TEND_AI_BASE_URL") or c.get("base_url","https://api.openai.com/v1"),
-            "model":os.environ.get("TEND_AI_MODEL") or c.get("model","gpt-4.1-mini"),"has_key":bool(secrets.get())}
+    return {"base_url":environment.get("TETHER_AI_BASE_URL") or c.get("base_url","https://api.openai.com/v1"),
+            "model":environment.get("TETHER_AI_MODEL") or c.get("model","gpt-4.1-mini"),"has_key":bool(secrets.get())}
 
 def save(base_url,model,key=None,clear_key=False):
     base_url=normalize_base(base_url)
@@ -175,11 +176,11 @@ Use ordinary Markdown only, with no HTML, CSS, JSON display blocks, or decorativ
 def request(messages,tools=True,max_tokens=None,progress=None):
     c=load(); key=secrets.get()
     if not key:raise ValueError("Set your API key in Settings before chatting.")
-    base=(os.environ.get("TEND_AI_BASE_URL") or c.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+    base=(environment.get("TETHER_AI_BASE_URL") or c.get("base_url") or "https://api.openai.com/v1").rstrip("/")
     parsed=urlparse(base)
     if parsed.scheme!="https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("AI provider URL must use HTTPS")
-    payload={"model":os.environ.get("TEND_AI_MODEL") or c.get("model","gpt-4.1-mini"),"messages":messages}
+    payload={"model":environment.get("TETHER_AI_MODEL") or c.get("model","gpt-4.1-mini"),"messages":messages}
     payload.update(model_options(base,payload['model']))
     if tools:payload["tools"]=TOOLS;payload["tool_choice"]="auto"
     if max_tokens is not None:payload["max_tokens"]=max_tokens

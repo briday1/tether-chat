@@ -15,8 +15,8 @@ BASE='http://127.0.0.1:18768'
 
 
 def serve_fixture():
-    from tend import ai,store
-    from tend.app import app
+    from tether import ai,store
+    from tether.app import app
     import uvicorn
     def fake(message,progress=None,history=None,task_context=None):
         if message=='Complete an Attention action before a simulated failure':
@@ -38,11 +38,11 @@ def main():
     from attention_ui_checks import check_attention_updates
     from note_ui_checks import check_note_replies
     from context_ui_checks import check_task_context
-    from tend import store
+    from tether import store
     with tempfile.TemporaryDirectory(prefix='tether-chat-session-') as folder:
-        os.environ['TEND_DB']=str(Path(folder)/'session.sqlite3')
-        os.environ['TEND_CONFIG']=str(Path(folder)/'provider.json')
-        os.environ.pop('TEND_AI_API_KEY',None)
+        os.environ['TETHER_DB']=str(Path(folder)/'session.sqlite3')
+        os.environ['TETHER_CONFIG']=str(Path(folder)/'provider.json')
+        os.environ.pop('TETHER_AI_API_KEY',None)
         store.init();task=store.create('Prepare briefing',summary='Confirm the access review before the briefing.',categories=['Projects'])
         action=store.add(task['id'],'action','Contact the review team')
         store.update_action(action['id'],{'revisit_at':'2020-01-01T12:00:00Z'})

@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {DriveFiles} from '../../tend/drive-sync-service.mjs';
+import {DriveFiles} from '../../tether/drive-sync-service.mjs';
 const session={mode:'folder-records',folderId:'folder12345',workspaceId:'folder12345'};
 const op={version:1,id:'operation_001',actor:'device_0001',when:'2026-10-28T00:00:00Z',changes:[{key:'task:task1',field:'$exists',value:false,parents:[]}]};
 test('Drive journal reads are folder-bound, cached and never send token in URL',async()=>{

@@ -1,4 +1,5 @@
 """Persist database location and stage safe migrations for next tether-chat restart."""
+from . import environment
 import json, os, sqlite3
 from pathlib import Path
 
@@ -14,7 +15,7 @@ def active_path():
 
 def info():
     c=load()
-    return {"current":str(active_path()),"pending":c.get("pending"),"pending_mode":c.get("pending_mode","move"),"environment_override":bool(os.environ.get("TEND_DB"))}
+    return {"current":str(active_path()),"pending":c.get("pending"),"pending_mode":c.get("pending_mode","move"),"environment_override":bool(environment.get("TETHER_DB"))}
 
 def _write(config):
     f=config_path();f.parent.mkdir(parents=True,exist_ok=True)
@@ -30,7 +31,7 @@ def stage(target,mode="move"):
     from .workspaces import current
     if current()!='work':raise ValueError("Manage database locations from Work; Home remains in its own local file")
     if mode not in ("move","existing"):raise ValueError("Choose Move current or Use existing")
-    if os.environ.get("TEND_DB"):raise ValueError("Remove TEND_DB environment override before relocating the database")
+    if environment.get("TETHER_DB"):raise ValueError("Remove TETHER_DB environment override before relocating the database")
     path=Path(target).expanduser().resolve()
     if mode=="move" and path.is_dir():path=path/active_path().name
     if path.suffix.lower() not in (".sqlite3",".sqlite",".db"):raise ValueError("Use a .sqlite3, .sqlite, or .db filename")

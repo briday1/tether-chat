@@ -3,14 +3,14 @@ import io
 import json
 from urllib.error import HTTPError
 import pytest
-from tend import ai
-from tend.provider import failure,retry_delay
+from tether import ai
+from tether.provider import failure,retry_delay
 
 
 @pytest.fixture
 def connection(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_CONFIG',str(tmp_path/'provider.json'))
-    for name in ('TEND_AI_BASE_URL','TEND_AI_MODEL','TEND_AI_API_KEY'):monkeypatch.delenv(name,raising=False)
+    monkeypatch.setenv('TETHER_CONFIG',str(tmp_path/'provider.json'))
+    for name in ('TETHER_AI_BASE_URL','TETHER_AI_MODEL','TETHER_AI_API_KEY'):monkeypatch.delenv(name,raising=False)
     vault={}
     monkeypatch.setattr(ai.secrets,'get',lambda:vault.get('key'))
     monkeypatch.setattr(ai.secrets,'set_key',lambda key:vault.update(key=key.strip()))
@@ -82,7 +82,7 @@ def test_key_rotation_applies_without_restarting_and_errors_are_redacted(connect
 
 def test_model_discovery_route_and_connection_test_use_the_current_fields(connection,monkeypatch,tmp_path):
     from fastapi.testclient import TestClient
-    from tend.app import app
+    from tether.app import app
     client=TestClient(app,base_url='http://127.0.0.1')
     calls=[]
     def network(req,timeout):

@@ -14,7 +14,7 @@ spec.loader.exec_module(builder)
 
 @pytest.mark.parametrize('base',['/','/tether-chat/'])
 def test_build_reuses_screens_and_scopes_every_asset(tmp_path,base):
-    before={p:p.read_bytes() for p in (ROOT/'tend').glob('*') if p.is_file()}
+    before={p:p.read_bytes() for p in (ROOT/'tether').glob('*') if p.is_file()}
     output=builder.build(tmp_path/'web',base)
     manifest=json.loads((output/'manifest.webmanifest').read_text(encoding='utf-8'))
     assert manifest['start_url']==manifest['scope']==base
@@ -55,9 +55,9 @@ def test_build_rejects_unsafe_output_and_invalid_scope(tmp_path):
 
 
 def test_desktop_portable_export_contains_data_and_excludes_credentials(tmp_path,monkeypatch):
-    from tend import store
-    from tend.portable import export_data
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'desktop.sqlite3'))
+    from tether import store
+    from tether.portable import export_data
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'desktop.sqlite3'))
     store.init();task=store.create('Release','Details',['Work','Software'])
     action=store.add(task['id'],'action','Run checks');store.add_action_note(action['id'],'A scoped detail')
     store.record_activity(task['id'],'Tests passed');store.remember('user','Hello')

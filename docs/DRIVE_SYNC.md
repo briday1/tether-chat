@@ -11,7 +11,7 @@ This backend-free implementation keeps each device's local database. Drive carri
 5. The app shows waiting-for-partner versus linked-device state, last successful sync, and unresolved conflicts. It checks about every 30 seconds while open. Expired Google authorization requires reconnecting; offline edits remain local.
 6. Extra phones/computers use **Another device** to create a new writer file, which existing devices must explicitly select once. No device may overwrite another device's assigned journal.
 
-The publisher configures Google once; ordinary household members should not need their own developer project. `tend/drive-config.json` supplies the public OAuth client ID, project number, and restricted browser Picker key for shipped builds. Empty defaults show App setup fields as a development fallback. Never put a client secret, service-account key, access token, or refresh token in that file.
+The publisher configures Google once; ordinary household members should not need their own developer project. `tether/drive-config.json` supplies the public OAuth client ID, project number, and restricted browser Picker key for shipped builds. Empty defaults show App setup fields as a development fallback. Never put a client secret, service-account key, access token, or refresh token in that file.
 
 Desktop Google authorization happens in the **system browser**, not the embedded desktop webview. Open the sharing browser page from the app and leave it open to sync the same local Home database. Browser edition keeps sync in the shell when navigating between its screens. Closed apps do not continuously sync.
 

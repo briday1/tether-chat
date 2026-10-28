@@ -1,4 +1,4 @@
-import {project,applyToState,stable as syncStable,SyncError} from '../tend/drive-sync-core.mjs';
+import {project,applyToState,stable as syncStable,SyncError} from '../tether/drive-sync-core.mjs';
 import {Database, Model, Problem, required, now, uid, copy, snapshotRange} from './store.mjs';
 import {exportData, importData} from './portable.mjs';
 import {encryptKey, decryptKey} from './credentials.mjs';
@@ -296,7 +296,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       if(method==='GET')return read((m,s)=>({records:project(s),metadata:s.drive_sync?.metadata||{},revision:s.drive_sync?.revision||0}));
       if(method==='POST')return write((m,s)=>{const records=project(s),revision=s.drive_sync?.revision||0;if(revision!==body.expected_revision||syncStable(records)!==syncStable(body.expected))throw new Problem('Home changed during sync. Retry safely.',409);if(!body.metadata||Array.isArray(body.metadata)||typeof body.metadata!=='object'||JSON.stringify(body.metadata).length>8*1024*1024)throw new Problem('Invalid sync metadata');applyToState(s,body.records);s.drive_sync={metadata:body.metadata,revision:revision+1};return {records:project(s),metadata:s.drive_sync.metadata,revision:revision+1}});
     }
-    if(path==='/health')return {app:'tend',brand:'tether-chat',version:config.version,status:'ok',runtime:'browser'};
+    if(path==='/health')return {app:'tether',brand:'tether-chat',version:config.version,status:'ok',runtime:'browser'};
     if(path==='/settings')return method==='POST'?saveSettings(body):read((m,s)=>publicSettings(s));
     if(path==='/preferences')return method==='POST'?write(m=>m.setPreferences(body)):read(m=>m.preferences());
     if(path==='/settings/models' && method==='POST')return models(body);

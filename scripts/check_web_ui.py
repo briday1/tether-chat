@@ -15,8 +15,8 @@ sys.path.insert(0,str(ROOT))
 
 def main():
     from playwright.sync_api import sync_playwright,expect
-    from tend import store
-    from tend.portable import export_data
+    from tether import store
+    from tether.portable import export_data
     from voice_ui_checks import MOCKS,check_dictation,check_recording
     from attention_ui_checks import check_attention_updates
     from note_ui_checks import check_note_replies
@@ -26,7 +26,7 @@ def main():
     builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
     with tempfile.TemporaryDirectory(prefix='tether-web-ui-') as temp:
         folder=Path(temp);builder.build(folder/'tether-chat','/tether-chat/')
-        os.environ['TEND_DB']=str(folder/'fixture.sqlite3');store.init()
+        os.environ['TETHER_DB']=str(folder/'fixture.sqlite3');store.init()
         task=store.create('Prepare briefing','Keep the supporting documents together.',['Projects','Writing'])
         first=store.add(task['id'],'action','Contact the review team')
         second=store.add(task['id'],'action','Check the draft attachment')

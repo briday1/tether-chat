@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {HomeSync} from '../../tend/drive-sync-service.mjs';
-import {makeChanges,mergeJournal,stable,SyncError} from '../../tend/drive-sync-core.mjs';
+import {HomeSync} from '../../tether/drive-sync-service.mjs';
+import {makeChanges,mergeJournal,stable,SyncError} from '../../tether/drive-sync-core.mjs';
 const when='2026-10-28T00:00:00Z';
 const task={id:'task1',title:'Milk',summary:'',state:'open',categories:['Home'],revisit_at:null,due_at:null,recurrence:null,next_occurrence:null,archived_at:null,created_at:when,updated_at:when};
 const records={'task:task1':task},session={mode:'folder-records',folderId:'folder_12345',workspaceId:'space_12345'};

@@ -25,11 +25,11 @@ body{background:var(--page)!important;color:var(--text)!important}header,.main,.
 
 /* Flat, theme-aware surfaces; category outline colors remain independent. */
 :root{--task-card-bg:var(--paper);--task-card-text:var(--text);--task-card-muted:var(--muted);--task-card-border:var(--line);--logo-main:var(--text);--logo-accent:var(--accent);--logo-bg:var(--soft)}
-.tend-mark{width:29px;height:29px;display:inline-block;vertical-align:middle;margin-right:9px;flex:none}
-.tend-mark .mark-bg{fill:var(--logo-bg)}
-.tend-mark .mark-letter{fill:var(--logo-main)}
-.tend-mark .mark-leaf{fill:var(--logo-accent)}
-.tend-mark .mark-vein{fill:none;stroke:var(--logo-bg);stroke-width:2;stroke-linecap:round}
+.tether-mark{width:29px;height:29px;display:inline-block;vertical-align:middle;margin-right:9px;flex:none}
+.tether-mark .mark-bg{fill:var(--logo-bg)}
+.tether-mark .mark-letter{fill:var(--logo-main)}
+.tether-mark .mark-leaf{fill:var(--logo-accent)}
+.tether-mark .mark-vein{fill:none;stroke:var(--logo-bg);stroke-width:2;stroke-linecap:round}
 :root[data-theme="dark"],:root[data-theme="solarized-dark"],:root[data-theme="dusk"],:root[data-theme="ocean"]{--task-card-bg:var(--paper);--task-card-text:var(--text);--task-card-muted:var(--muted);--task-card-border:var(--line)}
 
 /* Settings overlay controls: match the active WriteShape theme. */
@@ -95,7 +95,7 @@ body.drawer-open{overflow:hidden}
 
 #board .action-list-row.selected{outline:2px solid var(--accent);outline-offset:-2px}
 @media(max-width:950px){#board:has(.actions-section){grid-template-columns:minmax(155px,.7fr) minmax(210px,1fr)}#board .actions-section{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);padding:16px 0 0}}
-@media(max-width:600px){#board:has(.actions-section){grid-template-columns:minmax(0,1fr)}.reference-drawer,.action-drawer{padding:18px}.topnav .brand{font-size:22px!important}.topnav .tend-mark{width:25px!important;height:25px!important}}
+@media(max-width:600px){#board:has(.actions-section){grid-template-columns:minmax(0,1fr)}.reference-drawer,.action-drawer{padding:18px}.topnav .brand{font-size:22px!important}.topnav .tether-mark{width:25px!important;height:25px!important}}
 /* Reserve enough room for the full lowercase wordmark. */
 @media(min-width:651px){.topnav .brand{width:144px!important;flex-basis:144px!important}}
 
@@ -173,5 +173,5 @@ html::-webkit-scrollbar-thumb{border-color:var(--page)}
 .panel button.secondary,.action-drawer button.secondary{border:1px solid var(--line);border-radius:9px;background:var(--soft);color:var(--text);padding:8px 12px;font:inherit}
 
 .topnav .workspace-picker{flex:0 0 auto!important;min-width:0!important;width:74px!important;margin:0 5px!important}.topnav>a{white-space:nowrap}
-@media(max-width:560px){.topnav{gap:5px!important;padding-left:8px!important;padding-right:8px!important}.topnav>a{padding:6px 4px!important;font-size:12px!important}.topnav .workspace-picker{width:65px!important;margin:0!important;font-size:12px!important}.topnav .brand{gap:4px!important}.topnav .tend-mark{width:24px!important;height:24px!important}.topnav .brand-word{font-size:18px!important}.topnav .settings-gear{width:30px!important;height:30px!important;min-width:30px!important}}
-@media(max-width:420px){.topnav{gap:3px!important}.topnav .brand-word{font-size:16px!important}.topnav .tend-mark{width:20px!important;height:20px!important}.topnav .workspace-picker{width:61px!important}.topnav>a{padding:6px 3px!important}}
+@media(max-width:560px){.topnav{gap:5px!important;padding-left:8px!important;padding-right:8px!important}.topnav>a{padding:6px 4px!important;font-size:12px!important}.topnav .workspace-picker{width:65px!important;margin:0!important;font-size:12px!important}.topnav .brand{gap:4px!important}.topnav .tether-mark{width:24px!important;height:24px!important}.topnav .brand-word{font-size:18px!important}.topnav .settings-gear{width:30px!important;height:30px!important;min-width:30px!important}}
+@media(max-width:420px){.topnav{gap:3px!important}.topnav .brand-word{font-size:16px!important}.topnav .tether-mark{width:20px!important;height:20px!important}.topnav .workspace-picker{width:61px!important}.topnav>a{padding:6px 3px!important}}

@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {HouseholdSetup} from '../../tend/drive-setup.mjs';
-import {SyncError} from '../../tend/drive-sync-core.mjs';
+import {HouseholdSetup} from '../../tether/drive-setup.mjs';
+import {SyncError} from '../../tether/drive-sync-core.mjs';
 const device='device_12345',folder={id:'folder_12345',name:'Our Home'},own={id:'own_file_123',name:'Mine'},partner={id:'partner_12345',name:'Partner'};
 function memory(){const data=new Map();return {getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key),data}}
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}}

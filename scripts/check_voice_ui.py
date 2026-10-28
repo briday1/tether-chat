@@ -12,7 +12,7 @@ sys.path.insert(0,str(ROOT))
 
 
 def serve():
-    from tend.app import app
+    from tether.app import app
     import uvicorn
     uvicorn.run(app,host='127.0.0.1',port=18769,log_level='warning')
 
@@ -21,7 +21,7 @@ def main():
     from playwright.sync_api import sync_playwright
     from voice_ui_checks import MOCKS,check_dictation,check_recording
     with tempfile.TemporaryDirectory(prefix='tether-voice-ui-') as temp:
-        environment=os.environ.copy();environment['TEND_DB']=str(Path(temp)/'voice.sqlite3')
+        environment=os.environ.copy();environment['TETHER_DB']=str(Path(temp)/'voice.sqlite3')
         server=subprocess.Popen([sys.executable,__file__,'--serve'],cwd=ROOT,env=environment,stdout=subprocess.DEVNULL)
         try:
             for _ in range(100):

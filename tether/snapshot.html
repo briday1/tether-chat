@@ -37,7 +37,7 @@ const names=t=>t.categories?.length?t.categories:[t.category||'Unsorted'];
 function color(name){let hash=0;for(const char of name.toLowerCase())hash=(Math.imul(hash,31)+char.charCodeAt(0))>>>0;return palette[hash%palette.length]}
 const dateOnly=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 window.addEventListener('message',event=>{
- if(parent===window||event.source!==parent||event.origin!==location.origin||event.data?.type!=='tend:snapshot-theme')return;
+ if(parent===window||event.source!==parent||event.origin!==location.origin||event.data?.type!=='tether:snapshot-theme')return;
  const variables=event.data.variables||{};
  if(typeof variables.paper==='string')document.documentElement.style.setProperty('--calendar-task-base',variables.paper);
  if(typeof event.data.theme==='string')document.documentElement.dataset.theme=event.data.theme;
@@ -59,12 +59,12 @@ function showDate(date,data){
 }
 $('#day-dialog-close').onclick=()=>$('#day-dialog').close();
 $('#day-dialog').addEventListener('close',hidePreview);
-window.addEventListener('message',event=>{if(parent!==window && event.source===parent && event.origin===location.origin && event.data?.type==='tend:snapshot-refresh')load()});
-function notifyHeight(){if(parent!==window)parent.postMessage({type:'tend:snapshot-size',height:Math.ceil($('.shell').getBoundingClientRect().height)},location.origin)}
+window.addEventListener('message',event=>{if(parent!==window && event.source===parent && event.origin===location.origin && event.data?.type==='tether:snapshot-refresh')load()});
+function notifyHeight(){if(parent!==window)parent.postMessage({type:'tether:snapshot-size',height:Math.ceil($('.shell').getBoundingClientRect().height)},location.origin)}
 new ResizeObserver(notifyHeight).observe($('.shell'));
 function categoryLabels(parent,t){const group=document.createElement('span');group.className='task-categories';for(const name of names(t)){const tag=document.createElement('span');tag.className='task-category';tag.style.setProperty('--category-color',color(name));tag.textContent=name;group.append(tag)}parent.append(group)}
 async function showTask(id,button,actionId=null){
- if(parent!==window){parent.postMessage({type:'tend:snapshot-task',id,action_id:actionId},location.origin);return}
+ if(parent!==window){parent.postMessage({type:'tether:snapshot-task',id,action_id:actionId},location.origin);return}
  hidePreview();$('#day-dialog').close();const request=++detailRequest;activeButton=button;
  try{const response=await fetch('/api/threads/'+encodeURIComponent(id));if(!response.ok)throw Error('Task is no longer available');const t=await response.json();if(request!==detailRequest)return;
  const selected=actionId?(t.entries||[]).find(e=>e.id===actionId):null;
@@ -107,7 +107,7 @@ function download(format){
  // especially inside an embedded calendar or installed desktop browser window.
  const link=document.createElement('a');
  link.href='/api/snapshot.'+format+'?'+query;
- link.download='tend-'+last.start+'-'+last.end+'.'+format;
+ link.download='tether-'+last.start+'-'+last.end+'.'+format;
  document.body.append(link);
  link.click();
  link.remove();

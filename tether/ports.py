@@ -1,6 +1,7 @@
 """Choose local service ports and remember a successful desktop launch."""
 import json
 import os
+from . import environment
 from pathlib import Path
 import socket
 import tempfile
@@ -26,17 +27,17 @@ def _saved():
     return {'web':8765,'mcp':8766}
 
 
-def web_port():return int(os.environ.get('TEND_WEB_PORT') or _saved()['web'])
+def web_port():return int(environment.get('TETHER_WEB_PORT') or _saved()['web'])
 
 
-def mcp_port():return int(os.environ.get('TEND_MCP_PORT') or _saved()['mcp'])
+def mcp_port():return int(environment.get('TETHER_MCP_PORT') or _saved()['mcp'])
 
 
 def compatible(port):
     try:
         with urlopen(f'http://127.0.0.1:{port}/api/health',timeout=.75) as response:
             data=json.load(response)
-            return (response.status==200 and isinstance(data,dict) and data.get('app')=='tend'
+            return (response.status==200 and isinstance(data,dict) and data.get('app') in ('tether','tend')
                     and data.get('brand')=='tether-chat' and data.get('version')==__version__
                     and data.get('streaming_chat') is True and data.get('tool_runner')=='unbounded-v2')
     except (OSError,ValueError,HTTPException):return False
@@ -71,10 +72,10 @@ def configure(log=print):
     if not _valid(web) or not _valid(mcp):raise ValueError('Service ports must be between 1 and 65535')
     if web==mcp:raise ValueError('Web and MCP ports must differ')
     if compatible(web) and listening(mcp):
-        os.environ['TEND_WEB_PORT']=str(web);os.environ['TEND_MCP_PORT']=str(mcp)
+        os.environ['TETHER_WEB_PORT']=str(web);os.environ['TETHER_MCP_PORT']=str(mcp)
         return True
     chosen_web=_choose(web,{mcp});chosen_mcp=_choose(mcp,{chosen_web})
-    os.environ['TEND_WEB_PORT']=str(chosen_web);os.environ['TEND_MCP_PORT']=str(chosen_mcp)
+    os.environ['TETHER_WEB_PORT']=str(chosen_web);os.environ['TETHER_MCP_PORT']=str(chosen_mcp)
     if (chosen_web,chosen_mcp)!=(web,mcp):
         log(f'Previous service ports were busy; using web {chosen_web} and MCP {chosen_mcp}. Existing processes were left running.')
     return False

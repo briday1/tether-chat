@@ -23,20 +23,23 @@ dependencies = [
 ]
 
 [project.scripts]
-"tether-chat" = "tend.cli:main"
+"tether-chat" = "tether.cli:main"
 
 [project.gui-scripts]
-"tether-chat-desktop" = "tend.native:main"
+"tether-chat-desktop" = "tether.native:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
 desktop = ["pywebview>=5,<7", "pystray>=0.19,<1"]
 
+[tool.setuptools]
+py-modules = ["tend"]
+
 [tool.setuptools.packages.find]
-include = ["tend*"]
+include = ["tether*"]
 
 [tool.setuptools.package-data]
-tend = ["drive-config.json", "drive-sharing.html", "drive-sharing.mjs", "drive-sync-core.mjs", "drive-sync-service.mjs", "drive-journals.mjs", "drive-setup.mjs", "index.html", "board.html", "workspace.js", "display.html", "display.js", "display.css", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "speech.mjs", "updates.js", "notes.js", "notes.css", "provider-models.js", "preferences.js", "locations.js", "tool-models.json", "favicon.svg", "manifest.webmanifest"]
+tether = ["drive-config.json", "drive-sharing.html", "drive-sharing.mjs", "drive-sync-core.mjs", "drive-sync-service.mjs", "drive-journals.mjs", "drive-setup.mjs", "index.html", "board.html", "workspace.js", "display.html", "display.js", "display.css", "snapshot.html", "theme.css", "theme.js", "chat.js", "action-notes.js", "voice.js", "speech.mjs", "updates.js", "notes.js", "notes.css", "provider-models.js", "preferences.js", "locations.js", "tool-models.json", "favicon.svg", "manifest.webmanifest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

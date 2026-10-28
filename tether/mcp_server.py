@@ -1,9 +1,10 @@
 """MCP stdio interface to the same local SQLite database as the browser app."""
 import os
+from . import environment
 import sys
 from mcp.server.fastmcp import FastMCP
 from . import store as db
-mcp=FastMCP("tether-chat",host="127.0.0.1",port=int(os.environ.get("TEND_MCP_PORT","8766")))
+mcp=FastMCP("tether-chat",host="127.0.0.1",port=int(environment.get("TETHER_MCP_PORT","8766")))
 @mcp.tool()
 def get_snapshot(start:str,end:str,category:str="")->dict:
     """Get a read-only calendar for inclusive ISO dates. Each task appears once and carries all categories. A category filter matches any membership; category counts can overlap. Embed the view URL in chat on request; PNG/SVG download URLs need no AI generation."""

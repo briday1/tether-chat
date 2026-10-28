@@ -2,6 +2,7 @@
 import ctypes
 import io
 import os
+from . import environment
 import sys
 import time
 from pathlib import Path
@@ -107,7 +108,7 @@ def _run():
             root=py.absolute().parent.parent
             py=root/'.venv'/'Scripts'/'python.exe'
             if not py.is_file():raise RuntimeError('Reinstall the optional native build or use tether-chat-desktop from a Python installation.')
-        os.environ['TEND_SERVICE_PYTHON']=str(py)
+        os.environ['TETHER_SERVICE_PYTHON']=str(py)
         icon_file=create_icon(Path.home()/'.tend'/'icons'/'tether-chat-horizon-v3.ico')
         supervisor=desktop.start_and_open(open_window=False)
         window=webview.create_window(WINDOW_TITLE,f'http://127.0.0.1:{desktop.port()}/',

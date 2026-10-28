@@ -1,5 +1,6 @@
 """Store provider secrets in the OS credential vault, never in JSON config."""
 import os
+from . import environment
 import keyring
 from keyring.errors import KeyringError
 
@@ -20,7 +21,7 @@ def _vault():
     return backend
 
 def get():
-    override=os.environ.get("TEND_AI_API_KEY")
+    override=environment.get("TETHER_AI_API_KEY")
     if override:return override
     try:
         return _vault().get_password(SERVICE,ACCOUNT)

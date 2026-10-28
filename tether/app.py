@@ -102,7 +102,7 @@ def notes_js():return FileResponse(Path(__file__).with_name("notes.js"),media_ty
 @app.get("/notes.css")
 def notes_css():return FileResponse(Path(__file__).with_name("notes.css"),media_type="text/css")
 @app.get("/api/health")
-def health():return {"app":"tend","brand":"tether-chat","version":__version__,"status":"ok","streaming_chat":True,"board_categories":True,"tool_runner":"unbounded-v2"}
+def health():return {"app":"tether","brand":"tether-chat","version":__version__,"status":"ok","streaming_chat":True,"board_categories":True,"tool_runner":"unbounded-v2"}
 @app.get("/manifest.webmanifest")
 def manifest():return FileResponse(Path(__file__).with_name("manifest.webmanifest"),media_type="application/manifest+json")
 @app.get("/")
@@ -120,7 +120,7 @@ def snapshot_png(start:str,end:str,category:str="",theme:str="sage",scale:int=2)
     from .snapshot_export import png
     try:
         return Response(png(start,end,category,theme,scale),media_type="image/png",
-                        headers={"Content-Disposition":"attachment; filename=tend-snapshot.png",
+                        headers={"Content-Disposition":"attachment; filename=tether-snapshot.png",
                                  "Cache-Control":"no-store"})
     except ValueError as exc:
         raise HTTPException(422,str(exc)) from None
@@ -140,7 +140,7 @@ def board_page():return desktop_screen('board.html')
 def snapshot_svg(start:str,end:str,category:str="",theme:str="sage"):
     from .snapshot_export import svg
     try:return Response(svg(start,end,category,theme),media_type="image/svg+xml",
-                        headers={"Content-Disposition":"attachment; filename=tend-snapshot.svg","Cache-Control":"no-store"})
+                        headers={"Content-Disposition":"attachment; filename=tether-snapshot.svg","Cache-Control":"no-store"})
     except ValueError as exc:raise HTTPException(422,str(exc)) from None
 @app.get("/api/board")
 def board():return db.board()
@@ -277,7 +277,7 @@ def backup():
     except Exception:
         os.unlink(file.name)
         raise
-    return FileResponse(file.name,filename="tether-chat-"+__import__("tend.workspaces",fromlist=["current"]).current()+"-backup.sqlite3",media_type="application/octet-stream",
+    return FileResponse(file.name,filename="tether-chat-"+__import__("tether.workspaces",fromlist=["current"]).current()+"-backup.sqlite3",media_type="application/octet-stream",
                         background=BackgroundTask(os.unlink,file.name))
 
 @app.get("/api/portable")

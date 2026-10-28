@@ -10,19 +10,19 @@ Python 3.11 or newer.
 git clone https://github.com/briday1/tether-chat.git
 cd tether-chat
 python -m pip install -e .
-tend
+tether
 ```
 
-The **single `tether-chat` command** waits for the web server to respond successfully before opening a browser tab, and starts the browser web server on http://127.0.0.1:8765 and local MCP streamable-HTTP on http://127.0.0.1:8766/mcp. Press Ctrl+C to stop both. Set `TEND_NO_BROWSER=1` if you don't want your browser to open.
+The **single `tether-chat` command** waits for the web server to respond successfully before opening a browser tab, and starts the browser web server on http://127.0.0.1:8765 and local MCP streamable-HTTP on http://127.0.0.1:8766/mcp. Press Ctrl+C to stop both. Set `TETHER_NO_BROWSER=1` if you don't want your browser to open.
 
-Open **Settings** in the GUI, enter your HTTPS API base URL, model name and your own API key. The model **must support OpenAI-compatible chat-completions tool calling**. The key is stored in the operating system credential vault (Windows Credential Manager, macOS Keychain, or a supported Linux Secret Service/KWallet backend), NOT in `provider.json`. Only the nonsecret provider URL and model are saved in `~/.tend/provider.json`. The GUI never receives a stored key or exposes a show-key control; changing or clearing browser data does not remove it. If no secure vault is available, key saving fails closed; you can alternatively supply `TEND_AI_API_KEY` as a process environment variable. Existing plaintext keys from early tether-chat builds are migrated on next settings load when a secure vault is available. Because older versions previously wrote the key unencrypted, consider rotating that key. For hosted AI, note that thread context is sent to the configured provider.
+Open **Settings** in the GUI, enter your HTTPS API base URL, model name and your own API key. The model **must support OpenAI-compatible chat-completions tool calling**. The key is stored in the operating system credential vault (Windows Credential Manager, macOS Keychain, or a supported Linux Secret Service/KWallet backend), NOT in `provider.json`. Only the nonsecret provider URL and model are saved in `~/.tend/provider.json`. The GUI never receives a stored key or exposes a show-key control; changing or clearing browser data does not remove it. If no secure vault is available, key saving fails closed; you can alternatively supply `TETHER_AI_API_KEY` as a process environment variable. Existing plaintext keys from early tether-chat builds are migrated on next settings load when a secure vault is available. Because older versions previously wrote the key unencrypted, consider rotating that key. For hosted AI, note that thread context is sent to the configured provider.
 
 ## Local storage and MCP
 
-- SQLite: `~/.tend/tend.sqlite3` (override via `TEND_DB`)
+- SQLite: `~/.tend/tend.sqlite3` (override via `TETHER_DB`)
 - Browser: http://127.0.0.1:8765
 - MCP HTTP: http://127.0.0.1:8766/mcp
-- MCP stdio alternative: `python -m tend.mcp_server`
+- MCP stdio alternative: `python -m tether.mcp_server`
 - Local backup: **Settings → Download SQLite backup**
 - Tests: `python -m pip install -e '.[dev]'` then `pytest`
 
@@ -71,7 +71,7 @@ Each thought may have an optional **Due date** (an actual deadline) and separate
 
 The board includes an activity timeline. Log progress, feedback, blockers or decisions with the time they happened (default: now). The AI and MCP tools also support backdated events and period reports for weeks, months, quarters and years. Reports use the recorded occurrence time, not entry time.
 
-In **Settings → Database location**, choose either **Move current database** to a new unused SQLite filename or **Use an existing tether-chat database**. Both are staged until you stop and restart `tether-chat`. A move uses SQLite backup and integrity verification and keeps the original. Using an existing database validates its schema and integrity without overwriting it. Choose a local disk or a backup-managed folder, **not a cloud-sync folder that modifies the live SQLite file while tether-chat is running**. The browser cannot provide a reliable native system file path through ordinary web file pickers, so paste a full path (e.g. `D:\\Backups\\tether-chat\\tend.sqlite3`). External `TEND_DB` environment overrides take precedence and disable Settings relocation.
+In **Settings → Database location**, choose either **Move current database** to a new unused SQLite filename or **Use an existing tether-chat database**. Both are staged until you stop and restart `tether-chat`. A move uses SQLite backup and integrity verification and keeps the original. Using an existing database validates its schema and integrity without overwriting it. Choose a local disk or a backup-managed folder, **not a cloud-sync folder that modifies the live SQLite file while tether-chat is running**. The browser cannot provide a reliable native system file path through ordinary web file pickers, so paste a full path (e.g. `D:\\Backups\\tether-chat\\tend.sqlite3`). External `TETHER_DB` environment overrides take precedence and disable Settings relocation.
 
 ## Moving the database from Settings
 
@@ -110,7 +110,7 @@ tether-chat uses local-only loopback connections. The server continues running a
 
 ### Troubleshooting
 
-If the desktop shortcut doesn't open tether-chat, first try running `.\.venv\Scripts\python.exe -m tend.desktop` from PowerShell to see the error. Check `%USERPROFILE%\.tend\server.log` and `%USERPROFILE%\.tend\desktop-launch.log` for startup details. If Python is missing, install Python 3.11+ and recreate the virtual environment before rerunning the installer.
+If the desktop shortcut doesn't open tether-chat, first try running `.\.venv\Scripts\python.exe -m tether.desktop` from PowerShell to see the error. Check `%USERPROFILE%\.tend\server.log` and `%USERPROFILE%\.tend\desktop-launch.log` for startup details. If Python is missing, install Python 3.11+ and recreate the virtual environment before rerunning the installer.
 
 ## Notification planning without background AI usage
 
@@ -130,7 +130,7 @@ Update the repository and reinstall the editable package, then **stop any tether
 
 ### Fully windowless startup
 
-The Windows shortcut starts `pythonw.exe -m tend.desktop`; the desktop launcher now uses `pythonw.exe` for its detached service supervisor as well. All service output is redirected to `%USERPROFILE%\.tend\server.log` and `services.log`. The tether-chat app window is the only window that should appear. If you still see a command window, close any tether-chat process started earlier from PowerShell and recreate the shortcut with `install-desktop.ps1`. Do not launch `.venv\Scripts\tether-chat.exe` to get background operation, because that is the terminal-oriented command.
+The Windows shortcut starts `pythonw.exe -m tether.desktop`; the desktop launcher now uses `pythonw.exe` for its detached service supervisor as well. All service output is redirected to `%USERPROFILE%\.tend\server.log` and `services.log`. The tether-chat app window is the only window that should appear. If you still see a command window, close any tether-chat process started earlier from PowerShell and recreate the shortcut with `install-desktop.ps1`. Do not launch `.venv\Scripts\tether-chat.exe` to get background operation, because that is the terminal-oriented command.
 
 ## AI connection diagnostics
 
@@ -140,7 +140,7 @@ To troubleshoot your API key, model name, or custom GenAI.mil endpoint, open **S
 
 ### Windows desktop icon
 
-The shortcut installer now generates a multi-resolution `tend.ico` in the repository and assigns it to the Windows `.lnk` file, instead of borrowing the Microsoft Edge icon. Re-run `powershell -ExecutionPolicy Bypass -File .\install-desktop.ps1` to refresh an existing shortcut. Windows may cache old shortcut icons temporarily. The standalone browser window's title-bar/taskbar icon can still depend on Edge/Chrome app-window behavior; the shortcut itself uses tether-chat's ICO.
+The shortcut installer now generates a multi-resolution `tether.ico` in the repository and assigns it to the Windows `.lnk` file, instead of borrowing the Microsoft Edge icon. Re-run `powershell -ExecutionPolicy Bypass -File .\install-desktop.ps1` to refresh an existing shortcut. Windows may cache old shortcut icons temporarily. The standalone browser window's title-bar/taskbar icon can still depend on Edge/Chrome app-window behavior; the shortcut itself uses tether-chat's ICO.
 
 ## Compact category list
 
@@ -186,7 +186,7 @@ The installation includes the `pystray`, `Pillow`, and `psutil` dependencies nee
 
 ### Horizon icon refresh (desktop, tray, and browser)
 
-tether-chat's header, browser favicon, app manifest, and system tray now use Horizon icon artwork from the same PNG renderer as the Windows shortcut's ICO. The installer writes `tend-horizon.ico` (a new filename to avoid stale Windows shortcut icon caches). Run `git pull`, then `powershell -ExecutionPolicy Bypass -File .\\install-desktop.ps1` to refresh the shortcut. **Fully exit the existing tether-chat tray instance before reopening**: an already-running tray process keeps its old icon and code. Hard-refresh the browser app if it shows an old favicon. Chromium's `--app` window may still display the Edge/Chrome taskbar identity instead of the page favicon, depending on the browser and Windows; the favicon cannot fully control native browser chrome.
+tether-chat's header, browser favicon, app manifest, and system tray now use Horizon icon artwork from the same PNG renderer as the Windows shortcut's ICO. The installer writes `tether-horizon.ico` (a new filename to avoid stale Windows shortcut icon caches). Run `git pull`, then `powershell -ExecutionPolicy Bypass -File .\\install-desktop.ps1` to refresh the shortcut. **Fully exit the existing tether-chat tray instance before reopening**: an already-running tray process keeps its old icon and code. Hard-refresh the browser app if it shows an old favicon. Chromium's `--app` window may still display the Edge/Chrome taskbar identity instead of the page favicon, depending on the browser and Windows; the favicon cannot fully control native browser chrome.
 
 ## Native Windows tether-chat app (not an Edge window)
 
@@ -225,7 +225,7 @@ The former **Board** navigation item is now **Tasks**, with the same themed cont
 
 **Exit tether-chat** now takes a snapshot of the processes owned by the native launcher (supervisor, web server, MCP server, reminder worker, and any nested Python virtual-environment subprocesses), terminates descendants before parents, waits briefly, then force-stops any remaining owned children. It does **not** indiscriminately kill Python or terminate an independently running tether-chat server that the native app did not start. The Python supervisor uses the same child-tree cleanup when it exits normally or handles Ctrl+C. This prevents the old orphaned-process/port-8765-or-8766 issue on ordinary shutdown.
 
-Because `tend/native.py` changed, **rebuild the native executable** after pulling: close the tray instance, run `git pull`, then `powershell -ExecutionPolicy Bypass -File .\\install-desktop.ps1`. Launch the new `dist\\tether-chat.exe`; right-click its tray icon and select **Exit tether-chat**. Both ports should then be free: `Get-NetTCPConnection -LocalPort 8765,8766 -State Listen -ErrorAction SilentlyContinue` should produce no rows, provided no independent server is running. On unexpected hard crashes or forced process kills Windows may not execute normal cleanup; those situations remain outside guaranteed graceful shutdown.
+Because `tether/native.py` changed, **rebuild the native executable** after pulling: close the tray instance, run `git pull`, then `powershell -ExecutionPolicy Bypass -File .\\install-desktop.ps1`. Launch the new `dist\\tether-chat.exe`; right-click its tray icon and select **Exit tether-chat**. Both ports should then be free: `Get-NetTCPConnection -LocalPort 8765,8766 -State Listen -ErrorAction SilentlyContinue` should produce no rows, provided no independent server is running. On unexpected hard crashes or forced process kills Windows may not execute normal cleanup; those situations remain outside guaranteed graceful shutdown.
 
 ## Archiving tasks
 
@@ -247,8 +247,21 @@ Commit those generated PNGs if you want to keep them in GitHub. Alternatively, r
 
 ## Chat calendars and overlapping categories
 
-Calendar requests now return an embedded, read-only response with task inspection and PNG/SVG downloads. There is no separate Snapshots navigation or date-editing toolbar. The iframe reports its measured content height to its same-origin parent using `tend:snapshot-size`; the parent validates the sender before resizing it. Weeks and months size independently. Phone week views use day rows. Multi-day calendars retain Monday–Friday and add weekend columns only when tasks or recorded activity occur on them. Downloads preserve the requested dates and category filter, use stable category colors, and expand to include all tasks rather than dropping overflow.
+Calendar requests now return an embedded, read-only response with task inspection and PNG/SVG downloads. There is no separate Snapshots navigation or date-editing toolbar. The iframe reports its measured content height to its same-origin parent using `tether:snapshot-size`; the parent validates the sender before resizing it. Weeks and months size independently. Phone week views use day rows. Multi-day calendars retain Monday–Friday and add weekend columns only when tasks or recorded activity occur on them. Downloads preserve the requested dates and category filter, use stable category colors, and expand to include all tasks rather than dropping overflow.
 
 The `thread_categories` table stores ordered memberships. Startup migrates existing `threads.category` values without dropping data and does not overwrite established memberships on later starts. Every task response includes `categories`; the legacy `category` field mirrors the first membership. Updating legacy `category` intentionally replaces all memberships with that one category. Updating `categories` replaces the list; an empty list returns the task to Unsorted. The MCP `set_task_categories` and chat `set_categories` tools also support additive and removal edits under a write transaction. Category groups can overlap; All Tasks deduplicates by task ID. Category filters for snapshots and linked activity reports match any membership. Archived tasks keep their memberships and activity history, but their current deadlines do not appear as active calendar obligations.
 
 Refresh screenshots with `python scripts/capture_screenshots.py`. The script uses isolated synthetic data, exercises a task with multiple memberships, verifies unique task counts, checks frame sizing on desktop and mobile, opens read-only details, and downloads both formats. Calendar-only images are captured at the content bounds, independently of the browser viewport.
+
+## Source-package rename
+
+The Python implementation is now `tether/`; imports and module launches use
+`tether`, and the distribution remains `tether-chat`. The snapshot skill is
+`skills/tether-snapshot/`. New environment settings use `TETHER_*`; existing
+`TEND_*` settings are still accepted, with `TETHER_*` taking precedence.
+
+Existing data is intentionally not moved: `~/.tend`, `tend.sqlite3`, the OS
+credential-vault service name, and saved browser theme keys keep their historical
+identifiers. This avoids losing tasks, API settings, or themes on upgrade.
+A small `tend.py` compatibility loader keeps older `python -m tend.native`
+shortcuts working until they are recreated; no `tend` executable is installed.

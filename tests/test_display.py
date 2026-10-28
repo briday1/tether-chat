@@ -6,8 +6,8 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 def test_display_uses_shared_calendar_and_workspace():
-    page=(ROOT/'tend/display.html').read_text()
-    script=(ROOT/'tend/display.js').read_text()
+    page=(ROOT/'tether/display.html').read_text()
+    script=(ROOT/'tether/display.js').read_text()
     assert 'src="/workspace.js"' in page
     assert 'data-display-nav' in page
     assert 'id="display-calendar"' in page
@@ -20,7 +20,7 @@ def test_display_uses_shared_calendar_and_workspace():
 
 
 def test_calendar_has_fixed_cells_and_accessible_detail_paths():
-    page=(ROOT/'tend/snapshot.html').read_text()
+    page=(ROOT/'tether/snapshot.html').read_text()
     assert '.day{height:136px' in page
     assert '.day-items{min-height:0;overflow:auto' in page
     assert "button.addEventListener('focus'" in page

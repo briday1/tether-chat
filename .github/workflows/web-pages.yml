@@ -2,11 +2,11 @@ name: Browser app and GitHub Pages
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tether/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
   push:
     branches: [main]
     tags: ['v20*']
-    paths: ['web/**', 'scripts/**', 'tests/**', 'tend/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
+    paths: ['web/**', 'scripts/**', 'tests/**', 'tether/**', 'pyproject.toml', '.github/workflows/web-pages.yml']
 permissions:
   contents: read
 concurrency:

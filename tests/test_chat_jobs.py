@@ -6,12 +6,12 @@ import time
 from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
-from tend import store, ai, chat_jobs
-from tend.app import app
+from tether import store, ai, chat_jobs
+from tether.app import app
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv('TEND_DB', str(tmp_path/'jobs.sqlite3'))
+    monkeypatch.setenv('TETHER_DB', str(tmp_path/'jobs.sqlite3'))
     monkeypatch.setattr(ai, 'public_config', lambda: {'has_key': False})
     store.init()
     return TestClient(app, base_url='http://127.0.0.1')
@@ -100,7 +100,7 @@ def test_failed_and_interrupted_requests_are_not_automatically_replayed(client, 
     assert 'may have been saved' in state['jobs'][0]['error']
 
 def test_notification_has_tether_icon_and_brand(monkeypatch,tmp_path):
-    from tend import notifications,branding
+    from tether import notifications,branding
     calls=[];icon=tmp_path/'tether-chat.ico';icon.write_bytes(b'icon')
     monkeypatch.setitem(sys.modules,'plyer',SimpleNamespace(notification=SimpleNamespace(notify=lambda **kw:calls.append(kw))))
     monkeypatch.setattr(branding,'icon_path',lambda:icon)

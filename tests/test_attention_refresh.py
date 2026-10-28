@@ -1,12 +1,12 @@
 """Live Attention reflects saved changes without calling the provider."""
 import json
 import pytest
-from tend import ai, attention, store
+from tether import ai, attention, store
 
 
 @pytest.fixture
 def records(tmp_path, monkeypatch):
-    monkeypatch.setenv('TEND_DB', str(tmp_path/'attention.sqlite3'))
+    monkeypatch.setenv('TETHER_DB', str(tmp_path/'attention.sqlite3'))
     store.init()
     monkeypatch.setattr(ai, '_attention_cache', {'items': [], 'revisions': {}})
     monkeypatch.setattr(ai, 'public_config', lambda: {'has_key': True})

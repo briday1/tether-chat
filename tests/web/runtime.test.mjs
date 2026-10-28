@@ -244,7 +244,7 @@ test('long rate limit delays are shown without retrying early',async t=>{
 
 test('listed OpenAI chat tools receive their required reasoning option',async t=>{
   const {readFileSync}=await import('node:fs');
-  const tool_models=JSON.parse(readFileSync(new URL('../../tend/tool-models.json',import.meta.url)));
+  const tool_models=JSON.parse(readFileSync(new URL('../../tether/tool-models.json',import.meta.url)));
   const {api}=await setup(t,async(url,options)=>{
     const body=JSON.parse(options.body);assert.equal(body.reasoning_effort,'none');assert.equal(body.model,'gpt-6-sol');
     return provider({role:'assistant',content:'OK'});

@@ -1,5 +1,6 @@
 """Windows desktop entry point: start tether-chat only when needed, then open an app window."""
 import os
+from . import environment
 import subprocess
 import sys
 import time
@@ -23,7 +24,7 @@ def healthy():
 def open_app():
     url=f"http://127.0.0.1:{port()}/"
     paths=[]
-    for root in (os.environ.get("PROGRAMFILES(X86)",""),os.environ.get("PROGRAMFILES",""),os.environ.get("LOCALAPPDATA","")):
+    for root in (environment.get("PROGRAMFILES(X86)",""),environment.get("PROGRAMFILES",""),environment.get("LOCALAPPDATA","")):
         if root:
             paths.extend([str(Path(root)/"Microsoft"/"Edge"/"Application"/"msedge.exe"),
                           str(Path(root)/"Google"/"Chrome"/"Application"/"chrome.exe")])
@@ -69,19 +70,19 @@ def start_and_open(open_window=True):
     if not reuse:
         # Run the console Python interpreter with its console creation suppressed.
         # The supervisor prints progress; pythonw has no stdout and can crash on print().
-        py=os.environ.get("TEND_SERVICE_PYTHON",sys.executable)
+        py=environment.get("TETHER_SERVICE_PYTHON",sys.executable)
         if py.lower().endswith("pythonw.exe"):
             py=py[:-len("pythonw.exe")]+"python.exe"
         flags=getattr(subprocess,"CREATE_NO_WINDOW",0)|getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)
-        env=os.environ.copy()
-        env["TEND_NO_BROWSER"]="1"
+        env=environment.snapshot()
+        env["TETHER_NO_BROWSER"]="1"
         logs=Path.home()/".tend"/"server.log"
         logs.parent.mkdir(parents=True,exist_ok=True)
         from datetime import datetime,timezone
         log_offset=logs.stat().st_size if logs.exists() else 0
         with logs.open("ab") as output:
             output.write(("\n[tether-chat launch "+datetime.now(timezone.utc).isoformat()+"]\n").encode());output.flush()
-            child=subprocess.Popen([py,"-m","tend.cli"],env=env,creationflags=flags,
+            child=subprocess.Popen([py,"-m","tether.cli"],env=env,creationflags=flags,
                              stdin=subprocess.DEVNULL,stdout=output,stderr=subprocess.STDOUT,
                              close_fds=True,cwd=str(Path(__file__).resolve().parent.parent))
         try:

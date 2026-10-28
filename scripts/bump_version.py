@@ -20,7 +20,7 @@ def main():
     args = parser.parse_args()
     if not 2000 <= args.year <= 9999:
         parser.error('Year must be a four-digit year')
-    meta = ROOT/'pyproject.toml'; runtime = ROOT/'tend/__init__.py'
+    meta = ROOT/'pyproject.toml'; runtime = ROOT/'tether/__init__.py'
     text = meta.read_text(encoding='utf-8')
     old = tomllib.loads(text)['project']['version']; new = next_version(old, args.year)
     code = runtime.read_text(encoding='utf-8')

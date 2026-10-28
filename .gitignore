@@ -11,7 +11,7 @@ web-dist/
 node_modules/
 uv.lock
 
-# Tend user data and all SQLite variants (including local backups)
+# Tether user data and all SQLite variants (including local backups)
 .tend/
 **/.tend/
 *.db
@@ -28,7 +28,7 @@ uv.lock
 *.bak
 *.sqlite3.bak
 *.sqlite3.backup
-*tend-backup*
+*tether-backup*
 backups/
 backup/
 
@@ -42,3 +42,8 @@ ai.json
 *.key
 *.p12
 *.pfx
+
+# Branded data names (legacy .tend remains ignored above)
+.tether/
+**/.tether/
+*tether-backup*

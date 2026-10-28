@@ -10,27 +10,27 @@ ROOT=Path(__file__).resolve().parents[1]
 wheel=next((ROOT/'dist').glob('tether_chat-*.whl'))
 check='''from importlib.metadata import distribution
 from importlib.resources import files
-from tend.snapshot_export import png,svg
-from tend.native import WINDOW_TITLE
-from tend import __version__
+from tether.snapshot_export import png,svg
+from tether.native import WINDOW_TITLE
+from tether import __version__
 d=distribution("tether-chat")
 names={e.name for e in d.entry_points if e.group in ("console_scripts","gui_scripts")}
 assert names=={"tether-chat","tether-chat-desktop"},names
 assert d.version==__version__
 assert WINDOW_TITLE=="tether-chat "+__version__
-assert files("tend").joinpath("chat.js").is_file()
-assert files("tend").joinpath("notes.js").is_file()
-assert files("tend").joinpath("notes.css").is_file()
-assert files("tend").joinpath("action-notes.js").is_file()
-assert files("tend").joinpath("voice.js").is_file()
-assert files("tend").joinpath("speech.mjs").is_file()
-assert files("tend").joinpath("updates.js").is_file()
-assert files("tend").joinpath("provider-models.js").is_file()
-assert files("tend").joinpath("preferences.js").is_file()
-assert files("tend").joinpath("locations.js").is_file()
-assert files("tend").joinpath("tool-models.json").is_file()
+assert files("tether").joinpath("chat.js").is_file()
+assert files("tether").joinpath("notes.js").is_file()
+assert files("tether").joinpath("notes.css").is_file()
+assert files("tether").joinpath("action-notes.js").is_file()
+assert files("tether").joinpath("voice.js").is_file()
+assert files("tether").joinpath("speech.mjs").is_file()
+assert files("tether").joinpath("updates.js").is_file()
+assert files("tether").joinpath("provider-models.js").is_file()
+assert files("tether").joinpath("preferences.js").is_file()
+assert files("tether").joinpath("locations.js").is_file()
+assert files("tether").joinpath("tool-models.json").is_file()
 for name in ("index.html","board.html"):
-    page=files("tend").joinpath(name).read_text(encoding="utf-8")
+    page=files("tether").joinpath(name).read_text(encoding="utf-8")
     assert '<span class="brand-word">tether<span>.</span></span>' in page
 print("Installed wheel:",d.version,"; commands:",sorted(names))
 '''
@@ -40,6 +40,7 @@ with tempfile.TemporaryDirectory(prefix='tether-chat-wheel-') as temporary:
     python=envdir/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
     subprocess.run([str(python),'-m','pip','install','--disable-pip-version-check',str(wheel)],check=True,cwd=root)
     subprocess.run([str(python),'-c',check],check=True,cwd=root)
+    subprocess.run([str(python),'-m','tether.cli','--help'],check=True,cwd=root)
     subprocess.run([str(python),'-m','tend.cli','--help'],check=True,cwd=root)
     uv=shutil.which('uv')
     if uv:

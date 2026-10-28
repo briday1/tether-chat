@@ -1,3 +1,4 @@
+from . import environment
 """Local Work/Home datasets. A workspace is organization, not an access boundary."""
 from contextvars import ContextVar
 from contextlib import contextmanager
@@ -25,7 +26,7 @@ def database_path(base):
     import os
     from pathlib import Path
     from .storage import load
-    saved=load().get('home') if not os.environ.get('TEND_DB') else None
+    saved=load().get('home') if not environment.get('TETHER_DB') else None
     return Path(saved).expanduser() if saved else base.with_name(base.stem + '.home' + base.suffix)
 
 def guidance():

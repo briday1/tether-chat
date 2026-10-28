@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
-from tend import store,workspaces
+from tether import store,workspaces
 
 def test_drive_local_routes_require_home_and_same_origin(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'work.sqlite3'))
-    from tend.app import app
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'work.sqlite3'))
+    from tether.app import app
     with TestClient(app,base_url='http://localhost') as client:
         assert client.get('/api/drive-sync/local').status_code==403
         headers={'X-Tether-Workspace':'home'}

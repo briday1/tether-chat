@@ -51,8 +51,8 @@
    retry.onclick=async()=>{retry.disabled=true;try{await enqueue(job.message,job.context?.kind==='attention'?{task_id:job.context.task_id,action_id:job.context.action_id}:null,job.context?.kind==='task_context'?job.context.task_ids:undefined)}finally{retry.disabled=false}};
    node.append(retry);
   }else{
-   node.append(el('div','tend-activity-heading',job.status==='queued'?'Queued…':'Working on your request'));
-   if(job.progress?.length){node.append(el('div','tend-activity-current',job.progress.at(-1)));const details=el('details','tend-activity-details');details.append(el('summary','','Show activity'));const log=el('div','tend-activity-log');for(const item of job.progress)log.append(el('div','',item));details.append(log);node.append(details)}
+   node.append(el('div','tether-activity-heading',job.status==='queued'?'Queued…':'Working on your request'));
+   if(job.progress?.length){node.append(el('div','tether-activity-current',job.progress.at(-1)));const details=el('details','tether-activity-details');details.append(el('summary','','Show activity'));const log=el('div','tether-activity-log');for(const item of job.progress)log.append(el('div','',item));details.append(log);node.append(details)}
    node.append(el('small','muted','You can switch to Tasks; this request will keep running.'));
   }
   return node;

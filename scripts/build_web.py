@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def shared_ai():
     """Extract only the public prompt and tool declarations; never load provider settings."""
-    source = ast.parse((ROOT / 'tend/ai.py').read_text(encoding='utf-8'))
+    source = ast.parse((ROOT / 'tether/ai.py').read_text(encoding='utf-8'))
     nodes = [node for node in source.body if
              isinstance(node, ast.FunctionDef) and node.name == 'spec' or
              isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in {'S', 'TOOLS', 'SYSTEM'} for t in node.targets)]
@@ -49,7 +49,7 @@ def paths(text, base):
 
 
 def screen(name, base):
-    page = (ROOT / 'tend' / name).read_text(encoding='utf-8')
+    page = (ROOT / 'tether' / name).read_text(encoding='utf-8')
     if name not in ('snapshot.html','display.html','drive-sharing.html'):
         page, changed = re.subn(r'<h2>AI connection</h2>.*?<a href="/api/backup"[^>]*>Download SQLite backup</a>',
                                lambda _: (ROOT / 'web/settings.html').read_text(encoding='utf-8'), page, flags=re.S)
@@ -81,7 +81,7 @@ def build(output, base='/'):
     if not re.fullmatch(r'/(?:[A-Za-z0-9_.-]+/)*', base) or '..' in base.split('/'):
         raise ValueError('Base path must be / or a repository path such as /tether-chat/')
     output = Path(output).resolve()
-    if output == ROOT or output in ROOT.parents or output == ROOT / 'web' or output == ROOT / 'tend':
+    if output == ROOT or output in ROOT.parents or output == ROOT / 'web' or output == ROOT / 'tether':
         raise ValueError('Choose a separate generated output folder')
     marker = output / '.tether-web-build'
     if output.exists() and any(output.iterdir()) and not marker.exists():
@@ -92,7 +92,7 @@ def build(output, base='/'):
     version = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     tools, system = shared_ai()
     config = {'version': version, 'base': base, 'tools': tools, 'system': system,
-              'tool_models':json.loads((ROOT/'tend/tool-models.json').read_text(encoding='utf-8'))}
+              'tool_models':json.loads((ROOT/'tether/tool-models.json').read_text(encoding='utf-8'))}
     # The spaced assignment also makes legacy in-session pollers ignore this
     # release; only a new launch should switch an already-open older app.
     (output / 'app-config.js').write_text('window.TETHER_CONFIG = ' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
@@ -100,19 +100,19 @@ def build(output, base='/'):
         if source.suffix in {'.js', '.mjs', '.css'} or source.name == 'index.html':
             shutil.copy2(source, output / source.name)
             if source.name=='runtime.mjs':
-                target=output/source.name;target.write_text(target.read_text().replace('../tend/drive-sync-core.mjs','./drive-sync-core.mjs'))
+                target=output/source.name;target.write_text(target.read_text().replace('../tether/drive-sync-core.mjs','./drive-sync-core.mjs'))
     # Keep recovery independent of cached scripts, styles and app configuration.
     (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
     for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'workspace.js', 'display.js', 'display.css','drive-sync-core.mjs','drive-sync-service.mjs','drive-journals.mjs','drive-setup.mjs','drive-sharing.mjs'):
-        text = paths((ROOT / 'tend' / name).read_text(encoding='utf-8'), base)
+        text = paths((ROOT / 'tether' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))
         (output / name).write_text(text, encoding='utf-8')
-    shutil.copy2(ROOT/'tend/drive-config.json',output/'drive-config.json')
+    shutil.copy2(ROOT/'tether/drive-config.json',output/'drive-config.json')
     for original, target in [('index.html','conversation.html'),('board.html','board.html'),('snapshot.html','snapshots.html'),('display.html','display.html'),('drive-sharing.html','drive-sharing.html')]:
         (output / target).write_text(screen(original, base), encoding='utf-8')
     sys.path.insert(0, str(ROOT))
-    from tend.windows_icon import raster
+    from tether.windows_icon import raster
     (output / 'icon').mkdir()
     for size in (32,192,512): (output / f'icon/{size}.png').write_bytes(raster(size))
     manifest = {'id':base,'name':'tether.','short_name':'tether.','description':'Your local-first task assistant',

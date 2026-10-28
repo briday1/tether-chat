@@ -1,5 +1,6 @@
 """Start tether-chat's local browser and HTTP MCP servers with one command."""
 import os
+from . import environment
 import subprocess
 import sys
 import time
@@ -44,28 +45,28 @@ def main():
         parser.error("tether-chat is local-only; bind to 127.0.0.1 or localhost.")
     if args.port is not None and not 1<=args.port<=65535:parser.error("Invalid --port")
     if args.mcp_port is not None and not 1<=args.mcp_port<=65535:parser.error("Invalid --mcp-port")
-    if args.port is not None:os.environ["TEND_WEB_PORT"]=str(args.port)
-    if args.mcp_port is not None:os.environ["TEND_MCP_PORT"]=str(args.mcp_port)
-    if args.no_browser:os.environ["TEND_NO_BROWSER"]="1"
+    if args.port is not None:os.environ["TETHER_WEB_PORT"]=str(args.port)
+    if args.mcp_port is not None:os.environ["TETHER_MCP_PORT"]=str(args.mcp_port)
+    if args.no_browser:os.environ["TETHER_NO_BROWSER"]="1"
     # Recover automatically from a stale server or another program using either port.
     from . import ports
     if ports.configure():
-        if os.environ.get("TEND_NO_BROWSER")!="1":
+        if environment.get("TETHER_NO_BROWSER")!="1":
             webbrowser.open(f"http://127.0.0.1:{ports.web_port()}/")
         print("tether-chat is already running; reused existing web server.",flush=True)
         return
     store.init()
     storage.activate_pending()
     store.init()
-    env=os.environ.copy()
+    env=environment.snapshot()
     web_host="127.0.0.1"
-    web_port=int(env.get("TEND_WEB_PORT","8765"))
-    mcp_port=int(env.get("TEND_MCP_PORT","8766"))
+    web_port=int(env.get("TETHER_WEB_PORT","8765"))
+    mcp_port=int(env.get("TETHER_MCP_PORT","8766"))
     if web_port==mcp_port: raise SystemExit("Web and MCP ports must differ")
     commands=[
-        [sys.executable,"-m","uvicorn","tend.app:app","--host",web_host,"--port",str(web_port)],
-        [sys.executable,"-m","tend.mcp_server","--http"],
-        [sys.executable,"-m","tend.notifications"]
+        [sys.executable,"-m","uvicorn","tether.app:app","--host",web_host,"--port",str(web_port)],
+        [sys.executable,"-m","tether.mcp_server","--http"],
+        [sys.executable,"-m","tether.notifications"]
     ]
     children=[]
     restart_history={}
@@ -101,7 +102,7 @@ def main():
         print(f"tether-chat MCP: http://127.0.0.1:{mcp_port}/mcp",flush=True)
         print(f"Local database: {store.path()}",flush=True)
         print("Press Ctrl+C to stop tether-chat when running in a terminal.",flush=True)
-        if env.get("TEND_NO_BROWSER")!="1":
+        if env.get("TETHER_NO_BROWSER")!="1":
             webbrowser.open(url)
         while True:
             for index,child in enumerate(children):

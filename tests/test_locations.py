@@ -1,12 +1,12 @@
 import io
 import json
 import pytest
-from tend import store,locations,ai
+from tether import store,locations,ai
 
 FEATURE={'type':'Feature','geometry':{'type':'Point','coordinates':[-0.12,51.5]},'properties':{'osm_type':'N','osm_id':123,'name':'Example Dental','housenumber':'12','street':'High Street','city':'London','country':'United Kingdom'}}
 
 def test_confirm_search_choose_and_save_is_idempotent(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'tasks.sqlite3'));store.init()
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'tasks.sqlite3'));store.init()
     task=store.capture('Dentist appointment');calls=[]
     def network(request,timeout):
         calls.append(request)
@@ -33,7 +33,7 @@ def test_confirm_search_choose_and_save_is_idempotent(tmp_path,monkeypatch):
 
 
 def test_failed_lookup_is_retryable_and_has_google_maps_fallback(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'tasks.sqlite3'));store.init();task=store.create('Visit office')
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'tasks.sqlite3'));store.init();task=store.create('Visit office')
     request=locations.prepare(task['id'],'Office London')
     def offline(*a,**k):raise OSError('offline')
     monkeypatch.setattr(locations,'urlopen',offline)
@@ -44,9 +44,9 @@ def test_failed_lookup_is_retryable_and_has_google_maps_fallback(tmp_path,monkey
 
 
 def test_confirmation_endpoints_and_cards(tmp_path,monkeypatch):
-    monkeypatch.setenv('TEND_DB',str(tmp_path/'tasks.sqlite3'))
+    monkeypatch.setenv('TETHER_DB',str(tmp_path/'tasks.sqlite3'))
     from fastapi.testclient import TestClient
-    from tend.app import app
+    from tether.app import app
     store.init();task=store.capture('Dentist appointment');request=locations.prepare(task['id'],'Example Dental London')
     monkeypatch.setattr(locations,'urlopen',lambda *a,**k:io.BytesIO(json.dumps({'features':[FEATURE]}).encode()))
     client=TestClient(app,base_url='http://127.0.0.1')

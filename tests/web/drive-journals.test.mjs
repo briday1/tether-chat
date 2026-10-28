@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {DriveJournals} from '../../tend/drive-journals.mjs';
-import {makeChanges} from '../../tend/drive-sync-core.mjs';
+import {DriveJournals} from '../../tether/drive-journals.mjs';
+import {makeChanges} from '../../tether/drive-sync-core.mjs';
 const when='2026-10-28T00:00:00Z',workspace='workspace_123',device='device_12345',file='journal_12345',peerFile='journal_99999';
 const task={id:'task1',title:'Milk',summary:'',state:'open',categories:['Home'],revisit_at:null,due_at:null,recurrence:null,next_occurrence:null,archived_at:null,created_at:when,updated_at:when};
 const records={'task:task1':task},start=makeChanges([],{},records,device,'operation_0001',when);

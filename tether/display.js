@@ -17,7 +17,7 @@
   function theme(){
     const style=getComputedStyle(document.documentElement),variables={};
     for(const name of ['page','paper','panel','text','muted','line','soft','accent','accent-text','highlight'])variables[name]=style.getPropertyValue('--'+name).trim();
-    frame.contentWindow?.postMessage({type:'tend:snapshot-theme',theme:document.documentElement.dataset.theme,variables},location.origin);
+    frame.contentWindow?.postMessage({type:'tether:snapshot-theme',theme:document.documentElement.dataset.theme,variables},location.origin);
   }
   function renderQuick(data){
     const days=data.days||[],today=iso(new Date()),items=days.flatMap(day=>(day.tasks||[]).map(task=>({...task,date:day.date}))).filter(task=>task.state!=='settled');
@@ -37,7 +37,7 @@
       $('#display-date').value=anchor;
       $('#view-week').setAttribute('aria-pressed',String(view==='week'));$('#view-month').setAttribute('aria-pressed',String(view==='month'));
       if(key!==lastRange){lastRange=key;frame.contentWindow.location.replace('/snapshots?'+new URLSearchParams({start,end,embed:'1',workspace:mode()}));}
-      else frame.contentWindow?.postMessage({type:'tend:snapshot-refresh'},location.origin);
+      else frame.contentWindow?.postMessage({type:'tether:snapshot-refresh'},location.origin);
       const response=await fetch('/api/snapshot?'+new URLSearchParams({start,end}));
       if(!response.ok)throw Error('Could not refresh this calendar. Your saved tasks have not changed.');
       const data=await response.json();if(request!==revision)return;
@@ -54,8 +54,8 @@
   new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
-    if(event.data?.type==='tend:snapshot-size' && Number.isFinite(event.data.height))frame.style.height=Math.max(190,Math.min(event.data.height+4,2500))+'px';
-    if(event.data?.type==='tend:snapshot-task' && /^[A-Za-z0-9_-]+$/.test(event.data.id||'')){
+    if(event.data?.type==='tether:snapshot-size' && Number.isFinite(event.data.height))frame.style.height=Math.max(190,Math.min(event.data.height+4,2500))+'px';
+    if(event.data?.type==='tether:snapshot-task' && /^[A-Za-z0-9_-]+$/.test(event.data.id||'')){
       const action=event.data.action_id;if(action && !/^[A-Za-z0-9_-]+$/.test(action))return;
       const href='/board#'+(action?'action/'+event.data.id+'/'+action:'task/'+event.data.id);location.href=window.tetherWorkspaceURL?window.tetherWorkspaceURL(href):href;
     }

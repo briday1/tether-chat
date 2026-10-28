@@ -1,12 +1,12 @@
 import copy
 import json
 import pytest
-from tend import drive_sync as sync, store, workspaces
+from tether import drive_sync as sync, store, workspaces
 
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setenv('TEND_DB', str(tmp_path / 'test.sqlite3'))
+    monkeypatch.setenv('TETHER_DB', str(tmp_path / 'test.sqlite3'))
     store.init()
     with workspaces.use('home'):
         store.init()
@@ -18,7 +18,7 @@ def commit(snap, records=None, metadata=None):
 
 
 def test_work_never_exports_or_applies(tmp_path, monkeypatch):
-    monkeypatch.setenv('TEND_DB', str(tmp_path / 'test.sqlite3'))
+    monkeypatch.setenv('TETHER_DB', str(tmp_path / 'test.sqlite3'))
     store.init(); store.create('Private work')
     with pytest.raises(sync.SyncError) as error:
         sync.snapshot()
