@@ -288,3 +288,21 @@ test('Home runtime keeps local data and prompts separate without changing Work c
   assert.ok(!JSON.stringify(requests).includes('Project update'));
   assert.equal(config.system,'Use tools to save changes.');
 });
+
+test('Drive local adapter is Home-only, transactional and excludes private fields',async t=>{
+  const work=await setup(t);await work.api('/threads','POST',{title:'Private work'});
+  assert.equal((await work.api('/drive-sync/local')).status,403);
+  const home=await setup(t,undefined,undefined,undefined,{config:{...config,workspace:'home'}});
+  const task=(await home.api('/threads','POST',{title:'Milk'})).data;
+  home.db.state.messages.push({id:'m',role:'user',body:'Private conversation',created_at:new Date().toISOString()});
+  home.db.state.settings.api_key='secret';home.db.state.tasks[0].action_prompt='Private AI instruction';
+  const s=(await home.api('/drive-sync/local')).data;
+  assert.equal(JSON.stringify(s).includes('Private'),false);assert.equal(JSON.stringify(s).includes('secret'),false);
+  const changed=copy(s.records);changed['task:'+task.id].title='Bread';
+  const result=await home.api('/drive-sync/local','POST',{expected:s.records,expected_revision:s.revision,records:changed,metadata:{queue:[]}});
+  assert.equal(result.status,200);assert.equal(home.db.state.tasks[0].title,'Bread');assert.equal(home.db.state.tasks[0].action_prompt,'Private AI instruction');
+  assert.equal((await home.api('/drive-sync/local','POST',{expected:s.records,expected_revision:s.revision,records:s.records,metadata:{}})).status,409);
+  const now=result.data;const injected=copy(now.records);injected['task:'+task.id].api_key='bad';
+  assert.equal((await home.api('/drive-sync/local','POST',{expected:now.records,expected_revision:now.revision,records:injected,metadata:{}})).status,422);
+  const backup=(await home.api('/portable')).data;assert.equal(JSON.stringify(backup).includes('queue'),false);
+});

@@ -49,6 +49,7 @@
     }
     for (const frame of document.querySelectorAll('iframe[src]')) { const url=decorate(frame.src);if(url!==frame.src)frame.contentWindow.location.replace(url); }
     if (workspace === 'home') {
+      if(header){const share=document.createElement('a');share.href=decorate('/drive-sharing');share.textContent='Share Home';header.append(share);}
       const prompt = document.querySelector('#actionPrompt');
       if (prompt) prompt.placeholder = 'What should happen when this personal task is due?';
       const form = document.querySelector('#storageForm');

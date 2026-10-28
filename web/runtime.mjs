@@ -1,3 +1,4 @@
+import {project,applyToState,stable as syncStable,SyncError} from '../tend/drive-sync-core.mjs';
 import {Database, Model, Problem, required, now, uid, copy, snapshotRange} from './store.mjs';
 import {exportData, importData} from './portable.mjs';
 import {encryptKey, decryptKey} from './credentials.mjs';
@@ -201,7 +202,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
               if(!readOnlyTools.has(name))current.changes_saved=true;return result;
             });used.push(name);await progress((labels[name]||'Tool operation')+' — done');
           }
-        }catch(error){result={error:error instanceof Problem?error.message:'Invalid tool arguments'};await progress('Tool operation — could not complete')}
+        }catch(error){result={error:error instanceof Problem||error instanceof SyncError?error.message:'Invalid tool arguments'};await progress('Tool operation — could not complete')}
         transcript.push({role:'tool',tool_call_id:call.id||'',content:JSON.stringify(result)});
       }
       repeatedRounds=changed?0:repeatedRounds+1;
@@ -230,7 +231,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
             const message={id:uid(),role:'assistant',body:result.answer,created_at:now()};s.messages.push(message);
             Object.assign(current,{status:'done',result:{...result,answer_html:markdown(result.answer)},assistant_message_id:message.id,updated_at:now()});return null});
         }catch(error){await write((m,s)=>{const current=s.jobs.find(j=>j.id===job.id);if(current?.status==='running'){
-          current.status='error';current.error=error instanceof Problem?error.message:'The request could not finish. Review saved changes before retrying.';current.updated_at=now();
+          current.status='error';current.error=error instanceof Problem||error instanceof SyncError?error.message:'The request could not finish. Review saved changes before retrying.';current.updated_at=now();
         }return null})}
       }
     });
@@ -290,6 +291,11 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
   }
   const rendered=s=>s.messages.slice(-100).map(row=>({...row,html:row.role==='assistant'?markdown(row.body):null}));
   async function route(path,method,body,query){
+    if(path==='/drive-sync/local'){
+      if(workspace!=='home')throw new Problem('Drive sharing is available only in Home',403);
+      if(method==='GET')return read((m,s)=>({records:project(s),metadata:s.drive_sync?.metadata||{},revision:s.drive_sync?.revision||0}));
+      if(method==='POST')return write((m,s)=>{const records=project(s),revision=s.drive_sync?.revision||0;if(revision!==body.expected_revision||syncStable(records)!==syncStable(body.expected))throw new Problem('Home changed during sync. Retry safely.',409);if(!body.metadata||Array.isArray(body.metadata)||typeof body.metadata!=='object'||JSON.stringify(body.metadata).length>8*1024*1024)throw new Problem('Invalid sync metadata');applyToState(s,body.records);s.drive_sync={metadata:body.metadata,revision:revision+1};return {records:project(s),metadata:s.drive_sync.metadata,revision:revision+1}});
+    }
     if(path==='/health')return {app:'tend',brand:'tether-chat',version:config.version,status:'ok',runtime:'browser'};
     if(path==='/settings')return method==='POST'?saveSettings(body):read((m,s)=>publicSettings(s));
     if(path==='/preferences')return method==='POST'?write(m=>m.setPreferences(body)):read(m=>m.preferences());
@@ -368,7 +374,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       let body={};if(options.body)body=JSON.parse(options.body);else if(input instanceof Request && !['GET','HEAD'].includes(method))body=await input.clone().json();
       const result=await route(url.pathname.slice(prefix.length),method,body,url.searchParams);
       return Response.json(result,{status:method==='POST' && url.pathname.endsWith('/chat/jobs')?202:200,headers:{'Cache-Control':'no-store'}});
-    }catch(error){return Response.json({detail:error instanceof Problem?error.message:'The local operation failed. No success was recorded.'},{status:error.status||422})}
+    }catch(error){return Response.json({detail:error instanceof Problem||error instanceof SyncError?error.message:'The local operation failed. No success was recorded.'},{status:error.status||422})}
   }
   async function notifications(){
     if(globalThis.Notification?.permission!=='granted')return;
