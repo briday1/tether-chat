@@ -5,9 +5,35 @@
   const storageKey=()=>`tether-display:${location.pathname}:${mode()}`;
   const iso=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
   const validDate=value=>typeof value==='string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value+'T12:00:00').valueOf());
-  let view='week',anchor=iso(new Date()),followingToday=true,weekStart=1,revision=0,lastRange='',busy=false;
-  try{const saved=JSON.parse(localStorage.getItem(storageKey())||'{}');if(saved.view==='month')view='month';if(saved.followingToday===false && validDate(saved.anchor)){anchor=saved.anchor;followingToday=false}}catch(_){}
-  function persist(){try{localStorage.setItem(storageKey(),JSON.stringify({view,anchor,followingToday}))}catch(_){}}
+  let view='month',anchor=iso(new Date()),followingToday=true,weekStart=1,density='compact',revision=0,lastRange='',busy=false;
+  try{const saved=JSON.parse(localStorage.getItem(storageKey())||'{}');if(['week','month'].includes(saved.view))view=saved.view;if(['compact','comfortable'].includes(saved.density))density=saved.density;if(saved.followingToday===false && validDate(saved.anchor)){anchor=saved.anchor;followingToday=false}}catch(_){}
+  function persist(){try{localStorage.setItem(storageKey(),JSON.stringify({view,anchor,followingToday,density}))}catch(_){}}
+  function sidebar(open){$('.display-main').inert=open;$('#display-sidebar').hidden=!open;$('#display-backdrop').hidden=!open;$('#display-menu').setAttribute('aria-expanded',String(open));if(open)$('#display-close').focus();else $('#display-menu').focus()}
+  $('#display-menu').onclick=()=>sidebar($('#display-sidebar').hidden);
+  $('#display-close').onclick=$('#display-backdrop').onclick=()=>sidebar(false);
+  document.addEventListener('keydown',event=>{
+    if($('#display-sidebar').hidden)return;
+    if(event.key==='Escape'){event.preventDefault();sidebar(false)}
+    if(event.key==='Tab'){const focusable=[...$('#display-sidebar').querySelectorAll('button,a,input,select')].filter(el=>!el.disabled);const first=focusable[0],last=focusable.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}}
+  });
+  function clock(){const now=new Date();$('#display-clock').dateTime=now.toISOString();$('#display-clock').textContent=now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}
+  async function syncStatus(){
+    const label=$('#display-sync');
+    try{
+      if(!navigator.onLine){label.textContent='Offline · showing saved items';label.dataset.warning='true';return}
+      const host=window.parent!==window?window.parent:window,service=host.tetherHomeSync;
+      if(!service){label.textContent='Local calendar';label.dataset.warning='false';return}
+      const state=await service.state();
+      if(!state.metadata.session){label.textContent='Local calendar';label.dataset.warning='false';return}
+      const last=Date.parse(state.metadata.lastSync||''),age=Date.now()-last;
+      if(!service.token){label.textContent='Reconnect Google in Settings';label.dataset.warning='true'}
+      else if(!service.timer){label.textContent='Household sync paused';label.dataset.warning='true'}
+      else if(state.metadata.conflicts?.length){label.textContent='Sync needs a choice in Settings';label.dataset.warning='true'}
+      else if(service.status!=='Synced'&&service.status!=='Google connected'){label.textContent=service.status||'Waiting for household sync';label.dataset.warning='true'}
+      else if(!Number.isFinite(last)||age>180000){label.textContent='Household updates delayed · check Settings';label.dataset.warning='true'}
+      else{label.textContent='Household synced '+new Date(last).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});label.dataset.warning='false'}
+    }catch(_){label.textContent='Could not check household sync';label.dataset.warning='true'}
+  }
   function range(){
     const first=new Date(anchor+'T12:00:00'),last=new Date(first);
     if(view==='month'){first.setDate(1);last.setMonth(last.getMonth()+1,0)}
@@ -33,16 +59,18 @@
     try{
       if(followingToday)anchor=iso(new Date());
       persist(); // Save the user's view before any asynchronous refresh/navigation.
-      const {start,end}=range(),key=`${start}:${end}`;
+      const {start,end}=range(),key=`${start}:${end}:${density}`;
+      const date=new Date(anchor+'T12:00:00');$('#display-title').textContent=view==='month'?date.toLocaleDateString(undefined,{month:'long',year:'numeric'}):new Date(start+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})+' – '+new Date(end+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+      $('#display-density').value=density;clock();syncStatus();
       $('#display-date').value=anchor;
       $('#view-week').setAttribute('aria-pressed',String(view==='week'));$('#view-month').setAttribute('aria-pressed',String(view==='month'));
-      if(key!==lastRange){lastRange=key;frame.contentWindow.location.replace('/snapshots?'+new URLSearchParams({start,end,embed:'1',workspace:mode()}));}
+      if(key!==lastRange){lastRange=key;frame.contentWindow.location.replace('/snapshots?'+new URLSearchParams({start,end,embed:'1',layout:'display',density,workspace:mode()}));}
       else frame.contentWindow?.postMessage({type:'tether:snapshot-refresh'},location.origin);
       const response=await fetch('/api/snapshot?'+new URLSearchParams({start,end}));
       if(!response.ok)throw Error('Could not refresh this calendar. Your saved tasks have not changed.');
       const data=await response.json();if(request!==revision)return;
-      renderQuick(data);$('#display-error').textContent='';$('#display-status').textContent='Updated '+new Date().toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})+' · refreshes automatically';persist();
-    }catch(error){if(request===revision)$('#display-error').textContent=error.message}
+      renderQuick(data);$('#display-error').textContent='';$('#display-error').hidden=true;$('#display-status').textContent='Updated '+new Date().toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})+' · refreshes automatically';persist();
+    }catch(error){if(request===revision){$('#display-error').textContent=error.message;$('#display-error').hidden=false}}
     finally{if(request===revision)busy=false}
   }
   function step(direction){const date=new Date(anchor+'T12:00:00');if(view==='month'){date.setDate(1);date.setMonth(date.getMonth()+direction)}else date.setDate(date.getDate()+7*direction);anchor=iso(date);followingToday=false;refresh(true)}
@@ -50,11 +78,12 @@
   $('#today').onclick=()=>{followingToday=true;refresh(true)};
   for(const period of ['week','month'])$('#view-'+period).onclick=()=>{view=period;refresh(true)};
   $('#display-date').onchange=event=>{if(validDate(event.target.value)){anchor=event.target.value;followingToday=false;refresh(true)}};
+  $('#display-density').onchange=event=>{density=event.target.value;refresh(true)};
   frame.addEventListener('load',theme);
   new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
-    if(event.data?.type==='tether:snapshot-size' && Number.isFinite(event.data.height))frame.style.height=Math.max(190,Math.min(event.data.height+4,2500))+'px';
+    // Dashboard owns iframe height; snapshot content fits that viewport.
     if(event.data?.type==='tether:snapshot-task' && /^[A-Za-z0-9_-]+$/.test(event.data.id||'')){
       const action=event.data.action_id;if(action && !/^[A-Za-z0-9_-]+$/.test(action))return;
       const href='/board#'+(action?'action/'+event.data.id+'/'+action:'task/'+event.data.id);location.href=window.tetherWorkspaceURL?window.tetherWorkspaceURL(href):href;
@@ -62,7 +91,8 @@
   });
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
   window.addEventListener('focus',()=>refresh());
+  const statusTimer=setInterval(()=>{clock();if(!document.hidden)syncStatus()},15000);
   const timer=setInterval(()=>{if(!document.hidden)refresh()},60000);
-  window.addEventListener('pagehide',()=>clearInterval(timer),{once:true});
+  window.addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(statusTimer)},{once:true});
   fetch('/api/preferences').then(response=>response.ok?response.json():{}).then(preferences=>{weekStart=preferences.week_start??1;refresh(true)}).catch(()=>refresh(true));
 })();
