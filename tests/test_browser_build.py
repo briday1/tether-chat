@@ -19,7 +19,7 @@ def test_build_reuses_screens_and_scopes_every_asset(tmp_path,base):
     manifest=json.loads((output/'manifest.webmanifest').read_text(encoding='utf-8'))
     assert manifest['start_url']==manifest['scope']==base
     config_text=(output/'app-config.js').read_text(encoding='utf-8')
-    config=json.loads(config_text.removeprefix('window.TETHER_CONFIG=').rstrip(';\n'))
+    config=json.loads(config_text.split('=',1)[1].strip().rstrip(';'))
     assert config['version']==tomllib.loads((ROOT/'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     tools,system=builder.shared_ai()
     assert config['tools']==tools and config['system']==system

@@ -44,6 +44,7 @@ def main():
                 context.route('https://provider.example/v1/chat/completions',provider);context.route('https://provider.example/v1/models',models);context.route('https://photon.komoot.io/api/**',photon)
                 page.goto(base);frame=page.frame_locator('#app-frame')
                 def api(path,method='GET',body=None):
+                    page.wait_for_function("document.querySelector('#app-frame')?.contentWindow?.tetherBeforeChat")
                     return page.locator('#app-frame').evaluate('(e,args)=>e.contentWindow.fetch("/tether-chat/api"+args.path,{method:args.method,headers:{"Content-Type":"application/json"},body:args.body===null?undefined:JSON.stringify(args.body)}).then(r=>r.json())',{'path':path,'method':method,'body':body})
                 def send(text):frame.get_by_label('Message tether').fill(text);frame.get_by_role('button',name='Send',exact=True).click()
                 frame.get_by_role('button',name='Settings',exact=True).click()

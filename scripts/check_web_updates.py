@@ -41,17 +41,17 @@ def main():
     with tempfile.TemporaryDirectory(prefix='tether-web-update-') as temporary:
         print('Update check: build fixture',flush=True)
         folder=Path(temporary);release=builder.build(folder/'release','/tether-chat/')
-        config=json.loads((release/'app-config.js').read_text().removeprefix('window.TETHER_CONFIG=').rstrip(';\n'))
+        config=json.loads((release/'app-config.js').read_text().split('=',1)[1].strip().rstrip(';'))
         version=config['version'];served=folder/'site'/'tether-chat';shutil.copytree(release,served)
-        legacy={**config,'version':'2026.18'}
+        legacy={**config,'version':'2026.23'}
         (served/'app-config.js').write_text('window.TETHER_CONFIG='+json.dumps(legacy)+';\n')
-        (served/'shell.mjs').write_bytes((ROOT/'tests/fixtures/legacy-web-shell.mjs').read_bytes())
-        # This snapshots the old worker without an activation message handler.
+        (served/'shell.mjs').write_bytes((ROOT/'tests/fixtures/legacy-live-shell-2026-23.mjs').read_bytes())
+        # Start with the deployed worker and in-session poller from 2026.23.
         assets=[config['base']+str(file.relative_to(served)) for file in served.rglob('*') if file.is_file() and file.name not in {'sw.js','update.html'} and not file.name.startswith('.')]
-        worker=(ROOT/'tests/fixtures/legacy-web-sw.js.in').read_text()
-        for key,value in {'__CACHE__':'tether-web:/tether-chat/:2026.18:fixture','__PREFIX__':'tether-web:/tether-chat/:','__ASSETS__':assets,'__BASE__':'/tether-chat/'}.items():worker=worker.replace(key,json.dumps(value))
+        worker=(ROOT/'tests/fixtures/legacy-live-sw-2026-23.js.in').read_text()
+        for key,value in {'__CACHE__':'tether-web:/tether-chat/:2026.23:fixture','__PREFIX__':'tether-web:/tether-chat/:','__ASSETS__':assets,'__BASE__':'/tether-chat/','__VERSION__':'2026.23'}.items():worker=worker.replace(key,json.dumps(value))
         (served/'sw.js').write_text(worker)
-        # The actual old release has no update page on its server or in its cache.
+        # The independent recovery page arrives with the new deployment.
         (served/'update.html').unlink()
         server=ThreadingHTTPServer(('127.0.0.1',0),partial(FreshHandler,directory=str(folder/'site')))
         threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -76,9 +76,14 @@ def main():
                 before=page.evaluate(DB,'read')
                 unrelated=context.new_page();unrelated.goto(base.replace('/tether-chat/','/unrelated.html'));unrelated.evaluate("window.keepThisTab='untouched'")
                 other=context.new_page();other.goto(base)
-                expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text('2026.18')
+                expect(other.frame_locator('#app-frame').locator('#browserVersion')).to_contain_text('2026.23')
                 print('Update check: deploy current release',flush=True)
                 shutil.copytree(release,served,dirs_exist_ok=True)
+                page.bring_to_front()
+                page.evaluate("window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'))")
+                page.wait_for_timeout(1000)
+                expect(frame.locator('#browserVersion')).to_contain_text('2026.23')
+                expect(frame.get_by_label('Message tether')).to_have_value('Keep this unsent phone draft.')
                 page.evaluate(DB,'busy')
                 # New workers activate without any Settings action, but do not
                 # navigate open documents or interrupt their active work.
@@ -91,7 +96,7 @@ def main():
                 # The second tab stays open throughout recovery; no all-tabs-closed workaround.
                 other.evaluate(DB,'idle')
                 print('Update check: finish legacy recovery',flush=True)
-                update.wait_for_url(base,timeout=90000)
+                update.wait_for_url(lambda url:url.startswith(base) and 'update.html' not in url,timeout=90000)
                 # Legacy shells start current code on normal navigation; no forced
                 # navigation of other tabs with potentially unsaved editors.
                 other.reload();page.reload()
@@ -108,50 +113,48 @@ def main():
                 unlocked=update.evaluate("async()=>{const r=await tetherReady;return (await r.fetch('/tether-chat/api/settings/unlock',{method:'POST',body:JSON.stringify({passphrase:'synthetic-passphrase'})})).json()}")
                 assert unlocked['has_key']
                 expect(updated.get_by_role('button',name='Update app',exact=True)).to_have_count(0)
-                # Even a stale cached config cannot override an online release.
-                update.evaluate('''async()=>{
-                  for(const key of await caches.keys())if(key.startsWith('tether-web:/tether-chat/:')){
-                    const cache=await caches.open(key),path='/tether-chat/app-config.js';
-                    const text=await (await cache.match(path)).text();
-                    const config=JSON.parse(text.slice('window.TETHER_CONFIG='.length).trim().replace(/;$/,''));
-                    config.version='2026.18';await cache.put(path,new Response('window.TETHER_CONFIG='+JSON.stringify(config)+';'));
-                  }
-                }''')
-                print('Update check: ignore stale cache',flush=True)
-                update.reload()
-                expect(updated.locator('#browserVersion')).to_contain_text(version)
-                print('Update check: defer active work',flush=True)
+                # A deployment must not refresh an active release, even when
+                # idle, focused, reconnected, or viewing another app screen.
+                print('Update check: keep an active session on its release',flush=True)
                 future=version.split('.')[0]+'.'+str(int(version.split('.')[1])+1)
-                update.evaluate(DB,'busy')
-                updated.get_by_label('Message tether').fill('Keep this automatic-update draft.')
+                updated.get_by_label('Message tether').fill('Keep this launch-only draft.')
                 for name in ('app-config.js','sw.js'):
                     path=served/name;path.write_text(path.read_text().replace(version,future))
-                update.evaluate("window.dispatchEvent(new Event('focus'))")
+                update.evaluate("window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))")
+                # A browser may download a worker in the background. Activating
+                # its cache routing still must not replace this session's files.
+                update.evaluate("async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update()}")
                 update.wait_for_timeout(1000)
                 expect(updated.locator('#browserVersion')).to_contain_text(version)
-                assert update.url==base
-                update.evaluate(DB,'idle')
+                updated.get_by_role('link',name='Tasks',exact=True).click()
+                updated.get_by_role('link',name='Conversation',exact=True).click()
+                expect(updated.locator('#browserVersion')).to_contain_text(version)
+                expect(updated.get_by_label('Message tether')).to_have_value('Keep this launch-only draft.')
                 updated.get_by_role('button',name='Settings',exact=True).click()
-                update.evaluate("window.dispatchEvent(new Event('focus'))")
-                update.wait_for_timeout(1000)
+                updated.get_by_label('Provider API base URL').fill('https://unsaved.example/v1')
+                print('Update check: next launch adopts the new release',flush=True)
+                launched=context.new_page();launched.goto(base)
+                fresh=launched.frame_locator('#app-frame')
+                expect(fresh.locator('#browserVersion')).to_contain_text(future,timeout=90000)
+                expect(fresh.get_by_label('Message tether')).to_have_value('Keep this launch-only draft.')
+                # Other open windows and their unsaved fields remain untouched.
                 expect(updated.locator('#browserVersion')).to_contain_text(version)
+                expect(updated.get_by_label('Provider API base URL')).to_have_value('https://unsaved.example/v1')
                 updated.get_by_role('button',name='Close settings',exact=True).click()
-                update.evaluate("window.dispatchEvent(new Event('focus'))")
-                print('Update check: await automatic refresh',flush=True)
-                expect(updated.locator('#browserVersion')).to_contain_text(future,timeout=90000)
-                expect(updated.get_by_label('Message tether')).to_have_value('Keep this automatic-update draft.')
-                after=update.evaluate(DB,'read')
+                updated.get_by_role('link',name='Tasks',exact=True).click()
+                updated.get_by_role('link',name='Conversation',exact=True).click()
+                expect(updated.locator('#browserVersion')).to_contain_text(version)
+                after=launched.evaluate(DB,'read')
                 for field in ('tasks','entries','settings'):assert after[field]==before[field]
                 assert unrelated.evaluate('window.keepThisTab')=='untouched'
-                # The complete installed bundle remains usable without the network.
-                print('Update check: offline reload',flush=True)
-                context.set_offline(True);update.reload()
-                expect(updated.locator('#browserVersion')).to_contain_text(future)
-                expect(updated.get_by_label('Message tether')).to_have_value('Keep this automatic-update draft.')
-                assert update.evaluate('document.documentElement.scrollWidth<=innerWidth')
-                if os.environ.get('TETHER_UPDATE_SCREENSHOT'):update.screenshot(path=os.environ['TETHER_UPDATE_SCREENSHOT'])
+                print('Update check: offline launch',flush=True)
+                context.set_offline(True);launched.reload()
+                expect(fresh.locator('#browserVersion')).to_contain_text(future)
+                expect(fresh.get_by_label('Message tether')).to_have_value('Keep this launch-only draft.')
+                assert launched.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                if os.environ.get('TETHER_UPDATE_SCREENSHOT'):launched.screenshot(path=os.environ['TETHER_UPDATE_SCREENSHOT'])
                 browser.close()
-                print('PASS: online releases override stale caches; automatic updates wait for chat and editors; drafts, credentials, data, offline use and unrelated tabs survive.')
+                print('PASS: releases change at launch only; open sessions, routes and unsaved fields remain pinned; drafts, keys, data and offline use survive.')
         finally:server.shutdown();server.server_close()
 
 
