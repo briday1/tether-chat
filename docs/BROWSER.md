@@ -12,7 +12,7 @@ On iPhone, open the app in Safari and use **Share → Add to Home Screen**. Othe
 
 The browser edition loads current app files when online and uses the installed bundle offline. It checks for new releases when opened or resumed and refreshes automatically once active chats, microphone input, and open editors are finished. Tasks, notes, conversations, drafts, and saved credentials stay on this device. No update button is needed.
 
-If an older release stays cached, open [Update tether](https://briday1.github.io/tether-chat/update.html) in the same browser where you use tether. This independent update page works while other tether tabs remain open. It waits for an active chat to finish, downloads the latest interface, verifies the installed version, refreshes other open Tether tabs, and opens the updated app. If installed files still report an older version, it shows that version and offers Try again instead of reporting success. Keep using the same browser and origin to retain your existing local data.
+If an older release stays cached, open [Update tether](https://briday1.github.io/tether-chat/update.html) in the same browser where you use tether. This independent update page works while other tether tabs remain open. It waits for an active chat to finish, downloads the latest interface, verifies the installed version, notifies other open tabs to refresh when safe, and opens the updated app. If installed files still report an older version, it shows that version and offers Try again instead of reporting success. Keep using the same browser and origin to retain your existing local data.
 
 ## AI connection
 
