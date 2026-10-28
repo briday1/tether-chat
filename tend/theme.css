@@ -130,6 +130,7 @@ html::-webkit-scrollbar,html::-webkit-scrollbar-track,html::-webkit-scrollbar-co
 html::-webkit-scrollbar-thumb{border-color:var(--page)}
 
 /* One control system across desktop and browser Settings. */
+.settings [hidden]{display:none!important}
 .settings button,.settings a.secondary,.settings .web-file,.settings a[href="/api/backup"]{
   appearance:none!important;-webkit-appearance:none!important;box-sizing:border-box!important;
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
