@@ -149,9 +149,11 @@ def main():
                 expect(frame.get_by_label('Model',exact=True)).to_have_value('test-mini')
                 assert model_requests==['Bearer synthetic-test-key'] and requests==[]
                 frame.get_by_label('Model',exact=True).select_option('test-model')
+                frame.locator('#providerAdvanced').evaluate('(e)=>e.open=true')
                 frame.get_by_label('Save encrypted key on this device').check()
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 # Test must save the newly entered key and fields, with no prior Save click.
+                frame.locator('#providerActions').evaluate('(e)=>e.open=true')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
                 # A billing error keeps the saved key usable and must not be retried.
@@ -159,6 +161,7 @@ def main():
                 frame.locator('#provider').screenshot(path=str(folder/'connection.jpg'),type='jpeg',quality=90)
                 page.set_viewport_size({'width':1280,'height':900})
                 before=len(requests);provider_error='credit_balance_exhausted'
+                frame.locator('#providerActions').evaluate('(e)=>e.open=true')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('API credit balance is empty')
                 expect(frame.locator('#keyStatus')).to_contain_text('Key is unlocked')
@@ -167,10 +170,12 @@ def main():
                 expect(frame.get_by_label('Provider API base URL')).to_have_value('https://provider.example/v1')
                 frame.get_by_label('Provider API base URL').fill('https://wrong-provider.example/v1')
                 assert frame.locator('#model option').evaluate_all('(options)=>options.map(o=>o.value)')==['']
+                frame.locator('#providerActions').evaluate('(e)=>e.open=true')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Re-enter your API key')
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1')
                 frame.get_by_label('Model',exact=True).select_option('changed-test-model')
+                frame.locator('#providerActions').evaluate('(e)=>e.open=true')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
                 frame.get_by_role('button',name='Lock key',exact=True).click()
@@ -178,6 +183,7 @@ def main():
                 frame.get_by_label('Unlock passphrase',exact=True).fill('synthetic-passphrase')
                 frame.get_by_role('button',name='Unlock saved key',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Saved key unlocked')
+                frame.locator('#providerActions').evaluate('(e)=>e.open=true')
                 frame.get_by_role('button',name='Test connection',exact=True).click()
                 expect(frame.locator('#providerStatus')).to_contain_text('Connection successful')
                 # Save and close immediately, then chat while encryption/save is still pending.
@@ -221,6 +227,7 @@ def main():
                 with page.expect_download() as download:calendar.get_by_role('button',name='SVG',exact=True).click()
                 assert download.value.suggested_filename.endswith('.svg')
                 frame.get_by_role('button',name='Settings',exact=True).click()
+                frame.locator('#otherSettings').evaluate('(e)=>e.open=true')
                 with page.expect_download() as download:frame.get_by_role('button',name='Download backup',exact=True).click()
                 exported=json.loads(Path(download.value.path()).read_text())
                 assert len(exported['data']['tasks'])==2

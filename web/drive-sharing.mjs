@@ -22,7 +22,7 @@ const setup=new HouseholdSetup({transport:service.transport,localStorage,storage
 host.tetherHomeSetup=setup;
 const sheetURL=id=>'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(id)+'/edit';
 const invitation=()=>host.tetherHouseholdInvite;
-const status=text=>$('syncStatus').textContent=text;
+const status=text=>{$('syncStatus').textContent=text;if(/Google|copied|Paused|Reconnect|Invitation|Setup/.test(text))$('householdMessage').textContent=text;};
 async function show(){
   const s=await local('GET'),session=s.metadata.session,pending=setup.state();
   const ai=await householdAI.status();
