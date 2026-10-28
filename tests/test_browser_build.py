@@ -72,11 +72,11 @@ def test_desktop_portable_export_contains_data_and_excludes_credentials(tmp_path
 
 def test_public_policy_pages_are_static_and_linked(tmp_path):
     output=builder.build(tmp_path/'web','/tether-chat/')
-    index=(output/'index.html').read_text()
+    index=(output/'index.html').read_text(encoding='utf-8')
     for name in ('privacy.html','terms.html'):
-        page=(output/name).read_text()
+        page=(output/name).read_text(encoding='utf-8')
         assert '<script' not in page
         assert 'October 28, 2026' in page
         assert 'href="./'+name+'"' in index
         assert 'not enabled in the current public release' in page
-    assert 'drive.file' in (output/'privacy.html').read_text()
+    assert 'drive.file' in (output/'privacy.html').read_text(encoding='utf-8')
