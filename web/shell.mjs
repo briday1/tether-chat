@@ -9,22 +9,24 @@ let homeRuntime;
 function runtimeFor(){return homeRuntime ||= createRuntime({config:{...config,workspace:'home'}});}
 // Pin this document and all of its screens to one installed bundle.
 const sessionURL=new URL(location.href);sessionURL.searchParams.set('release',config.version);sessionURL.searchParams.set('workspace','home');
+if(sessionURL.searchParams.get('view')==='sharing'){sessionURL.searchParams.delete('view');sessionURL.searchParams.set('settings','sharing');}
 history.replaceState({},'',sessionURL.pathname+sessionURL.search+sessionURL.hash);
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event});
 window.tetherInstall=async()=>{if(!installPrompt)return false;await installPrompt.prompt();installPrompt=null;return true};
 function pageURL(){
   const query=new URLSearchParams(location.search),view=query.get('view')||'conversation';query.delete('view');query.set('release',config.version);query.set('workspace',workspace);
-  const page={sharing:'drive-sharing.html',board:'board.html',snapshots:'snapshots.html',display:'display.html',conversation:'conversation.html'}[view]||'conversation.html';
+  const page={sharing:'conversation.html',board:'board.html',snapshots:'snapshots.html',display:'display.html',conversation:'conversation.html'}[view]||'conversation.html';
   return config.base+page+(query.size?'?'+query:'')+location.hash;
 }
 function shellURL(url){
   const page=url.pathname.slice(config.base.length),query=new URLSearchParams(url.search);query.set('release',config.version);query.set('workspace',workspace);
-  if(page==='drive-sharing.html')query.set('view','sharing');else if(page==='display.html')query.set('view','display');else if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');
+  if(page==='drive-sharing.html'){query.delete('view');query.set('settings','sharing');}else if(page==='display.html')query.set('view','display');else if(page==='board.html')query.set('view','board');else if(page==='snapshots.html')query.set('view','snapshots');else query.delete('view');
   return config.base+(query.size?'?'+query:'')+url.hash;
 }
 window.tetherNavigate=(href,{replace=false}={})=>{
   const url=new URL(href,location.origin);
   if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html','drive-sharing.html'].some(page=>url.pathname===config.base+page))return;
+  if(url.pathname===config.base+'drive-sharing.html'){url.pathname=config.base+'conversation.html';url.searchParams.set('settings','sharing');}
   url.searchParams.set('release',config.version);url.searchParams.set('workspace',workspace);
   const next=url.pathname+url.search+url.hash;if(current===next)return;
   history[replace?'replaceState':'pushState']({},'',shellURL(url));current=next;navigateFrame(next);
@@ -32,6 +34,7 @@ window.tetherNavigate=(href,{replace=false}={})=>{
 window.tetherSyncRoute=href=>{
   const url=new URL(href,location.origin);
   if(url.origin!==location.origin || !['conversation.html','board.html','snapshots.html','display.html','drive-sharing.html'].some(page=>url.pathname===config.base+page))return;
+  if(url.pathname===config.base+'drive-sharing.html'){url.pathname=config.base+'conversation.html';url.searchParams.set('settings','sharing');}
   url.searchParams.set('release',config.version);url.searchParams.set('workspace',workspace);
   const next=url.pathname+url.search+url.hash;
   if(current!==next){current=next;history.replaceState({},'',shellURL(url))}

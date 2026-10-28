@@ -6,7 +6,7 @@ Each browser keeps its own local database. One explicitly selected Google Sheet 
 
 ## Set up a household
 
-1. Open **Share Home → Connect Google Drive** using your own Google account. No separate tether account is needed.
+1. Open **Settings → Share Home → Connect Google Drive** using your own Google account. No separate tether account is needed.
 2. Confirm sharing your existing Home tasks and notes, then choose **Create shared household** and give it a name. A clearly named Sheet is created with a dedicated Journal tab.
 3. Choose **Share household in Google Drive**. In the Sheet, click **Share**, enter your partner’s email as an **Editor**, and send Google’s invitation. Copy household link is optional; a link alone does not grant access.
 4. Your partner connects their own Google account, chooses **Join shared household**, and selects that same Sheet in Google Picker. Existing local Home records are merged, not silently replaced. Each additional device joins the same way.

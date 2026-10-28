@@ -83,3 +83,18 @@ def test_public_policy_pages_are_static_and_linked(tmp_path):
         assert 'href="./'+name+'"' in index
         assert 'optional experimental integration' in page
     assert 'drive.file' in (output/'privacy.html').read_text(encoding='utf-8')
+
+
+def test_household_sharing_is_inside_settings_not_navigation(tmp_path):
+    output=builder.build(tmp_path/'web','/tether-chat/')
+    for name in ('conversation.html','board.html'):
+        text=(output/name).read_text(encoding='utf-8')
+        assert text.index('id="settings"') < text.index('id="sharingSettings"') < text.index('<h2>AI connection</h2>')
+        assert 'type="module" src="./drive-sharing.mjs"' in text
+        assert 'Create shared household' in text
+    workspace=(output/'workspace.js').read_text(encoding='utf-8')
+    assert 'data-drive-nav' not in workspace
+    assert "searchParams.get('settings')==='sharing'" in workspace
+    bridge=(output/'bridge.js').read_text(encoding='utf-8')
+    assert "query.set('settings','sharing')" in bridge
+    assert 'Create shared household' not in (output/'drive-sharing.html').read_text(encoding='utf-8')

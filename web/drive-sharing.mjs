@@ -1,7 +1,8 @@
 import {HomeSync,uuid} from './drive-sync-service.mjs';
 import {DriveSheets} from './drive-sheets.mjs';
 import {HouseholdSetup} from './drive-setup.mjs';
-const $=id=>document.getElementById(id),host=window.top;
+const root=document.getElementById('sharingSettings');
+const $=id=>root.querySelector('#'+id),host=window.top;
 if(window.TETHER_CONFIG?.product!=='tether-home')throw Error('Household sharing is available only in tether-home.');
 const fetcher=window.fetch.bind(window),apiBase=window.TETHER_CONFIG.base+'api';
 const local=async(method,body)=>{const response=await fetcher(apiBase+'/drive-sync/local',{method,headers:{'Content-Type':'application/json','X-Tether-Workspace':'home'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json();if(!response.ok){const error=Error(result.detail||'Local sync failed');error.status=response.status;throw error}return result};
@@ -80,5 +81,9 @@ $('abandonSetup').onclick=()=>run(async()=>{if(confirm('Forget pending setup? Ex
 $('copyInvite').onclick=()=>run(async()=>{const s=await local('GET');if(!s.metadata.session)throw Error('Create or join a household first.');await navigator.clipboard.writeText(sheetURL(s.metadata.session.spreadsheetId));service.status='Household link copied. Grant access with Google’s Share button before sending it.';});
 $('sync').onclick=()=>run(()=>service.sync({force:true}));$('pause').onclick=()=>{uiGeneration++;setup.stop();service.stop();service.status='Paused; local edits are safe';show()};
 $('disconnect').onclick=()=>run(async()=>{if(confirm('Stop syncing this household? Local tasks and the shared Sheet are kept.')){uiGeneration++;setup.stop();await service.disconnect()}});
-window.addEventListener('pagehide',()=>{uiGeneration++;setup.stop();picker?.dispose()});
+const pauseSetup=()=>{uiGeneration++;setup.stop();picker?.dispose();picker=null};
+window.addEventListener('pagehide',pauseSetup);
+// Dismissing Settings cancels unfinished sign-in/setup, not an established sync.
+const settings=root.closest('#settings');
+if(settings)new MutationObserver(()=>{if(settings.classList.contains('hidden'))pauseSetup()}).observe(settings,{attributes:true,attributeFilter:['class']});
 await show().catch(error=>status(error.message));

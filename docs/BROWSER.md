@@ -122,6 +122,6 @@ Display provides week/month navigation, fixed calendar cells, scrollable daily
 items and date/task previews. **Use as chat context** pins a task to conversation;
 remove the chip to dismiss it. Pins do not restrict ordinary task tools.
 
-For optional household collaboration, use **Share Home**. Each person connects
+For optional household collaboration, use **Settings → Share Home**. Each person connects
 their own Google account; the publisher configures Google once. Read
 [Drive setup and limitations](DRIVE_SYNC.md). Do not sync a live SQLite file.

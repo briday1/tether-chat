@@ -5,7 +5,7 @@
   try{shell=window.top.location.origin===location.origin && window.top.tetherReady ? window.top : null}catch(_){}
   if(!shell){
     const query=new URLSearchParams(location.search),page=location.pathname.split('/').at(-1);
-    if(page==='drive-sharing.html')query.set('view','sharing');if(page==='display.html')query.set('view','display');if(page==='board.html')query.set('view','board');if(page==='snapshots.html')query.set('view','snapshots');
+    if(page==='drive-sharing.html'){query.delete('view');query.set('settings','sharing');}if(page==='display.html')query.set('view','display');if(page==='board.html')query.set('view','board');if(page==='snapshots.html')query.set('view','snapshots');
     location.replace(config.base+(query.size?'?'+query:'')+location.hash);return;
   }
   const screenRuntime=shell.tetherReady;

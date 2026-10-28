@@ -52,9 +52,10 @@ def screen(name, base):
     page = (ROOT / ('web' if name=='drive-sharing.html' else 'tether') / name).read_text(encoding='utf-8')
     if name not in ('snapshot.html','display.html','drive-sharing.html'):
         page, changed = re.subn(r'<h2>AI connection</h2>.*?<a href="/api/backup"[^>]*>Download SQLite backup</a>',
-                               lambda _: (ROOT / 'web/settings.html').read_text(encoding='utf-8'), page, flags=re.S)
+                               lambda _: (ROOT / 'web/sharing-settings.html').read_text(encoding='utf-8') + (ROOT / 'web/settings.html').read_text(encoding='utf-8'), page, flags=re.S)
         if changed != 1:
             raise ValueError('Desktop settings changed; update the browser settings adapter for ' + name)
+        page = page.replace('</body>', '<script type="module" src="./drive-sharing.mjs"></script></body>')
         start = page.index('async function loadSettings(){')
         end = page.index('function navigateBoardHash(){', start) if name == 'board.html' else page.index('</script>', start)
         page = page[:start] + 'const loadSettings=window.tetherLoadSettings,loadStorage=window.tetherLoadStorage;\n' + page[end:]

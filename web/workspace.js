@@ -39,7 +39,10 @@
         if (/\/display(?:\.html)?$/.test(location.pathname)) display.className = 'active';
         tasks?.after(display);
       }
-      if(!header.querySelector('[data-drive-nav]')){const sharing=document.createElement('a');sharing.textContent='Share Home';sharing.dataset.driveNav='';sharing.href=decorate(window.TETHER_CONFIG.base+'drive-sharing.html');header.append(sharing);}
+    }
+    if(new URL(location.href).searchParams.get('settings')==='sharing'){
+      const settings=document.querySelector('#sharingSettings');
+      if(settings){document.querySelector('#navsettings')?.click();settings.open=true;settings.scrollIntoView({block:'start'});}
     }
     for (const frame of document.querySelectorAll('iframe[src]')) { const url=decorate(frame.src);if(url!==frame.src)frame.contentWindow.location.replace(url); }
   });
