@@ -128,3 +128,18 @@ def test_dashboard_task_history_is_owned_by_display_not_nested_snapshot():
     assert "type:'tether:snapshot-detail-request',action:'close'" in snapshot
     assert "if(parentOwnsDetail)return;if(history.state?.tetherSnapshotDetail)" in snapshot
     assert "if(event.data?.type==='tether:snapshot-detail-close'){dismissDetail();detailClosing=false}" in snapshot
+
+
+def test_calendar_return_is_automatic_without_helper_copy():
+    page = (ROOT / 'tether/snapshot.html').read_text(encoding='utf-8')
+    assert 'date-panel-hint' not in page
+    assert 'Returns to Today after 15 seconds' not in page
+    assert 'function scheduleReturn()' in page and '15000' in page
+
+
+def test_main_settings_gear_matches_borderless_display():
+    for name in ['index.html', 'board.html']:
+        page = (ROOT / 'tether' / name).read_text(encoding='utf-8')
+        assert 'border:0;border-radius:0;background:none;cursor:pointer}.settings-gear' in page
+        assert '.settings-gear:focus-visible{outline:2px solid var(--accent)' in page
+        assert 'class="settings-gear" aria-label="Settings" title="Settings"' in page

@@ -1,7 +1,20 @@
 """Exercise desktop settings controls with an isolated synthetic credential service."""
 import json
+from pathlib import Path
+
+def check_nav_settings_gear(ui):
+    gear = ui.locator('#navsettings')
+    assert gear.get_attribute('aria-label') == 'Settings'
+    assert gear.evaluate("n=>{const s=getComputedStyle(n);return s.borderTopWidth==='0px'&&s.borderRightWidth==='0px'&&s.backgroundColor==='rgba(0, 0, 0, 0)'}")
+    assert gear.locator('svg').get_attribute('width') == '21'
+    product = gear.evaluate("()=>window.tetherWorkspace||'work'")
+    view = ui.locator('.topnav a.active').inner_text().strip().lower()
+    Path('artifacts').mkdir(exist_ok=True)
+    ui.locator('.topnav').screenshot(path=f'artifacts/display-{product}-{view}-settings-gear.png')
+
 
 def check_settings_appearance(ui):
+    check_nav_settings_gear(ui)
     controls=ui.locator('#settings button:not(#closeSettings)').evaluate_all('''buttons=>buttons.filter(b=>b.getClientRects().length).map(b=>{
       const s=getComputedStyle(b);return {text:b.textContent,height:b.getBoundingClientRect().height,font:s.fontSize,radius:s.borderRadius,border:s.borderTopWidth,padding:s.padding};
     })''')

@@ -48,6 +48,7 @@ def check_display_header(page, screen):
     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-28')
     page.keyboard.press('Enter')
     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-29')
+    expect(calendar.locator('#date-panel-hint')).to_have_count(0)
     # Selected date does not steal actual Today's visual/accessible identity.
     expect(calendar.locator('.today')).to_have_attribute('data-date', '2026-10-28')
     expect(calendar.locator('[aria-current="date"]')).to_have_count(1)
