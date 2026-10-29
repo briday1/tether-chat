@@ -10,7 +10,7 @@
 `;document.head.append(style);
   const button=document.createElement('button');button.id='display-quick-chat';button.type='button';button.textContent='Quick chat';button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-controls','display-chat-dialog');
   const dialog=document.createElement('dialog');dialog.id='display-chat-dialog';dialog.setAttribute('aria-label','Quick chat');
-  dialog.innerHTML='<header class="display-chat-heading"><strong>Quick chat</strong><small>Requests keep running when closed</small><button type="button" aria-label="Close quick chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><iframe id="display-chat-frame" title="Conversation with tether"></iframe>';
+  dialog.innerHTML='<header class="display-chat-heading"><strong>Quick chat</strong><button type="button" aria-label="Close quick chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><iframe id="display-chat-frame" title="Conversation with tether"></iframe>';
   document.body.append(button,dialog);
   const frame=dialog.querySelector('iframe');let loaded=false;
   const message=type=>frame.contentWindow?.postMessage({type},location.origin);

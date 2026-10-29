@@ -175,3 +175,14 @@ html::-webkit-scrollbar-thumb{border-color:var(--page)}
 .topnav .workspace-picker{flex:0 0 auto!important;min-width:0!important;width:74px!important;margin:0 5px!important}.topnav>a{white-space:nowrap}
 @media(max-width:560px){.topnav{gap:5px!important;padding-left:8px!important;padding-right:8px!important}.topnav>a{padding:6px 4px!important;font-size:12px!important}.topnav .workspace-picker{width:65px!important;margin:0!important;font-size:12px!important}.topnav .brand{gap:4px!important}.topnav .tether-mark{width:24px!important;height:24px!important}.topnav .brand-word{font-size:18px!important}.topnav .settings-gear{width:30px!important;height:30px!important;min-width:30px!important}}
 @media(max-width:420px){.topnav{gap:3px!important}.topnav .brand-word{font-size:16px!important}.topnav .tether-mark{width:20px!important;height:20px!important}.topnav .workspace-picker{width:61px!important}.topnav>a{padding:6px 3px!important}}
+
+/* Fixed slots keep draft width and the send/stop target stable in every state. */
+.composer-actions{display:grid;grid-template-columns:44px 44px;gap:8px;flex:0 0 96px;align-self:flex-end}
+.composer-actions .composer-button{width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+.composer-actions #send,.composer-actions #stop-chat{grid-column:2;grid-row:1}
+.composer-actions #interrupt-chat{grid-column:1;grid-row:1}
+.composer-actions .composer-button[hidden]{display:none!important}
+.composer-actions #interrupt-chat[hidden]{display:inline-flex!important;visibility:hidden;pointer-events:none}
+.composer-actions .composer-button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.composer-actions .composer-button:disabled{opacity:.55;cursor:default}
+.composer-actions .composer-button svg{pointer-events:none}

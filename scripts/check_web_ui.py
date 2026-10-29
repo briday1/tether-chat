@@ -263,6 +263,9 @@ def main():
                 frame.get_by_role('button',name='Close settings').click()
                 check_attention_updates(page,frame,'/tether-chat/api',base+'?view=board','/tether-chat/board.html',embedded=True)
                 check_note_replies(page,frame,'/tether-chat/api')
+                frame.get_by_role('link',name='Conversation',exact=True).click()
+                from composer_ui_checks import check_composer_controls
+                check_composer_controls(page,frame,'home-conversation')
                 assert not errors,errors
                 browser.close()
                 print('Browser edition: shared UI, voice, imports, scoped actions, encrypted keys, durable chat, backup, calendar, mobile, offline, and automatic Attention updates passed.')

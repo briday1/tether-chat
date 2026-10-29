@@ -12,8 +12,9 @@
   const cap=Math.max(44,Math.min(200,Math.floor(viewport*.3)));
   const scroll=input.scrollTop;
   input.style.maxHeight=cap+'px';input.style.height='44px';
-  const height=Math.min(cap,Math.max(44,input.scrollHeight));
-  input.style.height=height+'px';input.style.overflowY=input.scrollHeight>height?'auto':'hidden';
+  // An empty draft stays one row even if the placeholder wraps on a phone.
+  const height=input.value?Math.min(cap,Math.max(44,input.scrollHeight)):44;
+  input.style.height=height+'px';input.style.overflowY=input.value&&input.scrollHeight>height?'auto':'hidden';
   input.scrollTop=scroll;
   if(atBottom)chat.scrollTop=chat.scrollHeight;
  }
@@ -44,7 +45,13 @@
  let syncing=false,syncAgain=false,timer=null,jobs=[],first=true,submitting=false,jobStamp='';
  let attentionRequest=0,attentionStamp='',attentionTimer=null;
  const nodes=new Map(),pendingNodes=new Map(),sending=new Set(),attentionSending=new Set(),rejected=new Map();
- const stopButton=el('button','secondary','Stop');stopButton.type='button';stopButton.id='stop-chat';stopButton.hidden=true;document.querySelector('.sendrow').append(stopButton);
+ const actions=document.querySelector('.composer-actions');
+ const stopButton=el('button','primary composer-button');stopButton.type='button';stopButton.id='stop-chat';stopButton.hidden=true;
+ stopButton.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
+ const interruptButton=el('button','secondary composer-button');interruptButton.type='submit';interruptButton.id='interrupt-chat';interruptButton.hidden=true;
+ interruptButton.title='Stop the current request and send this added context';interruptButton.setAttribute('aria-label','Interrupt with added context');
+ interruptButton.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-5a5 5 0 0 1 5-5h9m-5-5 5 5-5 5"/></svg>';
+ actions.append(interruptButton,stopButton);
  let stopping=false;
  const sendPromises=new Map(),confirmedStops=new Set(),cancelSending=new Set();
  function pendingStops(){try{return JSON.parse(localStorage.getItem(stopKey)||'{}')}catch(_){return {}}}
@@ -57,7 +64,17 @@
  }
  function retryStops(){for(const id of Object.keys(pendingStops())){if(cancelSending.has(id)||readJournal()[id])continue;cancelSending.add(id);confirmStop(id).then(()=>sync()).catch(()=>{}).finally(()=>cancelSending.delete(id))}}
  function activeIds(){return [...new Set([...jobs.filter(j=>['queued','running'].includes(j.status)).map(j=>j.id),...Object.keys(readJournal()),...Object.keys(pendingStops())])]}
- function updateControls(){const active=activeIds().length>0;stopButton.hidden=!active;stopButton.disabled=stopping;stopButton.textContent=stopping?'Stopping…':'Stop';const send=document.querySelector('#send');send.textContent=active?'Interrupt':'Send';send.title=active?'Stop the current request and send this added context':'Send message';}
+ function updateControls(){
+  const active=activeIds().length>0,send=document.querySelector('#send'),focused=document.activeElement;
+  send.hidden=active;stopButton.hidden=!active;stopButton.disabled=stopping;
+  stopButton.title=stopping?'Stopping…':'Stop response';stopButton.setAttribute('aria-label',stopping?'Stopping…':'Stop');
+  stopButton.setAttribute('aria-busy',String(stopping));
+  interruptButton.hidden=!active||!document.querySelector('#message').value.trim();interruptButton.disabled=stopping||submitting||send.disabled;
+  // A keyboard user keeps the same primary action position as its state changes.
+  if(focused===send&&active)stopButton.focus();
+  else if((focused===stopButton&&!active)||(focused===interruptButton&&interruptButton.hidden))send.hidden?stopButton.focus():send.focus();
+ }
+ window.addEventListener('tether:composer-controls',updateControls);
  async function stopActive(){
   const ids=activeIds();if(!ids.length)return null;for(const id of ids){rememberStop(id);const payload=readJournal()[id];if(payload)remember({...payload,stop_requested:true})}stopping=true;updateControls();
   try{
@@ -215,7 +232,7 @@
  };
  document.querySelector('#refreshAttention').onclick=()=>reminders(true);
  const input=document.querySelector('#message');try{input.value=localStorage.getItem(draftKey)||''}catch(_){}
- input.addEventListener('input',()=>{resizeInput();try{localStorage.setItem(draftKey,input.value)}catch(_){}});
+ input.addEventListener('input',()=>{resizeInput();updateControls();try{localStorage.setItem(draftKey,input.value)}catch(_){}});
  window.addEventListener('pageshow',()=>{resizeInput();resume()});document.addEventListener('visibilitychange',()=>{if(!document.hidden)resume()});
  window.addEventListener('online',resume);
  const discuss=new URLSearchParams(location.search).get('discuss');if(discuss&&!input.value){input.value=discuss;input.focus()}
