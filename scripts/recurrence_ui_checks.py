@@ -22,9 +22,17 @@ def check_recurrence(page, screen):
         screen.get_by_role('link',name='Tasks',exact=True).click()
         expect(screen.locator('#board')).to_be_visible()
 
+    def open_editor(title):
+        screen.locator('.task-row').filter(has_text=title).first.click()
+        screen.locator('.edit-task-button').click()
+        expect(screen.locator('#panel')).to_be_visible()
+        expect(screen.locator('#heading')).to_have_text(title)
+        expect(screen.locator('#title')).to_have_value(title)
+
     def create(title, frequency, next_date, end=''):
         page.once('dialog',lambda dialog:dialog.accept(title))
         screen.locator('#new').click()
+        expect(screen.locator('#panel')).to_be_visible()
         expect(screen.locator('#title')).to_have_value(title)
         screen.locator('#recurrence').select_option(frequency)
         screen.locator('#nextOccurrence').fill(next_date)
@@ -35,7 +43,7 @@ def check_recurrence(page, screen):
         # whether Home's bridge or desktop's HTTP mutation finishes first.
         expect(screen.locator('#error')).to_be_empty()
         screen.locator('#close').click()
-        screen.locator('.task-row').filter(has_text=title).first.click()
+        open_editor(title)
         expect(screen.locator('#nextOccurrence')).to_have_value(next_date)
         expect(screen.locator('#recurrenceEnd')).to_have_value(end)
         screen.locator('#close').click()
@@ -87,7 +95,7 @@ def check_recurrence(page, screen):
     # present date. Each completion advances the same task, then ends inclusively.
     tasks_view()
     future=create('Completion recurrence UI fixture','weekly','2099-01-01T09:15','2099-01-08')
-    screen.locator('.task-row').filter(has_text=future['title']).first.click()
+    open_editor(future['title'])
     screen.locator('#completeOccurrence').click()
     expect(screen.locator('#nextOccurrence')).to_have_value('2099-01-08T09:15')
     screen.locator('#completeOccurrence').click()
@@ -97,12 +105,12 @@ def check_recurrence(page, screen):
     assert len(api('threads'))==baseline+3
     # Editing can remove an end date without duplicating or resetting its anchor.
     screen.locator('#close').click()
-    screen.locator('.task-row').filter(has_text=bounded['title']).first.click()
+    open_editor(bounded['title'])
     screen.locator('#recurrenceEnd').fill('')
     screen.locator('#edit button.primary').click()
     expect(screen.locator('#edit')).to_have_attribute('aria-busy','false')
     screen.locator('#close').click()
-    screen.locator('.task-row').filter(has_text=bounded['title']).first.click()
+    open_editor(bounded['title'])
     expect(screen.locator('#recurrenceEnd')).to_have_value('')
     assert task(bounded['title'])['recurrence_anchor']==bounded['recurrence_anchor']
     # Date-only repeats retain their calendar date without a midnight UTC shift.
@@ -115,6 +123,9 @@ def check_recurrence(page, screen):
     assert task(bounded['title'])['next_occurrence']=='2026-10-29'
     page.set_viewport_size({'width':320,'height':640})
     assert screen.locator('#panel').evaluate('(n)=>n.scrollWidth<=n.clientWidth+1'), 'Recurrence editor horizontal overflow'
+    screen.locator('#recurrenceEnd').scroll_into_view_if_needed()
+    expect(screen.locator('#occurrenceAllDay')).to_be_visible()
+    expect(screen.locator('#recurrenceEnd')).to_be_in_viewport()
     page.screenshot(path=str(artifacts/f'display-{workspace}-recurrence-editor-320.png'))
     page.set_viewport_size({'width':1280,'height':900})
     screen.locator('#close').click()
