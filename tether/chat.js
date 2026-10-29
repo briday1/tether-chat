@@ -12,8 +12,9 @@
   const cap=Math.max(44,Math.min(200,Math.floor(viewport*.3)));
   const scroll=input.scrollTop;
   input.style.maxHeight=cap+'px';input.style.height='44px';
-  const height=Math.min(cap,Math.max(44,input.scrollHeight));
-  input.style.height=height+'px';input.style.overflowY=input.scrollHeight>height?'auto':'hidden';
+  // An empty draft stays one row even if the placeholder wraps on a phone.
+  const height=input.value?Math.min(cap,Math.max(44,input.scrollHeight)):44;
+  input.style.height=height+'px';input.style.overflowY=input.value&&input.scrollHeight>height?'auto':'hidden';
   input.scrollTop=scroll;
   if(atBottom)chat.scrollTop=chat.scrollHeight;
  }

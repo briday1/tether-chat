@@ -117,6 +117,35 @@ def check_composer_controls(page, chat, variant):
     assert state('return c.posts.length') == before + 1
     assert state('return c.posts.at(-1).interrupt_job_id===c.posts.at(-2).request_id')
 
+    # Dictation blocks submission, not cancellation of the running generation.
+    state("""const mode=n.ownerDocument.querySelector('#voiceMode');
+      c.voiceMode=mode.value;c.hadSpeech=Object.prototype.hasOwnProperty.call(w,'SpeechRecognition');c.speech=w.SpeechRecognition;
+      w.SpeechRecognition=class {
+        start(){this.onstart();this.onresult({results:[[{transcript:'Spoken added context'}]]})}
+        abort(){}
+        stop(){this.onend()}
+      };
+      mode.value='browser';mode.dispatchEvent(new Event('change'));""")
+    mic = chat.locator('#voiceInput')
+    before = state('return c.posts.length')
+    mic.click()
+    expect(mic).to_have_attribute('aria-pressed', 'true')
+    expect(field).to_have_value('Spoken added context')
+    expect(stop).to_be_visible()
+    expect(stop).to_be_enabled()
+    expect(interrupt).to_be_visible()
+    expect(interrupt).to_be_disabled()
+    expect(send).to_be_disabled()
+    field.press('Enter')
+    assert state('return c.posts.length') == before
+    mic.click()
+    expect(mic).to_have_attribute('aria-pressed', 'false')
+    expect(interrupt).to_be_enabled()
+    expect(stop).to_be_enabled()
+    expect(field).to_have_value('Spoken added context')
+    state("""if(c.hadSpeech)w.SpeechRecognition=c.speech;else delete w.SpeechRecognition;
+      const mode=n.ownerDocument.querySelector('#voiceMode');mode.value=c.voiceMode;mode.dispatchEvent(new Event('change'));""")
+
     # Failed Stop leaves the draft intact, exposes an error and never sends context.
     state('c.failStop=true')
     field.fill('Preserve offline context')

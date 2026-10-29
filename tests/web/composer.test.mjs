@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../../tether/chat.js',import.meta.url),'utf8');
 const helper=source.slice(source.indexOf(' function resizeInput(){'),source.indexOf(" window.addEventListener('resize',resizeInput)"));
 function setup({height=900,content=44,bottom=true,visible=true}={}){
- const input={style:{},scrollTop:20,scrollHeight:content,getClientRects:()=>visible?[{}]:[]};
+ const input={value:'draft',style:{},scrollTop:20,scrollHeight:content,getClientRects:()=>visible?[{}]:[]};
  const chat={scrollHeight:2000,scrollTop:bottom?1700:300,clientHeight:300};
  const context={document:{querySelector:()=>input},chat,window:{innerHeight:height}};
  vm.createContext(context);vm.runInContext(helper,context);
@@ -31,4 +31,8 @@ test('all programmatic draft paths and input use shared resizing',()=>{
  const html=readFileSync(new URL('../../tether/index.html',import.meta.url),'utf8');
  assert.ok(!html.includes('Enter to send · Shift+Enter for new line'));
  assert.ok(html.includes("e.key==='Enter'&&!e.shiftKey"));
+});
+
+test('empty mobile draft ignores wrapped placeholder height',()=>{
+ const {input,resize}=setup({height:640,content:58});input.value='';resize();assert.equal(input.style.height,'44px');assert.equal(input.style.overflowY,'hidden');
 });
