@@ -63,13 +63,13 @@ def test_projection_snapshot_has_one_identity_no_writes(database):
 def test_completion_keeps_anchor_and_stops_at_inclusive_end(database,monkeypatch):
     t=store.create('Monthly')
     t=store.update(t['id'],{'recurrence':'monthly','next_occurrence':'2026-01-31','recurrence_end':'2026-03-31'})
-    t=store.complete_occurrence(t['id'])
+    t=store.complete_occurrence(t['id'],occurrence_at=t['next_occurrence'])
     assert t['next_occurrence']=='2026-02-28' and t['recurrence_anchor']=='2026-01-31'
     # A routine form save must not reset the anchor to February 28.
     t=store.update(t['id'],{'recurrence':'monthly','next_occurrence':'2026-02-28','summary':'Edited'})
-    t=store.complete_occurrence(t['id'])
+    t=store.complete_occurrence(t['id'],occurrence_at=t['next_occurrence'])
     assert t['next_occurrence']=='2026-03-31'
-    t=store.complete_occurrence(t['id'])
+    t=store.complete_occurrence(t['id'],occurrence_at=t['next_occurrence'])
     assert t['next_occurrence'] is None and t['recurrence']=='monthly'
     assert len(t['activity'])==3
     assert snapshot('2026-04-01','2026-04-30')['insights']['scheduled_due']==0
@@ -157,4 +157,75 @@ def test_date_only_follows_viewer_local_day(monkeypatch):
     finally:
         if original is None:os.environ.pop('TZ',None)
         else:os.environ['TZ']=original
+        time.tzset()
+
+
+def test_completion_retry_does_not_consume_tomorrow(database):
+    t=store.create('Daily')
+    store.update(t['id'],{'recurrence':'daily','next_occurrence':'2026-01-31'})
+    first=store.complete_occurrence(t['id'],occurrence_at=t['next_occurrence'])
+    repeated=store.complete_occurrence(t['id'])
+    assert first['next_occurrence']==repeated['next_occurrence']=='2026-02-01'
+    assert len(repeated['activity'])==1
+    assert repeated['completion']['completed'] is False
+
+
+def test_explicit_occurrence_identity_is_idempotent_and_preserves_independent_dates(database):
+    t=store.create('Monthly identity')
+    store.update(t['id'],{'recurrence':'monthly','next_occurrence':'2026-01-31','recurrence_end':'2026-02-28',
+                         'due_at':'2026-01-31','revisit_at':'2026-01-31T12:00:00+00:00'})
+    first=store.complete_occurrence(t['id'],occurrence_at='2026-01-31')
+    repeated=store.complete_occurrence(t['id'],occurrence_at='2026-01-31')
+    assert repeated['next_occurrence']=='2026-02-28' and len(repeated['activity'])==1
+    assert first['completion']['occurrence_at']=='2026-01-31'
+    assert repeated['due_at']=='2026-01-31' and repeated['revisit_at']=='2026-01-31T12:00:00+00:00'
+    done=store.complete_occurrence(t['id'],occurrence_at='2026-02-28')
+    assert done['next_occurrence'] is None
+    assert len(store.complete_occurrence(t['id'],occurrence_at='2026-02-28')['activity'])==2
+
+
+def test_explicit_future_attention_wins_over_due_recurrence(database):
+    t=store.create('Evening reminder')
+    store.update(t['id'],{'recurrence':'daily','next_occurrence':'2026-01-31','revisit_at':'2026-01-31T21:00:00+00:00'})
+    assert store.list_threads()[0]['due'] is False
+    assert store.recurring_due()==[]
+    store.update(t['id'],{'revisit_at':None})
+    assert store.list_threads()[0]['due'] is True
+
+
+def test_due_flags_compare_instants_not_offset_text(database):
+    t=store.create('Offset')
+    store.update(t['id'],{'due_at':'2026-01-31T10:00:00-05:00','revisit_at':'2026-01-31T10:00:00-05:00'})
+    assert not store.list_threads()[0]['due'] and store.list_threads()[0]['deadline_due']
+    store.update(t['id'],{'due_at':'2026-01-31T15:00:00+05:00','revisit_at':'2026-01-31T15:00:00+05:00'})
+    assert store.list_threads()[0]['due'] and store.list_threads()[0]['deadline_due']
+
+
+def test_deadline_date_survives_api_and_is_due_all_day(database):
+    t=store.create('Date deadline')
+    client=TestClient(app,base_url='http://127.0.0.1')
+    result=client.patch('/api/threads/'+t['id'],json={'due_at':'2026-01-31'})
+    assert result.status_code==200 and result.json()['due_at']=='2026-01-31'
+    action=store.add(t['id'],'action','Date action')
+    result=client.patch('/api/actions/'+action['id'],json={'due_at':'2026-02-01'})
+    assert result.status_code==200 and result.json()['due_at']=='2026-02-01'
+    assert store.list_threads()[0]['deadline_due']
+
+
+@pytest.mark.parametrize('zone,stamp,due_day,future_day',[
+    ('America/Los_Angeles','2026-11-01T06:30:00+00:00','2026-10-31','2026-11-01'),
+    ('Pacific/Kiritimati','2026-10-31T10:30:00+00:00','2026-11-01','2026-11-02'),
+])
+def test_calendar_due_uses_local_rollover_even_at_dst(zone,stamp,due_day,future_day,monkeypatch):
+    import os,time
+    from tether.recurrence import is_due,deadline_due
+    if not hasattr(time,'tzset'):pytest.skip('Process timezone switching unavailable')
+    previous=os.environ.get('TZ')
+    try:
+        os.environ['TZ']=zone;time.tzset()
+        assert is_due(due_day,stamp) and deadline_due(due_day,stamp)
+        assert not is_due(future_day,stamp) and not deadline_due(future_day,stamp)
+    finally:
+        if previous is None:os.environ.pop('TZ',None)
+        else:os.environ['TZ']=previous
         time.tzset()

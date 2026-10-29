@@ -1,6 +1,7 @@
 """Local provider settings and bounded OpenAI-compatible tool calling."""
 from . import environment
 import json, os, time, re
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -89,7 +90,7 @@ def _dispatch(name,args):
     if name=="overview":return store.overview()
     if name=="recurring_items":return {"due":store.recurring_due(),"all":[t for t in store.list_threads() if t.get("recurrence")]}
     if name=="set_recurrence":return store.update(args["id"],{"recurrence":args.get("frequency"),"next_occurrence":args.get("next_occurrence"),**{key:args[key] for key in ("recurrence_end","recurrence_timezone") if key in args}}) or {"error":"Not found"}
-    if name=="complete_occurrence":return store.complete_occurrence(args["id"],args.get("description","Completed recurring occurrence"))
+    if name=="complete_occurrence":return store.complete_occurrence(args["id"],args.get("description","Completed recurring occurrence"),args.get("occurrence_at"))
     if name=="daily_brief":return {"brief":store.daily_brief()}
     if name=="archive_thread":return store.archive_thread(args["id"],args.get("archive",True))
     if name=="list_archived":return store.archived_threads(args.get("query",""))
@@ -131,7 +132,7 @@ TOOLS=[
  spec("overview","Get currently tracked, due, waiting and settled thoughts",{}),
  spec("recurring_items","Retrieve recurring commitments and their next occurrences",{}),
  spec("set_recurrence","Set or clear recurring schedule. Specify next occurrence as timezone-aware ISO datetime or YYYY-MM-DD calendar date, separate from deadline or bring to attention. Optional recurrence_end is inclusive YYYY-MM-DD; recurrence_timezone is an IANA zone to preserve local time through daylight saving.",{"id":S,"frequency":{"type":["string","null"],"enum":["daily","weekly","monthly","quarterly","yearly",None]},"next_occurrence":{"type":["string","null"]},"recurrence_end":{"type":["string","null"]},"recurrence_timezone":{"type":["string","null"]}},["id","frequency","next_occurrence"]),
- spec("complete_occurrence","Record completion of current recurring occurrence, keep history and advance the next scheduled time",{"id":S,"description":S},["id"]),
+ spec("complete_occurrence","Complete the due recurring cycle, not tomorrow. For a specifically requested occurrence or early completion, pass occurrence_at copied from the task next_occurrence; retries with that identity never consume another cycle. Inspect completion.completed and completion.occurrence_at in the result; next_occurrence is the future schedule, not a deadline or attention time. Independent due_at/revisit_at are unchanged.",{"id":S,"description":S,"occurrence_at":S},["id"]),
  spec("daily_brief","Generate a concise daily brief of due, active and waiting items",{}),
  spec("list_threads","Find existing thoughts before deciding to create a duplicate",{"query":S}),
  spec("get_thread","Explore notes and related ideas",{"id":S},["id"]),
@@ -332,22 +333,42 @@ def reflect(question):
 # whose source task has not changed since the model selected them.
 _attention_cache={}
 def _attention_revision(task):
-    return tuple(task.get(k) for k in ('updated_at','title','summary','state','revisit_at','due_at','next_occurrence'))
+    return tuple(task.get(k) for k in ('updated_at','title','summary','state','revisit_at','due_at','next_occurrence')) + (json.dumps(task.get('attention_actions', []), sort_keys=True),)
+
+def _curatable(task):
+    # Explicit independent parent schedules survive completion of child work.
+    if task.get('attention_due') or task.get('deadline_due'):
+        return True
+    if task.get('revisit_at') and not task.get('attention_due'):
+        return False
+    if task.get('recurrence') and not task.get('recurring_due'):
+        return False
+    actions = task.get('attention_actions', [])
+    return not actions or any(not a['done'] and (
+        (not a.get('revisit_at') and not a.get('due_at')) or
+        store.recurrence_rules.is_due(a.get('revisit_at'), store.now()) or
+        store.recurrence_rules.is_due(a.get('due_at'), store.now())
+    ) for a in actions)
 
 def attention(force=False):
     cache=_attention_cache.setdefault(str(store.path().absolute()), {"items":[],"revisions":{}})
     threads=[t for t in store.list_threads() if not t.get('archived_at') and t["state"]!="settled"]
+    actions = {}
+    for action in store.query("SELECT id,thread_id,body,done,due_at,revisit_at FROM entries WHERE kind='action' ORDER BY id"):
+        actions.setdefault(action['thread_id'], []).append(action)
+    for task in threads:
+        task['attention_actions'] = actions.get(task['id'], [])
     due=[t for t in threads if t['due'] or t.get('deadline_due')]
-    fallback=[{"id":t["id"],"title":t["title"],"reason":"Scheduled attention","state":t["state"]} for t in due[:20]]
+    fallback=[{"id":t["id"],"title":t["title"],"reason":"Scheduled attention" if t.get("attention_due") else "Task due" if t.get("deadline_due") else "Recurring occurrence","state":t["state"]} for t in due[:20]]
     if not force:
         active={t['id']:t for t in threads}
         selected=list(fallback);seen={t['id'] for t in selected}
         for item in cache['items']:
             task=active.get(item['id'])
-            if task and task['id'] not in seen and cache['revisions'].get(task['id'])==_attention_revision(task):
+            if task and _curatable(task) and task['id'] not in seen and cache['revisions'].get(task['id'])==_attention_revision(task):
                 selected.append({**item,'title':task['title']});seen.add(task['id'])
         return {'items':selected[:20],'source':'live'}
-    candidates=threads[:80]
+    candidates=[t for t in threads if _curatable(t)][:80]
     if not candidates:
         selected=[]
     elif not public_config()["has_key"]:
@@ -356,14 +377,15 @@ def attention(force=False):
         try:
             context=[{"id":t["id"],"title":t["title"],"summary":t["summary"][:500],
                       "state":t["state"],"revisit_at":t["revisit_at"],"due_at":t.get("due_at"),"recurrence":t.get("recurrence"),"next_occurrence":t.get("next_occurrence"),"due":t["due"],
-                      "updated_at":t["updated_at"],"recurrence":t.get("recurrence"),"next_occurrence":t.get("next_occurrence")} for t in candidates]
+                      "actions":t.get("attention_actions",[]),"updated_at":t["updated_at"],"recurrence":t.get("recurrence"),"next_occurrence":t.get("next_occurrence")} for t in candidates]
             prompt=[{"role":"system","content":
                 "Curate the attention sidebar of a personal assistant. Select 0 to 5 items only if "
                 "they merit attention now: due reminders, near-term commitments, unresolved blockers, "
-                "or a meaningful decision, including recurring check-ins now due. Do NOT show every active item. If nothing merits attention, "
-                "return an empty list. Only use supplied IDs, and do not invent facts. Return JSON "
+                "or a meaningful decision, including recurring check-ins now due. Do NOT show every active item. "
+                "Respect future Bring to attention times and next occurrences. Completed actions do not justify parent attention. A deadline, reminder and recurrence are distinct; never label an occurrence as a deadline. "
+                "If nothing merits attention, return an empty list. Only use supplied IDs, and do not invent facts. Return JSON "
                 "object with one key 'items', an array of objects with 'id' and brief 'reason'."},
-                    {"role":"user","content":json.dumps(context,ensure_ascii=False)}]
+                    {"role":"user","content":json.dumps({"now":datetime.now().astimezone().isoformat(),"tasks":context},ensure_ascii=False)}]
             reply=request(prompt,tools=False)
             raw=reply["choices"][0]["message"].get("content") or "{}"
             if raw.strip().startswith("```"):

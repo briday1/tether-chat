@@ -1,6 +1,6 @@
 from pathlib import Path
 import re
-from datetime import datetime
+from datetime import datetime, date
 from fastapi import FastAPI,HTTPException
 from fastapi.responses import FileResponse,Response,HTMLResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -71,7 +71,7 @@ class Change(BaseModel):
     categories:list[str]|None=Field(default=None,max_length=20)
     state:Literal["open","waiting","paused","settled"]|None=None
     revisit_at:datetime|None=None
-    due_at:datetime|None=None
+    due_at:date|datetime|None=None
     recurrence:Literal["daily","weekly","monthly","quarterly","yearly"]|None=None
     next_occurrence:str|None=None
     recurrence_end:str|None=None
@@ -86,7 +86,7 @@ class Entry(BaseModel):
     body:str=Field(min_length=1)
 class ActionChange(BaseModel):
     done:bool|None=None
-    due_at:datetime|None=None
+    due_at:date|datetime|None=None
     revisit_at:datetime|None=None
 class Done(BaseModel):
     done:bool
@@ -374,9 +374,10 @@ def select_storage_folder():
 
 class Occurrence(BaseModel):
     description:str="Completed recurring occurrence"
+    occurrence_at:str|None=None
 @app.post("/api/threads/{id}/complete-occurrence")
 def complete_recurring(id:str,data:Occurrence):
-    try:return db.complete_occurrence(id,data.description)
+    try:return db.complete_occurrence(id,data.description,data.occurrence_at)
     except ValueError as exc:raise HTTPException(422,str(exc)) from None
 @app.get("/api/recurring")
 def recurring():return {"due":db.recurring_due(),"all":[t for t in db.list_threads() if t.get("recurrence")]}

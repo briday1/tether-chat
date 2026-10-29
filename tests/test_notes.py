@@ -73,3 +73,9 @@ def test_desktop_serves_shared_note_assets(tmp_path,monkeypatch):
             assert path in page
             response=client.get(path)
             assert response.status_code==200 and len(response.content)>100
+
+
+def test_date_only_occurrence_is_not_rendered_as_midnight():
+    from tether.notes import check_in
+    result=check_in({'id':'r','title':'Tomorrow','recurrence':'daily','next_occurrence':'2026-10-30'},None,'/board#task/r')
+    assert '| Next occurrence | 2026-10-30 |' in result

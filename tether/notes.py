@@ -83,8 +83,11 @@ def check_in(task, action, path):
     for label, value in [('Bring to attention', selected.get('revisit_at')),
                          ('Next occurrence', task.get('next_occurrence') if not action and task.get('recurrence') else None)]:
         if value:
-            local = datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone()
-            facts.append((label, local.strftime('%a, %b %d, %Y · %H:%M %Z')))
+            if len(value) == 10:
+                facts.append((label, value))
+            else:
+                local = datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone()
+                facts.append((label, local.strftime('%a, %b %d, %Y · %H:%M %Z')))
     if facts:
         parts.append('| Detail | Value |\n| --- | --- |\n' + '\n'.join(f'| {label} | {text(value)} |' for label, value in facts))
     parts.append('What is the latest on this ' + ('action' if action else 'task') + '—is it complete, blocked, or still in progress?')

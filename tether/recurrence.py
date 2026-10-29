@@ -145,3 +145,13 @@ def is_due(value, now):
         return dt.date() <= instant.astimezone().date() if date_only else dt <= instant
     except (ValueError, TypeError):
         return False
+
+
+def deadline_due(value, now):
+    """Deadlines are day-granular in the viewer's calendar; reminders are instants."""
+    try:
+        dt, date_only = parse(value)
+        day = dt.date() if date_only else dt.astimezone().date()
+        return day <= datetime.fromisoformat(now.replace('Z', '+00:00')).astimezone().date()
+    except (ValueError, TypeError):
+        return False

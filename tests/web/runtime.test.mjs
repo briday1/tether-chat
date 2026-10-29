@@ -376,3 +376,17 @@ test('an unacknowledged stopped outbox is atomically interrupted before any prov
   assert.equal((await api('/chat/jobs','POST',{...body,stop_requested:false})).data.status,'interrupted');
   await new Promise(r=>setTimeout(r,20));assert.equal(calls,0);assert.equal(db.state.messages.length,1);
 });
+
+test('curation cannot resurrect completed children or future occurrences as parent attention',async t=>{
+  let ids=[];const {api}=await setup(t,()=>provider({content:JSON.stringify({items:ids.map(id=>({id,reason:'Due today'}))})}));
+  await save(api);
+  const parent=(await api('/threads','POST',{title:'Parent with finished child'})).data;
+  const action=(await api('/threads/'+parent.id+'/entries','POST',{kind:'action',body:'Child'})).data;
+  await api('/actions/'+action.id,'PATCH',{done:true});
+  const future=(await api('/threads','POST',{title:'Tomorrow'})).data;
+  await api('/threads/'+future.id,'PATCH',{recurrence:'daily',next_occurrence:'2035-01-01'});
+  ids=[parent.id,future.id];
+  assert.deepEqual((await api('/attention?force=true')).data.items,[]);
+  await api('/threads/'+parent.id,'PATCH',{revisit_at:'2020-01-01T12:00:00Z'});
+  assert.deepEqual((await api('/attention')).data.items.map(i=>i.id),[parent.id]);
+});

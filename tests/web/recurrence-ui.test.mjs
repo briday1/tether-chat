@@ -43,11 +43,23 @@ test('shared recurrence controls are labeled and save guards duplicate submissio
 });
 test('completing a recurrence ignores double clicks and never reopens a different task',async()=>{
  const source=board.slice(board.indexOf('let completingOccurrence=false;'),board.indexOf("$('#note').onsubmit"));
- let resolvePost;const post=new Promise(resolve=>{resolvePost=resolve});const calls=[],opened=[],button={disabled:false,setAttribute(){}};
+ let resolvePost;const post=new Promise(resolve=>{resolvePost=resolve});const calls=[],opened=[],button={disabled:false,dataset:{occurrence:"2026-01-31"},setAttribute(){}};
  const ctx=vm.createContext({current:'first',$:()=>button,api:async(...args)=>{calls.push(args);await post},load:async()=>{},open:async id=>opened.push(id),error:e=>{throw e}});
  vm.runInContext(source,ctx);
  const first=button.onclick();const second=button.onclick();
  assert.equal(button.disabled,true);assert.equal(calls.length,1);
  ctx.current='second';resolvePost();await Promise.all([first,second]);
- assert.deepEqual(opened,[]);assert.equal(calls[0][0],'/threads/first/complete-occurrence');
+ assert.deepEqual(opened,[]);assert.equal(calls[0][0],'/threads/first/complete-occurrence');assert.equal(calls[0][2].occurrence_at,'2026-01-31');
+});
+test('task reminder editor shows local wall time and preserves the instant on save across DST',()=>{
+ const previous=process.env.TZ;
+ try{
+  process.env.TZ='America/Los_Angeles';
+  const {ctx}=editor({});const input={value:''};ctx.$=()=>input;
+  const assignment=board.match(/\$\('#revisit'\)\.value=[^;]+;/)[0];
+  for(const [stamp,local] of [['2026-10-29T16:00:00Z','2026-10-29T09:00'],['2026-11-02T17:00:00Z','2026-11-02T09:00']]){
+   ctx.t={revisit_at:stamp};vm.runInContext(assignment,ctx);
+   assert.equal(input.value,local);assert.equal(new Date(input.value).toISOString(),new Date(stamp).toISOString());
+  }
+ }finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}
 });

@@ -61,3 +61,11 @@ test('short and empty notes do not acquire unnecessary structure',()=>{
   const note=checkInNote(task,action,'/board#action/task/action');
   assert.ok(note.includes('2030-05-01')&&!note.includes('2030-05-06'));
 });
+
+test('date-only next occurrence remains the same calendar date west of UTC',()=>{
+  const previous=process.env.TZ;process.env.TZ='America/Los_Angeles';
+  try {
+    const note=checkInNote({id:'repeat',title:'Tomorrow',recurrence:'daily',next_occurrence:'2026-10-30'},null,'/board#task/repeat');
+    assert.ok(note.includes('2026-10-30'));assert.ok(!note.includes('Oct 29'));
+  } finally {if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}
+});

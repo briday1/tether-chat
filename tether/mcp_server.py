@@ -134,9 +134,9 @@ def set_recurrence(thread_id:str,frequency:str|None,next_occurrence:str|None,rec
     """Replace the complete repeat schedule (daily/weekly/monthly/quarterly/yearly). Omitted end/timezone clears those options; pass existing values to retain them. End date is inclusive; IANA timezone preserves DST wall time. Null frequency clears repeats."""
     return db.update(thread_id,{"recurrence":frequency,"next_occurrence":next_occurrence,"recurrence_end":recurrence_end,"recurrence_timezone":recurrence_timezone}) or {"error":"Thread not found"}
 @mcp.tool()
-def complete_recurring_occurrence(thread_id:str,description:str="Completed recurring occurrence")->dict:
-    """Log completing a cycle and schedule the next recurrence."""
-    return db.complete_occurrence(thread_id,description)
+def complete_recurring_occurrence(thread_id:str,description:str="Completed recurring occurrence",occurrence_at:str|None=None)->dict:
+    """Complete a due cycle. Pass its next_occurrence as occurrence_at for an idempotent explicit/early completion; inspect completion.completed. Independent deadlines/reminders are unchanged."""
+    return db.complete_occurrence(thread_id,description,occurrence_at)
 @mcp.tool()
 def set_task_due_action(thread_id:str,action:str="activity_report",period:str="week",category:str="")->dict:
     """Attach an activity report to a task's reminder (or action='none' to clear)."""

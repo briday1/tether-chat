@@ -47,7 +47,7 @@ export function checkInNote(task,action,path) {
   const facts=[];
   if(selected.due_at)facts.push(['Due date',selected.due_at.slice(0,10)]);
   for(const [label,value] of [['Bring to attention',selected.revisit_at],['Next occurrence',!action&&task.recurrence?task.next_occurrence:null]])
-    if(value)facts.push([label,new Date(value).toLocaleString(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'})]);
+    if(value)facts.push([label,value.length===10?value:new Date(value).toLocaleString(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'})]);
   if(facts.length)parts.push('| Detail | Value |\n| --- | --- |\n'+facts.map(([label,value])=>`| ${label} | ${noteText(value)} |`).join('\n'));
   parts.push('What is the latest on this '+(action?'action':'task')+'—is it complete, blocked, or still in progress?');
   return parts.join('\n\n');
