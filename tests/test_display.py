@@ -101,3 +101,16 @@ def test_display_back_forward_cache_keeps_refresh_and_resets_today():
     assert "if(event.persisted){followingToday=true;refresh(true)" in script
     assert "if(!event.persisted){clearInterval(refreshTimer)" in snapshot
     assert "window.addEventListener('pageshow'" in snapshot
+
+
+def test_display_settings_uses_same_svg_as_other_views():
+    import re
+    pages = [(ROOT / 'tether' / name).read_text(encoding='utf-8') for name in ['display.html', 'index.html', 'board.html']]
+    icons = [re.search(r'id="(?:display-settings|navsettings)"[^>]*>(<svg.*?</svg>)', page).group(1) for page in pages]
+    assert len(set(icons)) == 1
+
+def test_task_detail_reload_and_pending_panel_requests_are_guarded():
+    snapshot = (ROOT / 'tether/snapshot.html').read_text(encoding='utf-8')
+    assert "delete state.tetherSnapshotDetail;history.replaceState" in snapshot
+    assert "if(request!==selectionRevision||detail.open)return" in snapshot
+    assert "queueMicrotask(()=>{if(!detail.open&&!detailClosing)load()})" in snapshot

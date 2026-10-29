@@ -87,3 +87,22 @@ test('provider and stored text cannot inject HTML; internal links honor Pages ba
   assert.ok(!rendered.includes('<script>'));assert.ok(!rendered.includes('href="javascript:'));
   assert.ok(rendered.includes('href="/tether-chat/board.html#task/abc"'));assert.ok(rendered.includes('<strong>Hello</strong>'));
 });
+
+test('snapshot context uses real task and action data and confirmed places only',()=>{
+  const m=model(),task=m.create('Dentist <check>','Bring insurance & questions'),other=m.create('Other task');
+  m.update(task.id,{due_at:'2026-10-30T18:30:00Z',revisit_at:'2026-10-30T16:00:00Z'});
+  m.add(task.id,'thought','Literal <script> note');
+  const action=m.add(task.id,'action','Bring form');m.updateAction(action.id,{due_at:'2026-10-30'});m.addNote(action.id,'Action-specific note');
+  m.s.location_requests=[{task_id:task.id,status:'saved',selected:{address:'123 Main Street'}},{task_id:other.id,status:'saved',selected:{address:'Private other place'}},{task_id:task.id,status:'ready',selected:{address:'Unconfirmed place'}}];
+  const records=m.snapshot('2026-10-30','2026-10-30').days[0].tasks,t=records.find(t=>!t.action_id),a=records.find(t=>t.action_id);
+  assert.equal(t.summary,'Bring insurance & questions');assert.equal(t.location,'123 Main Street');assert.equal(a.location,t.location);
+  assert.equal(t.note_preview,'Literal <script> note');assert.equal(a.note_preview,'Action-specific note');
+  assert.equal(t.due_at,'2026-10-30T18:30:00.000Z');assert.equal(t.revisit_at,'2026-10-30T16:00:00.000Z');assert.equal(a.revisit_at,null);
+});
+
+test('snapshot summary is bounded while full task details remain available',()=>{
+  const m=model(),text='Full task context. '.repeat(100),task=m.create('Long details',text);
+  m.update(task.id,{due_at:'2026-10-30T18:00:00Z'});
+  assert.equal(m.snapshot('2026-10-30','2026-10-30').days[0].tasks[0].summary,text.slice(0,300));
+  assert.equal(m.get(task.id).summary,text);
+});

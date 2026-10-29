@@ -3,6 +3,23 @@
  // A settings-only Display drawer must not replay the conversation outbox.
  if(document.documentElement.hasAttribute('data-settings-embed'))return;
  const chat=document.querySelector('#chat');if(!chat)return;
+ // Measure content without replacing the field, selection, or keyboard focus.
+ // A third of the visible viewport (at most 200px) leaves room for scrollback.
+ function resizeInput(){
+  const input=document.querySelector('#message');if(!input||!input.getClientRects().length)return;
+  const atBottom=chat.scrollHeight-chat.scrollTop-chat.clientHeight<100;
+  const viewport=window.visualViewport?.height||window.innerHeight;
+  const cap=Math.max(44,Math.min(200,Math.floor(viewport*.3)));
+  const scroll=input.scrollTop;
+  input.style.maxHeight=cap+'px';input.style.height='44px';
+  const height=Math.min(cap,Math.max(44,input.scrollHeight));
+  input.style.height=height+'px';input.style.overflowY=input.scrollHeight>height?'auto':'hidden';
+  input.scrollTop=scroll;
+  if(atBottom)chat.scrollTop=chat.scrollHeight;
+ }
+ window.addEventListener('resize',resizeInput);
+ window.visualViewport?.addEventListener('resize',resizeInput);
+ window.addEventListener('tether:composer-resize',resizeInput);
  const workspace=window.tetherWorkspace||'work';
  const suffix=workspace==='work'?'':'-'+workspace;
  const journalKey='tether-chat-outbox'+suffix,draftKey='tether-chat-draft'+suffix;
@@ -99,7 +116,7 @@
    if(!response.ok){const error=await response.json().catch(()=>({}));if(response.status>=400&&response.status<500){
     const message=typeof error.detail==='string'?error.detail:'The message was not accepted. Your text has been kept; edit it and try again.';
     rejected.set(payload.request_id,{payload,error:message});forget(payload.request_id);
-    const input=document.querySelector('#message');if(!input.value){input.value=payload.text;try{localStorage.setItem(draftKey,payload.text)}catch(_){}}
+    const input=document.querySelector('#message');if(!input.value){input.value=payload.text;resizeInput();try{localStorage.setItem(draftKey,payload.text)}catch(_){}}
     await sync();return;
    }throw Error('Could not confirm delivery; reconnecting…')}
    await response.json();forget(payload.request_id);await sync();
@@ -145,16 +162,17 @@
   try{
    if(!await enqueue(text))return;
    document.querySelector('#command-menu').classList.add('hidden');
-   if(input.value.trim()===text){input.value='';try{localStorage.removeItem(draftKey)}catch(_){}}
+   if(input.value.trim()===text){input.value='';resizeInput();try{localStorage.removeItem(draftKey)}catch(_){}}
    input.focus();
   }finally{submitting=false}
  };
  document.querySelector('#refreshAttention').onclick=()=>reminders(true);
  const input=document.querySelector('#message');try{input.value=localStorage.getItem(draftKey)||''}catch(_){}
- input.addEventListener('input',()=>{try{localStorage.setItem(draftKey,input.value)}catch(_){}});
- window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',()=>{if(!document.hidden)resume()});
+ input.addEventListener('input',()=>{resizeInput();try{localStorage.setItem(draftKey,input.value)}catch(_){}});
+ window.addEventListener('pageshow',()=>{resizeInput();resume()});document.addEventListener('visibilitychange',()=>{if(!document.hidden)resume()});
  window.addEventListener('online',resume);
  const discuss=new URLSearchParams(location.search).get('discuss');if(discuss&&!input.value){input.value=discuss;input.focus()}
+ resizeInput();
  refreshReferences();sync();reminders();
  // Covers due times and updates from MCP or another process without an event.
  setInterval(()=>{if(!document.hidden)reminders()},3000);
