@@ -9,7 +9,7 @@ def check_recurrence(page, screen):
 
     def api(path, method='GET', body=None):
         return screen.locator('body').evaluate('''async(_,a)=>{
-          const r=await fetch(new URL('api/'+a.path,location.href),{method:a.method,
+          const r=await fetch(new URL('api/'+a.path,location.href).href,{method:a.method,
             headers:{'Content-Type':'application/json'},body:a.body===null?undefined:JSON.stringify(a.body)});
           if(!r.ok)throw Error('Recurrence fixture API '+r.status);return r.json();
         }''', {'path':path,'method':method,'body':body})

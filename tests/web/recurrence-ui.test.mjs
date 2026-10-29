@@ -35,6 +35,8 @@ test('calendar occurrence timing omits unrelated task dates',()=>{
 test('shared recurrence controls are labeled and save guards duplicate submission',()=>{
  for(const [id,type] of [['recurrenceEnd','date'],['occurrenceAllDay','checkbox']])assert.match(board,new RegExp('type="'+type+'" id="'+id+'"'));
  assert.ok(board.includes('Repeat through (optional, inclusive)'));
+ assert.ok(board.includes('.panel .recurrence-all-day{display:flex;align-items:center;gap:8px}'));
+ assert.ok(board.includes('.panel .recurrence-all-day input{width:auto;margin:0}'));
  assert.ok(board.includes("form.setAttribute('aria-busy','true');save.disabled=true"));
  assert.ok(board.includes("if(current===taskId)await open(taskId)"));
  assert.ok(board.includes("finally{form.setAttribute('aria-busy','false');save.disabled=false}"));
