@@ -11,7 +11,7 @@ def preferences(value=None):
     value={} if value is None else value
     if not isinstance(value,dict) or set(value)-set(DEFAULT_PREFERENCES):raise ValueError('Unknown reminder preference')
     result={**DEFAULT_PREFERENCES,**value}
-    if type(result['week_start']) is not int or not 0<=result['week_start']<=6:raise ValueError('Choose a first day of the week')
+    if type(result['week_start']) is not int or not 0<=result['week_start']<=6:raise ValueError('Choose a beginning-of-week reminder day')
     for key in ('morning_time','night_time'):
         if not isinstance(result[key],str) or not re.fullmatch(r'([01]\d|2[0-3]):[0-5]\d',result[key]):raise ValueError('Use a time in HH:MM format')
     return result
@@ -37,6 +37,10 @@ def resolve_reminder(value,saved=None,reference=None):
     if re.fullmatch(r'\d{4}-\d\d-\d\d',text):
         year,number,date=map(int,text.split('-'));return wall(year,number,date).astimezone(timezone.utc).isoformat()
     if re.match(r'\d{4}-\d\d-\d\dT',value.strip(),re.I):return datetime.fromisoformat(value.replace('Z','+00:00')).astimezone(timezone.utc).isoformat()
+    explicit_day=re.search(r'\b\d{4}-\d\d-\d\d\b',text)
+    if explicit_day:
+        year,number,date=map(int,explicit_day[0].split('-'));return wall(year,number,date).astimezone(timezone.utc).isoformat()
+    weekday=next((i for i,name in enumerate(DAYS) if re.search(r'\b'+name+r'\b',text)),None)
     relative=re.search(r'\bin\s+(a|an|one|two|three|four|\d+)\s+(minute|hour|day|week|month|year)s?\b',text)
     if relative:
         amount={'a':1,'an':1,'one':1,'two':2,'three':3,'four':4}.get(relative[1]);amount=amount if amount is not None else int(relative[1]);unit=relative[2]
@@ -44,11 +48,12 @@ def resolve_reminder(value,saved=None,reference=None):
         if unit in ('minute','hour'):return (now+timedelta(seconds=amount*(3600 if unit=='hour' else 60))).astimezone(timezone.utc).isoformat()
         date=day(amount*(7 if unit=='week' else 1)) if unit in ('day','week') else month(amount*(12 if unit=='year' else 1))
     elif re.search(r'\btomorrow\b|\bnext day\b',text) or text=='day':date=day(1)
-    elif re.search(r'\b(next|this) week\b',text) or text=='week':date=day(-(((now.weekday()+1)%7-p['week_start']+7)%7)+(0 if 'this week' in text else 7))
+    elif re.search(r'\b(next|this) week\b',text) or text=='week':
+        # Explicit weekdays use the fixed Sunday–Saturday calendar, not the reminder default.
+        date=day(-((now.weekday()+1)%7)+(0 if 'this week' in text else 7)+weekday) if weekday is not None else day(-(((now.weekday()+1)%7-p['week_start']+7)%7)+(0 if 'this week' in text else 7))
     elif re.search(r'\b(next|this) month\b',text) or text=='month':date=month(0 if 'this month' in text else 1,True)
     elif re.search(r'\b(next|this) year\b',text) or text=='year':date=wall(now.year+(0 if 'this year' in text else 1),1,1)
     else:
-        weekday=next((i for i,name in enumerate(DAYS) if re.search(r'\b'+name+r'\b',text)),None)
         if weekday is not None:
             offset=(weekday-(now.weekday()+1)%7+7)%7
             if offset==0 and re.search(r'\bnext\b',text):offset=7
@@ -65,6 +70,8 @@ def recurring_intent(text):
 
 def reminder_intent(text):
     if not re.search(r'\b(remind|reminder|bring.{0,12}attention|follow up|check back)\b',text,re.I):return None
+    if re.search(r'\b\d{4}-\d\d-\d\d\b',text):return text
+    if re.search(r'\b(?:next|this) week\b',text,re.I) and any(re.search(r'\b'+name+r'\b',text,re.I) for name in DAYS):return text
     for pattern in (r'\bin\s+(?:a|an|one|two|three|four|\d+)\s+(?:minute|hour|day|week|month|year)s?(?:\s+(?:in the )?(?:morning|night|evening|afternoon))?(?:\s+at\s+\d{1,2}(?::\d\d)?\s*(?:am|pm)?)?',r'\b(?:next|this)\s+(?:day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(?:in the )?(?:morning|night|evening|afternoon))?(?:\s+at\s+\d{1,2}(?::\d\d)?\s*(?:am|pm)?)?',r'\b(?:today|tomorrow|tonight)(?:\s+(?:in the )?(?:morning|night|evening|afternoon))?(?:\s+at\s+\d{1,2}(?::\d\d)?\s*(?:am|pm)?)?'):
         found=re.search(pattern,text,re.I)
         if found:return found[0]

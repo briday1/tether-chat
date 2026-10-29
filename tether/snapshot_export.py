@@ -57,30 +57,28 @@ def _layout(start,end,category,theme):
     if theme not in THEMES:raise ValueError('Unknown theme')
     data=snapshot(start,end,category)
     all_days=data['days'];single=len(all_days)==1
-    weekends=any(date.fromisoformat(d['date']).weekday()>=5 and (d['tasks'] or d['activity']) for d in all_days)
-    cols=1 if single else 7 if weekends else 5
+    cols=1 if single else 7
     first,last=date.fromisoformat(start),date.fromisoformat(end)
-    week_start=(data.get('week_start',1)+6)%7
+    week_start=6  # Python weekday: Sunday; reminder preferences never rotate calendars.
     begin=first if single else first-timedelta(days=(first.weekday()-week_start+7)%7)
     finish=last if single else last+timedelta(days=6-(last.weekday()-week_start+7)%7)
     by_date={d['date']:d for d in all_days};cells=[];cursor=begin
     width=1100;cw=width/cols
     while cursor<=finish:
-        if cols!=5 or cursor.weekday()<5:
-            day=by_date.get(cursor.isoformat());items=[]
-            if day:
-                for task in day['tasks']:
-                    cats=task['categories'];lines=_wrap(task['title'],cw-28,12,True)
-                    labels=[(c,_wrap(c,cw-39,10)) for c in cats]
-                    label=task.get('schedule_label','')
-                    height=12+len(lines)*16+sum(len(parts)*13+2 for _,parts in labels)+(14 if label else 0)
-                    items.append({'lines':lines,'labels':labels,'height':height,'color':category_color(cats[0]),'activity':False,'schedule_label':label})
-                for event in day['activity']:
-                    cats=event['categories'];lines=_wrap(event['body'],cw-28,12)
-                    labels=[(c,_wrap(c,cw-39,10)) for c in cats]
-                    height=26+len(lines)*16+sum(len(parts)*13+2 for _,parts in labels)
-                    items.append({'lines':lines,'labels':labels,'height':height,'color':category_color(cats[0]),'activity':True,'kind':event['kind']})
-            cells.append({'date':cursor,'outside':day is None,'items':items})
+        day=by_date.get(cursor.isoformat());items=[]
+        if day:
+            for task in day['tasks']:
+                cats=task['categories'];lines=_wrap(task['title'],cw-28,12,True)
+                labels=[(c,_wrap(c,cw-39,10)) for c in cats]
+                label=task.get('schedule_label','')
+                height=12+len(lines)*16+sum(len(parts)*13+2 for _,parts in labels)+(14 if label else 0)
+                items.append({'lines':lines,'labels':labels,'height':height,'color':category_color(cats[0]),'activity':False,'schedule_label':label})
+            for event in day['activity']:
+                cats=event['categories'];lines=_wrap(event['body'],cw-28,12)
+                labels=[(c,_wrap(c,cw-39,10)) for c in cats]
+                height=26+len(lines)*16+sum(len(parts)*13+2 for _,parts in labels)
+                items.append({'lines':lines,'labels':labels,'height':height,'color':category_color(cats[0]),'activity':True,'kind':event['kind']})
+        cells.append({'date':cursor,'outside':day is None,'items':items})
         cursor+=timedelta(days=1)
     rows=[cells[i:i+cols] for i in range(0,len(cells),cols)]
     heights=[max(86,max((29+sum(t['height']+4 for t in c['items']) for c in row),default=0)) for row in rows]
@@ -96,7 +94,7 @@ def _draw(start,end,category,theme,rect,text,layout=None):
     y=39
     if cols>1:
         rect(0,y,width,27,surface)
-        for i,name in enumerate([['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][(d+(data.get('week_start',1)+6)%7)%7] for d in range(7) if cols==7 or (d+(data.get('week_start',1)+6)%7)%7<5]):text(i*cw+8,y+8,name,11,ink,False)
+        for i,name in enumerate(['Sun','Mon','Tue','Wed','Thu','Fri','Sat']):text(i*cw+8,y+8,name,11,ink,False)
         y+=27
     for row,rh in zip(rows,heights):
         for i,cell in enumerate(row):

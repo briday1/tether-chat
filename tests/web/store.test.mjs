@@ -60,7 +60,7 @@ test('snapshots count multi-category tasks once, and retain archived historical 
 });
 test('snapshot commands handle next/last periods without any AI provider',()=>{
   const date=new Date('2026-10-27T12:00:00Z');
-  assert.deepEqual(snapshotRange('/snapshot next week',date),['2026-11-02','2026-11-08']);
+  assert.deepEqual(snapshotRange('/snapshot next week',date),['2026-11-01','2026-11-07']);
   assert.deepEqual(snapshotRange('give me my last month snapshot',date),['2026-09-01','2026-09-30']);
   assert.deepEqual(snapshotRange('/snapshot tomorrow',date),['2026-10-28','2026-10-28']);
   assert.deepEqual(snapshotRange('/snapshot 2026-10-27 to 2026-10-29',date),['2026-10-27','2026-10-29']);

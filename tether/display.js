@@ -4,7 +4,7 @@
   const mode=()=>window.tetherWorkspace || new URLSearchParams(location.search).get('workspace') || 'work';
   const storageKey=()=>`tether-display:${location.pathname}:${mode()}`;
   const iso=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-  let view='month',anchor=iso(new Date()),followingToday=true,weekStart=1,density='compact',revision=0,lastRange='',busy=false,detailOpen=false,detailClosing=false;
+  let view='month',anchor=iso(new Date()),followingToday=true,density='compact',revision=0,lastRange='',busy=false,detailOpen=false,detailClosing=false;
   try{const saved=JSON.parse(localStorage.getItem(storageKey())||'{}');if(['compact','comfortable'].includes(saved.density))density=saved.density}catch(_){}
   function persist(){try{localStorage.setItem(storageKey(),JSON.stringify({density}))}catch(_){}}
   function sidebar(open){$('.display-main').inert=open;$('.display-bar').inert=open;const chat=$('#display-quick-chat');if(chat)chat.inert=open;$('#display-sidebar').hidden=!open;$('#display-backdrop').hidden=!open;$('#display-menu').setAttribute('aria-expanded',String(open));if(open)$('#display-close').focus();else $('#display-menu').focus()}
@@ -63,7 +63,7 @@
   function range(){
     const first=new Date(anchor+'T12:00:00'),last=new Date(first);
     if(view==='month'){first.setDate(1);last.setMonth(last.getMonth()+1,0)}
-    else{first.setDate(first.getDate()-(first.getDay()-weekStart+7)%7);last.setTime(first.getTime());last.setDate(last.getDate()+6)}
+    else{first.setDate(first.getDate()-first.getDay());last.setTime(first.getTime());last.setDate(last.getDate()+6)}
     return {start:iso(first),end:iso(last)};
   }
   function theme(){
@@ -123,6 +123,5 @@
   const timer=setInterval(()=>{if(!document.hidden)refresh()},60000);
   window.addEventListener('pagehide',event=>{if(!event.persisted){clearInterval(timer);clearInterval(statusTimer)}});
   window.addEventListener('pageshow',event=>{if(event.persisted){followingToday=true;refresh(true);frame.contentWindow?.postMessage({type:'tether:snapshot-today'},location.origin)}});
-  refresh(true); // First frame follows device-local Today, without waiting for preferences.
-  fetch('/api/preferences').then(response=>response.ok?response.json():{}).then(preferences=>{weekStart=preferences.week_start??1;refresh(true)}).catch(()=>refresh(true));
+  refresh(true); // First frame follows device-local Today; reminder preferences do not affect calendars.
 })();

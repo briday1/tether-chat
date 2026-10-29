@@ -144,8 +144,7 @@ function render(data){
  if(detail.open)return;
  last=data;const signature=JSON.stringify(data)+dateOnly(new Date());if(signature===lastSignature){renderPanel();return}lastSignature=signature;
  const all=data.days||[],single=all.length===1,month=all.length>7,dashboard=params.get('layout')==='display',compact=month||dashboard;
- const weekends=all.some(d=>new Date(d.date+'T12:00:00').getDay()%6===0&&allItems(d).length);
- const cols=single?1:(compact||weekends)?7:5,weekStart=data.week_start??1,order=Array.from({length:7},(_,i)=>(weekStart+i)%7).filter(d=>cols===7||d>0&&d<6);
+ const cols=single?1:7,weekStart=0,order=[0,1,2,3,4,5,6];
  const first=new Date(data.start+'T12:00:00'),end=new Date(data.end+'T12:00:00'),format=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
  $('#range').textContent=single?dayLabel(data.start):format(first)+' – '+format(end)+', '+end.getFullYear();
  const grid=$('#grid'),headers=$('#weekdays'),focused=document.activeElement,focusedCell=focused?.closest('.day'),focusDate=focusedCell?.dataset.date,focusIndex=focusedCell?[...focusedCell.querySelectorAll('button')].indexOf(focused):-1;packingObserver.disconnect();grid.replaceChildren();headers.replaceChildren();$('.sheet').style.setProperty('--cols',cols);grid.className='grid '+(single?'single':month||dashboard?'month':'week');headers.hidden=single;
@@ -153,7 +152,6 @@ function render(data){
  const begin=new Date(first),finish=new Date(end);if(!single){begin.setDate(begin.getDate()-(begin.getDay()-weekStart+7)%7);finish.setDate(finish.getDate()+6-(finish.getDay()-weekStart+7)%7)}
  const lookup=new Map(all.map(d=>[d.date,d]));
  for(let date=new Date(begin);date<=finish;date.setDate(date.getDate()+1)){
-  if(cols===5&&(date.getDay()===0||date.getDay()===6))continue;
   const iso=dateOnly(date),d=lookup.get(iso),records=allItems(d),cell=document.createElement('div');cell.className='day'+(d?'':' outside')+(iso===dateOnly(new Date())?' today':'');cell.dataset.date=iso;
   const number=document.createElement('div');number.className='day-number';const dateButton=document.createElement('button');dateButton.className='day-date';dateButton.setAttribute('aria-controls','date-panel');if(iso===dateOnly(new Date()))dateButton.setAttribute('aria-current','date');dateButton.textContent=date.getDate();dateButton.setAttribute('aria-label',dayLabel(iso));dateButton.onclick=()=>selectDate(iso);number.append(dateButton);cell.append(number);
   cell.addEventListener('click',()=>selectDate(iso));
@@ -164,7 +162,7 @@ function render(data){
  }
  $('.sheet').style.setProperty('--rows',Math.max(1,Math.ceil(grid.childElementCount/cols)));if(dashboard&&month){packingObserver.observe(grid);queueDisplayPacking()}markSelected();renderPanel();if(focusDate){const cell=[...grid.children].find(cell=>cell.dataset.date===focusDate),buttons=cell?.querySelectorAll('button');if(buttons?.length){restoringFocus=true;buttons[Math.min(Math.max(0,focusIndex),buttons.length-1)].focus({preventScroll:true});restoringFocus=false}}notifyHeight();
 }
-async function load(){if(detail.open)return;const request=++loadRevision;try{const prefs=await fetch('/api/preferences').then(r=>r.ok?r.json():({week_start:1}));const monday=new Date();monday.setDate(monday.getDate()-(monday.getDay()-(prefs.week_start??1)+7)%7);const sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);const query=new URLSearchParams({start:params.get('start')||dateOnly(monday),end:params.get('end')||dateOnly(sunday)});if(params.get('category'))query.set('category',params.get('category'));const response=await fetch('/api/snapshot?'+query);if(!response.ok)throw Error('Could not load this calendar');const data=await response.json();if(request!==loadRevision)return;render(data);$('#error').textContent=''}catch(e){if(request===loadRevision)$('#error').textContent=e.message}}
+async function load(){if(detail.open)return;const request=++loadRevision;try{const sunday=new Date();sunday.setDate(sunday.getDate()-sunday.getDay());const saturday=new Date(sunday);saturday.setDate(saturday.getDate()+6);const query=new URLSearchParams({start:params.get('start')||dateOnly(sunday),end:params.get('end')||dateOnly(saturday)});if(params.get('category'))query.set('category',params.get('category'));const response=await fetch('/api/snapshot?'+query);if(!response.ok)throw Error('Could not load this calendar');const data=await response.json();if(request!==loadRevision)return;render(data);$('#error').textContent=''}catch(e){if(request===loadRevision)$('#error').textContent=e.message}}
 window.addEventListener('message',event=>{
  if(parent===window||event.source!==parent||event.origin!==location.origin)return;
  if(event.data?.type==='tether:snapshot-refresh')load();
