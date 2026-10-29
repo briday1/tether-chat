@@ -19,7 +19,7 @@ test('phone cells use accessible markers and count every hidden item',()=>{
  assert.equal(pack(16,34,18).visible,0);assert.equal(pack(16,34,18).more,18);
 });
 test('packing accounts for every item and never exceeds available practical height',()=>{
- for(const height of [0,1,5,10,15,16,17,18,19,35,50,79,100,155,240])for(const width of [28,61,62,89,90,180])for(const count of [0,1,2,3,9,18,80]){
+ for(const height of [0,1,5,10,15,16,17,18,19,35,50,79,100,155,240])for(const width of [28,51,52,61,62,89,90,180])for(const count of [0,1,2,3,9,18,80]){
   const p=pack(height,width,count,Array(count).fill(true));assert.equal(p.visible+p.more,count);assert.ok(used(p)<=height,JSON.stringify({height,width,count,p}));
  }
 });
@@ -61,4 +61,11 @@ test('compact context distinguishes deadlines and attention from occurrence time
  assert.match(context.displayContext({date:'2026-11-11',revisit_at:'2026-11-11T14:30:00Z'},false),/^Attention /);
  assert.doesNotMatch(context.displayContext({date:'2026-11-11',occurrence_at:'2026-11-11T14:30:00Z'},false),/^(Due|Attention|Logged) /);
  assert.equal(context.displayContext({date:'2026-11-11',due_at:'2026-11-12T14:30:00Z',summary:'Bring the folder'},false),'Bring the folder');
+});
+
+test('portrait tablet cells show readable titles while narrow phone cells retain markers',()=>{
+ assert.equal(pack(80,51,3).text,false);
+ assert.equal(pack(80,52,3).text,true);
+ assert.equal(pack(80,59,3).rowHeight,18);
+ assert.equal(pack(80,34,3).text,false);
 });

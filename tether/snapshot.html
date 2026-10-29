@@ -101,7 +101,7 @@ for(const event of ['pointerdown','pointermove','wheel','keydown','click'])$('#d
 $('#date-panel-items').addEventListener('scroll',()=>{if(selected)scheduleReturn()},{passive:true});
 // Pure capacity calculation; the overflow control is reserved before choosing rows.
 function displayPacking(height,width,count,contextFlags=[]){
- const gap=3,moreHeight=16,text=width>=62,rowHeight=text?18:8,available=Math.max(0,Math.floor(height));
+ const gap=3,moreHeight=16,text=width>=52,rowHeight=text?18:8,available=Math.max(0,Math.floor(height));
  let visible=Math.min(count,Math.max(0,Math.floor((available+gap)/(rowHeight+gap))));
  if(available<moreHeight&&visible<count)return {visible,more:count-visible,text,contexts:Array(visible).fill(false),rowHeight,moreHeight,gap,headerOverflow:true};
  if(visible<count)visible=Math.min(count,Math.max(0,Math.floor((available-moreHeight)/(rowHeight+gap))));

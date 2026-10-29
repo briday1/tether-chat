@@ -74,9 +74,10 @@ def check_display_packing(page,screen):
         assert calendar.locator('#grid').evaluate('(n)=>{const r=n.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1}'),(width,height)
         heights=calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>n.getBoundingClientRect().height)')
         assert max(heights)-min(heights)<=1,(width,height,heights)
-        if width>=1280:
+        if width>=768:
             assert packed['titles'] and all('Packing appointment' in title for title in packed['titles']),packed
             assert packed['titleFonts'] and min(packed['titleFonts'])>=11,packed
+        if width>=1280:
             sparse=calendar.locator('.day[data-date="2026-11-11"]')
             check_packed_day(sparse,1)
             expect(sparse.locator('.display-item-context')).to_contain_text('9:30 AM')
