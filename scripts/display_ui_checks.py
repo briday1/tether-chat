@@ -128,8 +128,7 @@ def check_display_settings(page, screen):
     from playwright.sync_api import expect
     page.add_init_script('''if(new URLSearchParams(location.search).get('settings')==='display'){
       window.__settingsRequests=[];let delegate=window.fetch;
-      const tracked=function(input,options){window.__settingsRequests.push({url:String(input?.url||input),method:options?.method||input?.method||'GET'});return delegate.apply(this,arguments)};
-      Object.defineProperty(window,'fetch',{configurable:true,get:()=>tracked,set:value=>{delegate=value}});
+      Object.defineProperty(window,'fetch',{configurable:true,get:()=>{const target=delegate;return function(input,options){window.__settingsRequests.push({url:String(input?.url||input),method:options?.method||input?.method||'GET'});return target.apply(this,arguments)}},set:value=>{delegate=value}});
     }''')
     calendar=screen.frame_locator('#display-calendar')
     screen.locator('#display-next').click()
