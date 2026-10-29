@@ -64,7 +64,7 @@ The assistant receives existing category names and recent task context before de
 
 “Next day” means tomorrow morning; “next week” uses the preferred first day of the next week; “next month” means the first of the next month; “next year” means January 1. The browser uses your device's local calendar, including daylight saving changes. Explicit days/times take precedence. A reminder to make an appointment does not invent the appointment's date or a deadline.
 
-Snapshots show task and action reminders, recurring next occurrences, and deadlines. Labels distinguish Reminder and Due; dates on the same item/day appear together. Action cards open the selected action. Calendar views and exports honor the saved first day of the week. Scheduled dates use your local calendar; logged activity retains its recorded UTC day.
+Snapshots show task and action reminders, recurring occurrences within the requested date range, and deadlines. Labels distinguish Reminder and Due; dates on the same item/day appear together. Action cards open the selected action. Calendar views and exports honor the saved first day of the week. Scheduled dates use your local calendar; logged activity retains its recorded UTC day.
 
 ## Confirmed address lookup
 
@@ -135,3 +135,9 @@ date unless another date is selected. This does not call an AI provider or reloa
 software. Shared updates still depend on an open, connected household session;
 Display shows offline, paused, reconnect, conflict, or stale-sync warnings rather
 than treating a refreshed local calendar as proof of a recent remote sync.
+
+### Repeating household tasks
+
+Home and Work use the same Repeat controls in the task editor: daily, weekly, monthly, quarterly, or yearly, with an optional inclusive end date. Leave the end date empty to keep repeating. Future calendar appearances are projections of one saved task, not extra tasks or completed activity. Completing the current occurrence moves its next date forward; a finished series keeps its history. The sidebar and task detail show the occurrence selected in the calendar.
+
+New timed schedules save their timezone so daylight saving changes preserve the intended local time. Older schedules without a saved timezone keep their original fixed-offset behavior until their schedule is edited. Monthly and yearly projections clamp short months while retaining the original day for later months. Date-only schedules remain calendar dates. Household sync and portable backups include the recurrence end, anchor, and timezone. Update every household device before editing schedules with these new fields.

@@ -130,9 +130,9 @@ def recurring_items()->dict:
     """See all recurring threads and their next occurrences."""
     return {"due":db.recurring_due(),"all":[t for t in db.list_threads() if t.get("recurrence")]}
 @mcp.tool()
-def set_recurrence(thread_id:str,frequency:str,next_occurrence:str)->dict:
-    """Configure a daily, weekly, monthly, quarterly or yearly recurrence."""
-    return db.update(thread_id,{"recurrence":frequency,"next_occurrence":next_occurrence}) or {"error":"Thread not found"}
+def set_recurrence(thread_id:str,frequency:str|None,next_occurrence:str|None,recurrence_end:str|None=None,recurrence_timezone:str|None=None)->dict:
+    """Replace the complete repeat schedule (daily/weekly/monthly/quarterly/yearly). Omitted end/timezone clears those options; pass existing values to retain them. End date is inclusive; IANA timezone preserves DST wall time. Null frequency clears repeats."""
+    return db.update(thread_id,{"recurrence":frequency,"next_occurrence":next_occurrence,"recurrence_end":recurrence_end,"recurrence_timezone":recurrence_timezone}) or {"error":"Thread not found"}
 @mcp.tool()
 def complete_recurring_occurrence(thread_id:str,description:str="Completed recurring occurrence")->dict:
     """Log completing a cycle and schedule the next recurrence."""

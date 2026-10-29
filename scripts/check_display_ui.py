@@ -146,6 +146,10 @@ def main():
                 expect(week.locator('#date-panel-title')).to_have_text('Today')
                 expect(week.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
                 expect(week.locator('#date-panel-items .task')).to_have_count(7)
+                from recurrence_ui_checks import check_recurrence
+                screen.get_by_role('link', name='Display', exact=True).click()
+                expect(screen.locator('#display-title')).to_be_visible()
+                check_recurrence(page, screen)
                 assert not errors, errors
                 browser.close()
                 print('Month Display and chat snapshots passed: fixed markers, all sidebar items, 15s return, navigation, tablet/phone, no exports/popups.')

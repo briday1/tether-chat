@@ -73,7 +73,10 @@ class Change(BaseModel):
     revisit_at:datetime|None=None
     due_at:datetime|None=None
     recurrence:Literal["daily","weekly","monthly","quarterly","yearly"]|None=None
-    next_occurrence:datetime|None=None
+    next_occurrence:str|None=None
+    recurrence_end:str|None=None
+    recurrence_anchor:str|None=None
+    recurrence_timezone:str|None=None
     due_action:Literal["activity_report"]|None=None
     action_config:dict|None=None
     action_prompt:str|None=None
@@ -184,7 +187,7 @@ def get(id:str):return found(db.get(id))
 @app.patch("/api/threads/{id}")
 def change(id:str,data:Change):
     fields=data.model_dump(exclude_unset=True)
-    for field in ("revisit_at","due_at","next_occurrence"):
+    for field in ("revisit_at","due_at"):
         if fields.get(field):fields[field]=fields[field].isoformat()
     try:return found(db.update(id,fields))
     except ValueError as exc:raise HTTPException(422,str(exc)) from None

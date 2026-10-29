@@ -3,12 +3,13 @@ from collections import Counter, defaultdict
 import json
 from datetime import date, timedelta,datetime
 from . import store as db
+from .recurrence import occurrences
 
 def snapshot(start: str, end: str, category: str = "") -> dict:
     first, last = date.fromisoformat(start), date.fromisoformat(end)
     if last < first or (last-first).days > 365:
         raise ValueError("Date range must be ordered and at most 366 days")
-    threads = db.with_categories(db.query("SELECT id,title,summary,category,state,due_at,revisit_at,next_occurrence,created_at,archived_at FROM threads WHERE archived_at IS NULL"))
+    threads = db.with_categories(db.query("SELECT id,title,summary,category,state,due_at,revisit_at,next_occurrence,recurrence,recurrence_end,recurrence_anchor,recurrence_timezone,created_at,archived_at FROM threads WHERE archived_at IS NULL"))
     events = db.with_categories(db.query("SELECT a.thread_id,a.kind,a.body,a.occurred_at,t.title,t.category FROM activity a JOIN threads t ON t.id=a.thread_id WHERE substr(a.occurred_at,1,10)>=? AND substr(a.occurred_at,1,10)<=? ORDER BY a.occurred_at,a.id", (start,end)),"thread_id")
     if category:
         threads = [t for t in threads if category in t["categories"]]
@@ -34,9 +35,18 @@ def snapshot(start: str, end: str, category: str = "") -> dict:
         except (ValueError,TypeError):return None
     def add(t,action=None):
         record=action or t;dates={}
-        for field,kind in [('due_at','deadline'),('revisit_at','reminder')]+([] if action else [('next_occurrence','reminder')]):
+        for field,kind in [('due_at','deadline'),('revisit_at','reminder')]:
             day=calendar_day(record.get(field))
             if day and start<=day<=end:dates.setdefault(day,[]).append(kind)
+        projected = {}
+        if not action and not t.get('recurrence'):
+            day = calendar_day(t.get('next_occurrence'))
+            if day and start <= day <= end:dates.setdefault(day, []).append('reminder')
+        if not action:
+            for occurrence in occurrences(t, start, end):
+                day = calendar_day(occurrence)
+                dates.setdefault(day, []).append('recurrence')
+                projected[day] = occurrence
         for day,kinds in dates.items():
             kinds=list(dict.fromkeys(kinds));done=bool(action and action.get('done'))
             byday[day]['tasks'].append({'id':t['id'],'task_id':t['id'],'action_id':action['id'] if action else None,
@@ -45,8 +55,10 @@ def snapshot(start: str, end: str, category: str = "") -> dict:
               'summary':t.get('summary','')[:300],'location':locations.get(t['id'],''),
               'note_preview':(action_notes.get(action['id'],'') if action else notes.get(t['id'],''))[:240],
               'due_at':record.get('due_at'),'revisit_at':record.get('revisit_at'),
-              'next_occurrence':None if action else t.get('next_occurrence'),
-              'schedule_label':' · '.join(label for label in ['Due' if 'deadline' in kinds else '', 'Reminder' if 'reminder' in kinds else '', 'Done' if done else ''] if label),
+              'next_occurrence':projected.get(day) or (t.get('next_occurrence') if not action and not t.get('recurrence') else None), 'occurrence_at':projected.get(day),
+              'recurrence':None if action else t.get('recurrence'), 'recurrence_end':None if action else t.get('recurrence_end'),
+              'is_projection':bool(projected.get(day) and projected[day] != t.get('next_occurrence')),
+              'schedule_label':' · '.join(label for label in ['Due' if 'deadline' in kinds else '', 'Reminder' if 'reminder' in kinds else '', 'Repeats' if 'recurrence' in kinds else '', 'Done' if done else ''] if label),
               'href':'/board#action/'+t['id']+'/'+action['id'] if action else '/board#task/'+t['id']})
     for t in threads:add(t)
     parents={t['id']:t for t in threads}

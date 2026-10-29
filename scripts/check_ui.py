@@ -165,6 +165,8 @@ def main():
                     expect(calendar.locator('#date-panel-title')).to_have_text('Today')
                     expect(page.locator('#view-week, #view-month')).to_have_count(0)
                     assert calendar.locator('body').evaluate('()=>new URL(location.href).searchParams.get("workspace")')=='work'
+                    from recurrence_ui_checks import check_recurrence
+                    check_recurrence(page, page)
                     page.goto(base+'/',wait_until='networkidle')
                 # Reproduce a desktop upgrade with an old script still in the
                 # WebView cache. Its matchReferences hook must remain harmless.

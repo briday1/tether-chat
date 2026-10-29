@@ -22,7 +22,7 @@ export function validateBackup(payload) {
     const id = identifier(source.id), model = new Model(state);
     const task = model.create(required(source.title,'Title',300),source.summary || '',categories(source.categories || [source.category || 'Unsorted']));
     const saved = state.tasks.at(-1); saved.id = id;
-    const fields = Object.fromEntries(['state','due_at','revisit_at','recurrence','next_occurrence','due_action','action_config','action_prompt','archived_at']
+    const fields = Object.fromEntries(['state','due_at','revisit_at','recurrence','next_occurrence','recurrence_end','recurrence_anchor','recurrence_timezone','due_action','action_config','action_prompt','archived_at']
       .filter(key => source[key] !== undefined).map(key => [key,source[key]]));
     model.update(id,fields);
     saved.created_at = timestamp(source.created_at) || task.created_at;
@@ -65,7 +65,7 @@ export function importData(state, payload) {
       const before=existing.get(key(row));
       if (before) {
         // Notification delivery is device-specific; it is never a merge conflict.
-        const clean = item => Object.fromEntries(Object.entries(item).filter(([k]) => !['notified_for','recurring_notified_for'].includes(k)));
+        const clean = item => {const result=Object.fromEntries(Object.entries(item).filter(([k]) => !['notified_for','recurring_notified_for'].includes(k)));if(table==='tasks')Object.assign(result,{action_prompt:item.action_prompt||'',recurrence_end:item.recurrence_end??null,recurrence_timezone:item.recurrence_timezone??null,recurrence_anchor:item.recurrence_anchor||(item.recurrence?item.next_occurrence:null)||null});return result};
         if (JSON.stringify(canonical(clean(before))) !== JSON.stringify(canonical(clean(row))))
           throw new Problem('This backup has a different version of an existing record. Import into an empty browser profile to retain both versions. Nothing was changed.');
       } else { candidate[table].push(row); counts[table]++; }
