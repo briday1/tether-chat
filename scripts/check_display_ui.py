@@ -40,13 +40,13 @@ def main():
                   return {today,other};}''')
                 screen = page.frame_locator('#app-frame')
                 from display_ui_checks import check_display_header
+                from display_packing_ui_checks import check_packed_day
                 check_display_header(page, screen)
                 screen.locator('#display-today').click()
                 calendar = screen.frame_locator('#display-calendar')
                 expect(calendar.locator('#date-panel-title')).to_have_text('Today')
                 expect(calendar.locator('#date-panel-items .task')).to_have_count(9)
-                expect(calendar.locator('.today .task-marker')).to_have_count(3)
-                expect(calendar.locator('.today .day-more')).to_have_text('+6 more')
+                check_packed_day(calendar.locator('.today'),9)
                 expect(screen.locator('#view-week, #view-month')).to_have_count(0)
                 expect(calendar.locator('.downloads, #png, #svg')).to_have_count(0)
                 heights = calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>n.getBoundingClientRect().height)')
@@ -62,7 +62,7 @@ def main():
                     other.click()
                     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
                     expect(calendar.locator('#date-panel-items .task')).to_have_count(7)
-                    expect(calendar.locator('[data-date="'+dates['other']+'"] .day-more')).to_have_text('+4 more')
+                    check_packed_day(calendar.locator('.day[data-date="'+dates['other']+'"]'),7)
                     assert calendar.locator('#grid').bounding_box() == before
                     expect(calendar.locator('#calendar-preview:visible, #day-dialog:visible, #details:visible')).to_have_count(0)
                     page.clock.fast_forward(10000)
@@ -95,9 +95,7 @@ def main():
                     heights = calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>Math.round(n.getBoundingClientRect().height))')
                     assert max(heights)-min(heights)<=1, heights
                     busy=calendar.locator('.day[data-date="2027-05-16"]')
-                    expect(busy.locator('.task-marker')).to_have_count(3)
-                    expect(busy.locator('.day-more')).to_have_text('+5 more')
-                    assert busy.evaluate('(day)=>{const box=day.getBoundingClientRect(),items=day.querySelector(".day-items").getBoundingClientRect();return [...day.querySelectorAll(".task-marker")].every(node=>node.getBoundingClientRect().bottom<=items.bottom+1)&&day.querySelector(".day-more").getBoundingClientRect().bottom<=box.bottom+1}'), size
+                    check_packed_day(busy,8)
                 calendar.locator('[data-date="2027-05-15"] .day-date').click()
                 expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2027-05-15')
                 expect(calendar.locator('#date-panel-items')).to_contain_text('No scheduled items')

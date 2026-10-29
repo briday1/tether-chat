@@ -116,8 +116,8 @@ installed tether-chat application instead when keeping the products separate.
 Existing Home data stays in its Home database. Device access is not prevented by
 this product separation; it is not encryption or a separate user account.
 
-Display provides week/month navigation, fixed calendar cells, scrollable daily
-items and date/task previews. **Use as chat context** pins a task to conversation;
+Display provides month navigation, fixed calendar cells, and a scrollable date
+panel with task details. **Use as chat context** pins a task to conversation;
 remove the chip to dismiss it. Pins do not restrict ordinary task tools.
 
 For optional household collaboration, use **Settings → Share Home**. Each person connects
@@ -127,8 +127,11 @@ their own Google account; the publisher configures Google once. Read
 ### Tablet Display
 
 Display opens a viewport-fitted month calendar suitable for a landscape household
- tablet. The menu button opens view/date/text/theme controls and links back to
-Conversation and Tasks. A day’s item count opens the full list on touchscreens;
+tablet. The menu links back to Conversation and Tasks; the gear opens Settings.
+Date cells use their available height for readable task titles and actual context
+when wide enough, or compact markers on narrow screens. More rows fit in larger
+cells; an overflow count reserves its own space only when some items cannot fit.
+Clicking or tapping a date or its items selects the full list in the date panel;
 long lists do not expand the month beyond the viewport. Portrait remains supported.
 The calendar rereads local data every minute while visible and follows the current
 date unless another date is selected. This does not call an AI provider or reload

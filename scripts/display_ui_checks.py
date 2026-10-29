@@ -125,6 +125,8 @@ def check_display_header(page, screen):
 
     from task_details_ui_checks import check_task_details
     check_task_details(page, screen)
+    from display_packing_ui_checks import check_display_packing
+    check_display_packing(page, screen)
 
 
 def check_display_settings(page, screen):
