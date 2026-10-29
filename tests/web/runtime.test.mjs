@@ -390,3 +390,17 @@ test('curation cannot resurrect completed children or future occurrences as pare
   await api('/threads/'+parent.id,'PATCH',{revisit_at:'2020-01-01T12:00:00Z'});
   assert.deepEqual((await api('/attention')).data.items.map(i=>i.id),[parent.id]);
 });
+
+test('daily reminder capture never injects one-shot dates and requires a recurrence tool',async t=>{
+  let count=0,db;const setupResult=await setup(t,()=>{
+    count++;
+    if(count===1)return provider({content:null,tool_calls:[{id:'daily-capture',function:{name:'capture',arguments:'{"title":"Daily check-in"}'}}]});
+    if(count===3){assert.equal(db.state.tasks[0].revisit_at,null);return provider({content:null,tool_calls:[{id:'daily-schedule',function:{name:'set_recurrence',arguments:JSON.stringify({id:db.state.tasks[0].id,frequency:'daily',next_occurrence:'2035-01-01T09:00:00Z',attention_mode:'occurrence'})}}]})}
+    return provider({content:'Captured.'});
+  },new MemoryDB(),new Locks(),{config:{...config,tools:[...config.tools,{type:'function',function:{name:'set_recurrence',parameters:{required:['id','frequency','next_occurrence']}}}]}});
+  db=setupResult.db;const {api}=setupResult;
+  await save(api);await api('/chat/jobs','POST',{request_id:'daily-capture-regression',text:'Remind me daily starting tomorrow'});
+  await waitFor(()=>db.state.jobs[0]?.status==='done');
+  assert.equal(count,4);assert.equal(db.state.tasks[0].recurrence,'daily');
+  assert.equal(db.state.tasks[0].revisit_at,null);assert.equal(db.state.tasks[0].due_at,null);
+});

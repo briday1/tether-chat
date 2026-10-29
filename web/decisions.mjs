@@ -76,3 +76,5 @@ export function chooseCategories(title,summary,available,supplied=[]){
   for(const [lower,name] of canonical)if(lower.length>3&&text.toLowerCase().includes(lower))return [name];
   return [canonical.get('personal')||'Personal'];
 }
+
+export function recurringIntent(text){return /\b(daily|weekly|monthly|quarterly|yearly|annually|every\s+(?:day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|repeat(?:ing)?)\b/i.test(text)}

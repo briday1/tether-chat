@@ -59,6 +59,10 @@ def resolve_reminder(value,saved=None,reference=None):
     if date<=now:date=day(1)
     return date.astimezone(timezone.utc).isoformat()
 
+def recurring_intent(text):
+    """Do not turn an explicitly repeating request into a one-shot reminder."""
+    return bool(re.search(r'\b(daily|weekly|monthly|quarterly|yearly|annually|every\s+(?:day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|repeat(?:ing)?)\b', text, re.I))
+
 def reminder_intent(text):
     if not re.search(r'\b(remind|reminder|bring.{0,12}attention|follow up|check back)\b',text,re.I):return None
     for pattern in (r'\bin\s+(?:a|an|one|two|three|four|\d+)\s+(?:minute|hour|day|week|month|year)s?(?:\s+(?:in the )?(?:morning|night|evening|afternoon))?(?:\s+at\s+\d{1,2}(?::\d\d)?\s*(?:am|pm)?)?',r'\b(?:next|this)\s+(?:day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(?:in the )?(?:morning|night|evening|afternoon))?(?:\s+at\s+\d{1,2}(?::\d\d)?\s*(?:am|pm)?)?',r'\b(?:today|tomorrow|tonight)(?:\s+(?:in the )?(?:morning|night|evening|afternoon))?(?:\s+at\s+\d{1,2}(?::\d\d)?\s*(?:am|pm)?)?'):

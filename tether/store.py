@@ -399,6 +399,15 @@ def configure_due_action(thread_id,action="activity_report",period="week",catego
     if action!="activity_report":raise ValueError("Unsupported action")
     return update(thread_id,{"due_action":"activity_report","action_config":{"period":period,"category":category}})
 
+def set_recurrence(thread_id,frequency,next_occurrence,attention_mode=None,**options):
+    """Choose recurring attention explicitly; omission preserves independent reminders."""
+    if attention_mode not in (None,'occurrence','independent'):raise ValueError('Invalid recurrence attention mode')
+    if attention_mode=='occurrence' and (not frequency or not next_occurrence):
+        raise ValueError('Occurrence attention requires a recurring schedule')
+    fields={'recurrence':frequency,'next_occurrence':next_occurrence,**options}
+    if attention_mode=='occurrence':fields['revisit_at']=None
+    return update(thread_id,fields)
+
 def advance_occurrence(value,frequency):
     return recurrence_rules.at(value, frequency, 1)
 

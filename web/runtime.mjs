@@ -8,7 +8,7 @@ import {renderMarkdown} from './render.mjs';
 import {taskNote,checkInNote} from './notes.mjs';
 import {providerFailure, retryDelay,compatibleModels,modelOptions} from './provider.mjs';
 import {SEARCH_URL,parsePlaces,locationRequests,beginSearch,finishSearch,saveLocation} from './locations.mjs';
-import {decisionFollowup,reminderIntent} from './decisions.mjs';
+import {decisionFollowup,reminderIntent,recurringIntent} from './decisions.mjs';
 
 const labels={list_threads:'Searching tracked tasks',get_thread:'Reading task details',capture:'Creating a task',
   add_note:'Adding a note',add_action_note:'Adding an action note',update_action:'Updating an action item',
@@ -201,8 +201,8 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
       if(!calls.length){
         const reminderRequest=reminderIntent(job.message)&&/^(?:please\s+)?(?:(?:can|could|would) you\s+)?(?:remind me|make\b|set\b|create\b|add\b|schedule\b)/i.test(job.message);
         const delegated=/figure (?:it|that) out|use your.*judg|you (?:decide|choose|pick)/i.test(job.message);
-        if(!decisionRetry && (reminderRequest&&!used.some(n=>['capture','set_revisit','update_action'].includes(n)) || delegated&&!used.length&&context.focused_task)){
-          decisionRetry=true;transcript.push({role:'assistant',content:message.content||''},{role:'system',content:'The user delegated the choice. Use saved defaults and existing task/category context to complete it with tools now. Do not ask for a reminder day or time. Reuse the existing task for a follow-up.'});continue;
+        if(!decisionRetry && (recurringIntent(job.message)&&/\bremind(?:er)?\b/i.test(job.message)&&!used.includes('set_recurrence') || reminderRequest&&!used.some(n=>['capture','set_revisit','update_action','set_recurrence'].includes(n)) || delegated&&!used.length&&context.focused_task)){
+          decisionRetry=true;transcript.push({role:'assistant',content:message.content||''},{role:'system',content:'The user delegated the choice. Use saved defaults and existing task/category context to complete it with tools now. For a repeating reminder, use set_recurrence with attention_mode occurrence; capture alone is not a recurring schedule. Do not ask for a reminder day or time. Reuse the existing task for a follow-up.'});continue;
         }
         return {answer:message.content||"The provider returned an empty response.",actions:used};
       }
@@ -224,7 +224,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
               const current=s.jobs.find(j=>j.id===job.id);if(current?.status!=='running')throw new Problem('This request was interrupted; no further changes were made');
               if(name==='capture'){
                 if(decisionFollowup(job.message)){const focused=m.focus();if(focused)args.existing_id=focused.id;else throw new Problem('This is a follow-up. Find the existing task instead of creating another task.')}
-                if(!args.remind_at){const requested=reminderIntent(job.message);if(requested)args.remind_at=requested}
+                if(!args.remind_at&&!recurringIntent(job.message)){const requested=reminderIntent(job.message);if(requested)args.remind_at=requested}
               }
               const result=m.dispatch(name,args);
               const taskId=result?.thread_id || result?.task_id || (result?.id && s.tasks.some(t=>t.id===result.id)?result.id:null);

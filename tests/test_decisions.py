@@ -103,3 +103,29 @@ def test_model_list_only_advertises_compatible_tool_models():
     assert options('https://api.openai.com/v1','gpt-6-luna')=={'reasoning_effort':'none'}
     custom=[{'id':'gpt-4.1-mini'},{'id':'gpt-4o','supports_tool_calling':False},{'id':'unknown'},{'id':'supported','supported_parameters':['tools']},{'id':'capable','capabilities':{'function_calling':True}},{'id':'disabled','supports_tool_calling':False,'supported_parameters':['tools']}]
     assert compatible_models(custom,'https://provider.test/v1')==['capable','gpt-4.1-mini','supported']
+
+
+def test_recurring_requests_do_not_authorize_one_shot_capture_default():
+    from tether.decisions import recurring_intent
+    for text in ('Remind me daily starting tomorrow','Remind me every Monday','Repeat this monthly'):
+        assert recurring_intent(text)
+    assert not recurring_intent('Remind me tomorrow')
+
+
+def test_daily_reminder_chat_does_not_inject_one_shot_date(database,monkeypatch):
+    calls=[]
+    def reply(*args,**kwargs):
+        calls.append(1)
+        if len(calls)==1:
+            message={'content':None,'tool_calls':[{'id':'one','function':{'name':'capture','arguments':'{"title":"Daily check-in"}'}}]}
+        elif len(calls)==3:
+            task=store.list_threads()[0]
+            assert task['revisit_at'] is None
+            message={'content':None,'tool_calls':[{'id':'two','function':{'name':'set_recurrence','arguments':json.dumps({'id':task['id'],'frequency':'daily','next_occurrence':'2035-01-01T09:00:00Z','attention_mode':'occurrence'})}}]}
+        else:message={'content':'Captured.'}
+        return {'choices':[{'message':message}]}
+    monkeypatch.setattr(ai,'request',reply)
+    ai.chat('Remind me daily starting tomorrow',history=[])
+    task=store.list_threads()[0]
+    assert len(calls)==4 and task['recurrence']=='daily'
+    assert task['revisit_at'] is None and task['due_at'] is None

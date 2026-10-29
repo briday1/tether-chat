@@ -229,3 +229,28 @@ def test_calendar_due_uses_local_rollover_even_at_dst(zone,stamp,due_day,future_
         if previous is None:os.environ.pop('TZ',None)
         else:os.environ['TZ']=previous
         time.tzset()
+
+
+def test_repeating_reminder_creation_replaces_one_shot_attention(database,monkeypatch):
+    from tether import ai,attention
+    monkeypatch.setattr(ai,'public_config',lambda:{'has_key':False})
+    t=store.capture('Daily check-in',remind_at='2026-01-31T12:00:00+00:00')
+    ai.dispatch('set_recurrence',{'id':t['id'],'frequency':'daily','next_occurrence':'2026-01-31T12:00:00+00:00','attention_mode':'occurrence'})
+    assert store.get(t['id'])['revisit_at'] is None
+    assert len(attention.items()['items'])==1
+    result=ai.dispatch('complete_occurrence',{'id':t['id']})
+    assert result['completion']['completed'] and result['next_occurrence'].startswith('2026-02-01')
+    assert attention.items()['items']==[]
+
+
+def test_recurrence_attention_mode_is_explicit_and_preserves_deadline(database):
+    from tether import ai
+    t=store.capture('Explicit parent reminder',remind_at='2026-01-31T12:00:00+00:00')
+    store.update(t['id'],{'due_at':'2026-02-15'})
+    args={'id':t['id'],'frequency':'daily','next_occurrence':'2026-01-31'}
+    for extra in ({},{'attention_mode':'independent'}):
+        result=ai.dispatch('set_recurrence',{**args,**extra})
+        assert result['revisit_at'] and result['due_at']=='2026-02-15'
+    with pytest.raises(ValueError):ai.dispatch('set_recurrence',{**args,'attention_mode':'invented'})
+    result=ai.dispatch('set_recurrence',{**args,'attention_mode':'occurrence'})
+    assert result['revisit_at'] is None and result['due_at']=='2026-02-15'

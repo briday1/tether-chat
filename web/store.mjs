@@ -380,7 +380,11 @@ export class Model {
       case 'set_due_date': return this.update(args.id, {due_at:args.when});
       case 'set_category': return this.update(args.id, {categories:[args.category]});
       case 'set_categories': return this.setCategories(args.id, args.categories, args.mode || 'replace');
-      case 'set_recurrence': return this.update(args.id, {recurrence:args.frequency || null,next_occurrence:args.next_occurrence || null,...Object.fromEntries(['recurrence_end','recurrence_timezone'].filter(key=>key in args).map(key=>[key,args[key]]))});
+      case 'set_recurrence': {
+        if(args.attention_mode!==undefined&&args.attention_mode!==null&&!['occurrence','independent'].includes(args.attention_mode))throw new Problem('Invalid recurrence attention mode');
+        if(args.attention_mode==='occurrence'&&(!args.frequency||!args.next_occurrence))throw new Problem('Occurrence attention requires a recurring schedule');
+        return this.update(args.id, {recurrence:args.frequency || null,next_occurrence:args.next_occurrence || null,...Object.fromEntries(['recurrence_end','recurrence_timezone'].filter(key=>key in args).map(key=>[key,args[key]])),...(args.attention_mode==='occurrence'?{revisit_at:null}:{})});
+      }
       case 'complete_occurrence': return this.complete(args.id,args.description,args.occurrence_at);
       case 'recurring_items': return {due:this.list().filter(t => t.recurring_due),all:this.list().filter(t => t.recurrence && !t.archived_at)};
       case 'archive_thread': return this.update(args.id, {archived_at:args.archive === false ? null : this.clock()});

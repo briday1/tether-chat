@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
-import {DEFAULT_PREFERENCES,resolveReminder,reminderIntent,taskKey} from '../../web/decisions.mjs';
+import {DEFAULT_PREFERENCES,resolveReminder,reminderIntent,recurringIntent,taskKey} from '../../web/decisions.mjs';
 import {emptyState,Model,snapshotRange} from '../../web/store.mjs';
 import {exportData,importData} from '../../web/portable.mjs';
 import {compatibleModels,modelOptions} from '../../web/provider.mjs';
@@ -52,4 +52,9 @@ test('address confirmation, result selection and saving are independent of the m
  finishSearch(m,request.id,claim.token,results);assert.throws(()=>saveLocation(m,request.id,'invented-result'));
  const saved=saveLocation(m,request.id,results[0].id);assert.equal(saveLocation(m,request.id,results[0].id).entry.id,saved.entry.id);assert.equal(m.get(task.id).entries.length,1);assert.ok(saved.entry.body.includes('Google Maps'));assert.ok(saved.entry.body.includes('12 High Street'));
  assert.equal(locationRequests(m)[0].status,'saved');
+});
+
+test('recurring requests are not one-shot capture defaults',()=>{
+ for(const text of ['Remind me daily starting tomorrow','Remind me every Monday','Repeat this monthly'])assert.ok(recurringIntent(text));
+ assert.equal(recurringIntent('Remind me tomorrow'),false);
 });

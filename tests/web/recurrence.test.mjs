@@ -96,3 +96,18 @@ test('date-only due flags respect local rollover on either side of UTC and DST',
   execFileSync(process.execPath,['--input-type=module','-e',script],{cwd:new URL('../../',import.meta.url),env:{...process.env,TZ}});
  }
 });
+test('repeating reminder creation switches a captured one-shot to occurrence attention explicitly',()=>{
+ const m=new Model(emptyState(),()=> '2026-01-31T13:00:00Z');
+ const t=m.capture({title:'Daily check-in',remind_at:'2026-01-31T12:00:00Z'});
+ m.dispatch('set_recurrence',{id:t.id,frequency:'daily',next_occurrence:'2026-01-31T12:00:00Z',attention_mode:'occurrence'});
+ assert.equal(m.get(t.id).revisit_at,null);assert.equal(m.attention().items.length,1);
+ assert.equal(m.dispatch('complete_occurrence',{id:t.id}).completion.completed,true);
+ assert.equal(m.attention().items.length,0);assert.ok(m.get(t.id).next_occurrence.startsWith('2026-02-01'));
+});
+test('recurrence attention mode omission and independent retain one-shot, occurrence retains deadline',()=>{
+ const {model:m,id}=setup({revisit_at:'2026-01-31T12:00:00Z',due_at:'2026-02-15'});
+ const args={id,frequency:'daily',next_occurrence:'2026-01-31'};
+ for(const extra of [{},{attention_mode:'independent'}]){m.dispatch('set_recurrence',{...args,...extra});assert.ok(m.get(id).revisit_at)}
+ assert.throws(()=>m.dispatch('set_recurrence',{...args,attention_mode:'invented'}));
+ m.dispatch('set_recurrence',{...args,attention_mode:'occurrence'});assert.equal(m.get(id).revisit_at,null);assert.equal(m.get(id).due_at,'2026-02-15');
+});
