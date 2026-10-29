@@ -39,6 +39,7 @@ jobs:
           python scripts/check_assistant_ui.py
           timeout 180s python -u scripts/check_web_updates.py
           python scripts/check_ui.py
+          python scripts/capture_screenshots.py
           python scripts/check_session_ui.py
           python scripts/check_voice_ui.py
       - name: Save Display layout evidence
