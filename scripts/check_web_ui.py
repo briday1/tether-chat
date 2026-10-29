@@ -20,7 +20,7 @@ def main():
     from voice_ui_checks import MOCKS,check_dictation,check_recording
     from attention_ui_checks import check_attention_updates
     from note_ui_checks import check_note_replies
-    from provider_ui_checks import check_settings_appearance
+    from provider_ui_checks import check_settings_appearance,check_nav_settings_gear
     from context_ui_checks import check_task_context
     spec=importlib.util.spec_from_file_location('build_web',ROOT/'scripts/build_web.py')
     builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
@@ -92,6 +92,8 @@ def main():
                 expect(frame.locator('#storageStatus')).to_contain_text('Imported 1 tasks')
                 frame.get_by_role('button',name='Close settings').click()
                 frame.get_by_role('link',name='Tasks',exact=True).click()
+                expect(frame.locator('#board')).to_be_visible()
+                check_nav_settings_gear(frame)
                 expect(frame.get_by_role('heading',name='All Tasks (1)',exact=True)).to_be_visible()
                 frame.locator('.task-row').filter(has_text='Prepare briefing').click()
                 frame.locator('[data-action-id="'+first['id']+'"]').click()
