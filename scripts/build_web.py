@@ -27,7 +27,7 @@ def paths(text, base):
     # api('/board') is an endpoint suffix, whereas '/board#task/…' is a
     # navigation URL. Protect the former before making Pages navigation explicit.
     text = text.replace("api('/board')", "api('__TETHER_BOARD_API__')").replace('api("/board")', 'api("__TETHER_BOARD_API__")')
-    for old, new in [('/drive-sharing.mjs',base+'drive-sharing.mjs'), ('/drive-sharing',base+'drive-sharing.html'), ('/board', base + 'board.html'), ('/workspace.js', base + 'workspace.js'), ('/display.js', base + 'display.js'), ('/display.css', base + 'display.css'), ('/snapshots', base + 'snapshots.html'),
+    for old, new in [('/drive-sharing.mjs',base+'drive-sharing.mjs'), ('/drive-sharing',base+'drive-sharing.html'), ('/board', base + 'board.html'), ('/workspace.js', base + 'workspace.js'), ('/display.js', base + 'display.js'), ('/display-chat.js', base + 'display-chat.js'), ('/chat-embed.js', base + 'chat-embed.js'), ('/display.css', base + 'display.css'), ('/snapshots', base + 'snapshots.html'),
                      ('/api', base + 'api'), ('/icon/', base + 'icon/'),
                      ('/theme.css', base + 'theme.css'), ('/theme.js', base + 'theme.js'),
                      ('/chat.js', base + 'chat.js'), ('/action-notes.js', base + 'action-notes.js'),
@@ -42,6 +42,8 @@ def paths(text, base):
             text = text.replace(quote + old, quote + new)
     text = re.sub(r'''(["'])/display(?=["'?#])''', lambda m:m[1]+base+'display.html', text)
     text = text.replace('href="/"', 'href="' + base + 'conversation.html"')
+    text = text.replace("'/?chat=", "'" + base + 'conversation.html?chat=')
+    text = text.replace("'/?settings=", "'" + base + 'conversation.html?settings=')
     text = text.replace("'/?task_context=", "'" + base + 'conversation.html?task_context=')
     text = text.replace("'/?discuss=", "'" + base + 'conversation.html?discuss=')
     text = text.replace('__TETHER_BOARD_API__', '/board')
@@ -100,7 +102,7 @@ def build(output, base='/'):
             shutil.copy2(source, output / source.name)
     # Keep recovery independent of cached scripts, styles and app configuration.
     (output/'update.html').write_text((ROOT/'web/update.html').read_text(encoding='utf-8').replace('__VERSION__',version),encoding='utf-8')
-    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'display.js', 'display.css'):
+    for name in ('theme.css', 'theme.js', 'favicon.svg', 'action-notes.js', 'chat.js', 'voice.js', 'speech.mjs', 'updates.js', 'notes.js', 'notes.css', 'provider-models.js', 'preferences.js', 'locations.js', 'display.js', 'display.css', 'display-chat.js', 'chat-embed.js'):
         text = paths((ROOT / 'tether' / name).read_text(encoding='utf-8'), base)
         if name == 'chat.js':
             text = text.replace("'tether-chat-outbox'", repr('tether-web-outbox:' + base)).replace("'tether-chat-draft'", repr('tether-web-draft:' + base))

@@ -9,6 +9,14 @@
 @media(max-width:620px){.calendar-layout{grid-template-columns:minmax(0,1fr);gap:9px}.date-panel{border-left:0;border-top:1px solid var(--line);padding:10px 0 0;max-height:240px;min-height:160px}.day{height:90px;padding:3px}.weekdays,.grid{gap:3px}.weekdays span{font-size:9px;padding-left:2px}.task-marker{height:7px;min-height:7px}.day-more{font-size:9px}.date-panel h2{font-size:16px}:root[data-dashboard] .calendar-layout{grid-template-rows:minmax(0,1fr) minmax(140px,30%)}:root[data-dashboard] .date-panel{min-height:0;max-height:none}:root[data-dashboard] .day{padding:2px}:root[data-dashboard] .day-date{min-height:20px;font-size:10px}:root[data-dashboard] .day-number{margin-bottom:3px}:root[data-dashboard] .day-items{gap:3px}:root[data-dashboard] .task-marker{height:6px;min-height:6px}:root[data-dashboard] .day-more{padding-top:2px;min-height:14px}}
 :root[data-density="comfortable"] .date-panel .task{font-size:15px;padding:12px}:root[data-density="comfortable"] .date-panel .task-categories,:root[data-density="comfortable"] .date-panel .activity-label{font-size:12px}
 @media(max-height:700px){:root[data-dashboard] .day{padding:2px}:root[data-dashboard] .day-date{min-height:18px;font-size:10px;padding:0}:root[data-dashboard] .day-number{margin-bottom:2px}:root[data-dashboard] .day-items{gap:2px}:root[data-dashboard] .task-marker{height:4px;min-height:4px}:root[data-dashboard] .day-more{padding-top:1px;min-height:13px;font-size:9px}}
+/* Display stays quiet; snapshots retain their existing card treatment. */
+:root[data-dashboard] .date-panel{border:0;padding-left:12px}
+:root[data-dashboard] .date-panel .task{border:0;box-shadow:none}
+:root[data-dashboard] .day.selected{border-color:var(--line);background:var(--soft)}
+:root[data-dashboard] .weekdays span{font-size:clamp(13px,1.6vw,18px);font-weight:600}
+:root[data-dashboard] .day-date{font-size:clamp(14px,1.8vw,20px);line-height:1.2;min-height:24px}
+@media(max-width:620px){:root[data-dashboard] .date-panel{padding:6px 0 0}:root[data-dashboard] .day-date{font-size:14px;min-height:19px}:root[data-dashboard] .weekdays span{font-size:12px}}
+@media(max-height:700px){:root[data-dashboard] .day-date{font-size:14px;min-height:18px}}
 </style>
 <div class="shell"><div class="sheet" id="sheet"><div class="calendar-head" id="range"></div>
 <div class="calendar-layout"><div class="calendar-month"><div class="weekdays" id="weekdays"></div><div class="grid" id="grid"></div></div>
@@ -40,7 +48,7 @@ function scheduleReturn(){clearTimeout(returnTimer);if(!selected)return;lastInte
 function markSelected(){for(const cell of document.querySelectorAll('.day'))cell.classList.toggle('selected',cell.dataset.date===(selected||dateOnly(new Date())))}
 function selectDate(date){if(restoringFocus)return;if(selected!==date){selected=date;selectionRevision++;panelSignature='';renderPanel();markSelected()}scheduleReturn()}
 function categoryLabels(parent,t){const span=document.createElement('span');span.className='task-categories';span.textContent=names(t).join(' · ');parent.append(span)}
-function taskCard(t,activity=false,asButton=false,date=null){const item=document.createElement(asButton?'button':'article');item.className='task'+(activity?' activity':'');item.style.setProperty('--task-color',color(names(t)[0]));const title=document.createElement('span');title.className='task-title';title.textContent=activity?t.body:t.title;item.append(title);if(activity||t.schedule_label){const label=document.createElement('span');label.className='activity-label';label.textContent=activity?[t.title,t.kind].filter(Boolean).join(' · '):t.schedule_label;item.append(label)}categoryLabels(item,t);if(asButton){item.onclick=()=>selectDate(date);item.onfocus=()=>selectDate(date)}return item}
+function taskCard(t,activity=false,asButton=false,date=null){const item=document.createElement(asButton?'button':'article');item.className='task'+(activity?' activity':'');item.style.setProperty('--task-color',color(names(t)[0]));const title=document.createElement('span');title.className='task-title';title.textContent=activity?t.body:t.title;item.append(title);if(activity||t.schedule_label){const label=document.createElement('span');label.className='activity-label';label.textContent=activity?[t.title,t.kind].filter(Boolean).join(' · '):t.schedule_label;item.append(label)}categoryLabels(item,t);if(asButton){item.onclick=()=>selectDate(date)}return item}
 async function renderPanel(force=false){
  const date=selected||dateOnly(new Date()),request=++selectionRevision,panel=$('#date-panel'),items=$('#date-panel-items'),changed=panel.dataset.date!==date,oldScroll=changed?0:items.scrollTop;if(changed){items.textContent='Loading date…';items.scrollTop=0}panel.dataset.date=date;$('#date-panel-title').textContent=date===dateOnly(new Date())?'Today':new Date(date+'T12:00:00').toLocaleDateString(undefined,{weekday:'long'});$('#date-panel-date').textContent=dayLabel(date);$('#date-panel-hint').textContent=selected?'Returns to Today after 15 seconds of inactivity.':'';
  let data=(last?.days||[]).find(day=>day.date===date);
@@ -64,11 +72,11 @@ function render(data){
  for(let date=new Date(begin);date<=finish;date.setDate(date.getDate()+1)){
   if(cols===5&&(date.getDay()===0||date.getDay()===6))continue;
   const iso=dateOnly(date),d=lookup.get(iso),records=allItems(d),cell=document.createElement('div');cell.className='day'+(d?'':' outside')+(iso===dateOnly(new Date())?' today':'');cell.dataset.date=iso;
-  const number=document.createElement('div');number.className='day-number';const dateButton=document.createElement('button');dateButton.className='day-date';dateButton.setAttribute('aria-controls','date-panel');if(iso===dateOnly(new Date()))dateButton.setAttribute('aria-current','date');dateButton.textContent=date.getDate();dateButton.setAttribute('aria-label',dayLabel(iso));dateButton.onclick=dateButton.onfocus=()=>selectDate(iso);number.append(dateButton);cell.append(number);
-  cell.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch')selectDate(iso)});cell.addEventListener('click',()=>selectDate(iso));
+  const number=document.createElement('div');number.className='day-number';const dateButton=document.createElement('button');dateButton.className='day-date';dateButton.setAttribute('aria-controls','date-panel');if(iso===dateOnly(new Date()))dateButton.setAttribute('aria-current','date');dateButton.textContent=date.getDate();dateButton.setAttribute('aria-label',dayLabel(iso));dateButton.onclick=()=>selectDate(iso);number.append(dateButton);cell.append(number);
+  cell.addEventListener('click',()=>selectDate(iso));
   const items=document.createElement('div');items.className='day-items';
-  for(const {task,activity} of (compact?records.slice(0,3):records)){if(compact){const marker=document.createElement('button');marker.className='task-marker';marker.style.setProperty('--task-color',color(names(task)[0]));marker.style.setProperty('--marker-width',(65+(color(names(task)[0]).charCodeAt(2)%30))+'%');marker.setAttribute('aria-label',(activity?task.body:task.title)+' · '+dayLabel(iso));marker.onclick=marker.onfocus=()=>selectDate(iso);items.append(marker)}else items.append(taskCard(task,activity,true,iso))}cell.append(items);
-  if(compact&&records.length>3){const more=document.createElement('button');more.className='day-more';more.textContent='+'+(records.length-3)+' more';more.setAttribute('aria-label','Show all '+records.length+' items on '+dayLabel(iso));more.onclick=more.onfocus=()=>selectDate(iso);cell.append(more)}grid.append(cell);
+  for(const {task,activity} of (compact?records.slice(0,3):records)){if(compact){const marker=document.createElement('button');marker.className='task-marker';marker.style.setProperty('--task-color',color(names(task)[0]));marker.style.setProperty('--marker-width',(65+(color(names(task)[0]).charCodeAt(2)%30))+'%');marker.setAttribute('aria-label',(activity?task.body:task.title)+' · '+dayLabel(iso));marker.onclick=()=>selectDate(iso);items.append(marker)}else items.append(taskCard(task,activity,true,iso))}cell.append(items);
+  if(compact&&records.length>3){const more=document.createElement('button');more.className='day-more';more.textContent='+'+(records.length-3)+' more';more.setAttribute('aria-label','Show all '+records.length+' items on '+dayLabel(iso));more.onclick=()=>selectDate(iso);cell.append(more)}grid.append(cell);
  }
  $('.sheet').style.setProperty('--rows',Math.max(1,Math.ceil(grid.childElementCount/cols)));markSelected();renderPanel();if(focusDate){const cell=[...grid.children].find(cell=>cell.dataset.date===focusDate),buttons=cell?.querySelectorAll('button');if(buttons?.length){restoringFocus=true;buttons[Math.min(Math.max(0,focusIndex),buttons.length-1)].focus({preventScroll:true});restoringFocus=false}}notifyHeight();
 }
@@ -80,6 +88,8 @@ window.addEventListener('message',event=>{
 });
 const refreshTimer=setInterval(()=>{if(!document.hidden)load()},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(selected&&Date.now()-lastInteraction>=15000){selected=null;panelSignature=''}load()}});
-window.addEventListener('pagehide',()=>{clearInterval(refreshTimer);clearTimeout(returnTimer);selectionRevision++;loadRevision++},{once:true});
+window.addEventListener('pagehide',event=>{if(!event.persisted){clearInterval(refreshTimer);clearTimeout(returnTimer);selectionRevision++;loadRevision++}});
+window.addEventListener('pageshow',event=>{if(event.persisted){if(selected&&Date.now()-lastInteraction>=15000){selected=null;panelSignature=''}renderPanel();markSelected();load()}});
+renderPanel(); // Show the local date before asynchronous preferences/data arrive.
 load();
 </script></html>

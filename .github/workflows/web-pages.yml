@@ -41,6 +41,13 @@ jobs:
           python scripts/check_ui.py
           python scripts/check_session_ui.py
           python scripts/check_voice_ui.py
+      - name: Save Display layout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: display-ui-screenshots
+          path: artifacts/display-*.png
+          if-no-files-found: ignore
       - uses: actions/cache@v4
         with:
           path: ~/.cache/tether-speech-check

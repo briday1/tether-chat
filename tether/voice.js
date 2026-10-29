@@ -87,6 +87,8 @@
     });
     form.addEventListener('submit',event=>{if(phase!=='idle'){event.preventDefault();event.stopImmediatePropagation();say('Stop voice input before sending.')}},true);
     window.addEventListener('pagehide',()=>{if(phase!=='idle')cancelVoice(false)});
+    // A hidden Display chat must release its microphone immediately, keeping the draft.
+    window.addEventListener('tether:voice-suspend',()=>{if(phase!=='idle'){cancelVoice(false);say('Voice input stopped. Your draft is kept.')}});
     document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase!=='idle')stopVoice()});
     const settings=document.querySelector('#settings');
     if(settings){

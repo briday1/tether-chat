@@ -11,23 +11,21 @@
 <script src="/workspace.js"></script>
 </head>
 <body class="display-dashboard">
-<div class="display-bar"><button id="display-menu" aria-label="View settings and navigation" aria-controls="display-sidebar" aria-expanded="false">☰</button><div class="display-month-navigation" role="group" aria-label="Month navigation"><button id="display-previous" aria-label="Previous month">‹</button><h1 id="display-title" aria-live="polite">Calendar</h1><button id="display-next" aria-label="Next month">›</button><button id="display-today">Today</button></div><time id="display-clock"></time></div>
-<button id="display-backdrop" aria-label="Close view settings" hidden></button>
-<aside id="display-sidebar" role="dialog" aria-modal="true" aria-label="Display settings" hidden>
- <div class="sidebar-heading"><strong>Display</strong><button id="display-close" aria-label="Close view settings">✕</button></div>
- <div class="display-navigation"><button id="previous" aria-label="Previous period">‹</button><button id="today">Today</button><button id="next" aria-label="Next period">›</button></div>
- <label>Go to date <input id="display-date" type="date"></label>
- <label>Calendar text <select id="display-density"><option value="compact">Compact</option><option value="comfortable">Comfortable</option></select></label>
- <label>Theme <select class="theme-picker" data-theme-picker aria-label="Color theme"></select></label>
- <p id="display-status" role="status">Calendar refreshes every minute while open.</p>
- <p class="display-hint">Choose a date to see all its items. Calendar refresh does not use AI.</p>
+<div class="display-bar"><button id="display-menu" aria-label="Switch view" aria-controls="display-sidebar" aria-expanded="false">☰</button><div class="display-month-navigation" role="group" aria-label="Month navigation"><button id="display-previous" aria-label="Previous month">‹</button><h1 id="display-title" aria-live="polite">Calendar</h1><button id="display-next" aria-label="Next month">›</button><button id="display-today">Today</button></div><time id="display-clock"><span id="display-clock-date"></span><span id="display-clock-time"></span></time><button id="display-settings" aria-label="Settings" title="Settings">⚙</button></div>
+<button id="display-backdrop" aria-label="Close navigation" hidden></button>
+<aside id="display-sidebar" role="dialog" aria-modal="true" aria-label="Switch view" hidden>
+ <div class="sidebar-heading"><strong>Switch view</strong><button id="display-close" aria-label="Close navigation">×</button></div>
  <nav aria-label="App navigation"><a href="/">Conversation</a><a href="/board">Tasks</a><a href="/display" data-display-nav aria-current="page">Display</a></nav>
+ <p id="display-status" role="status" hidden></p>
+
 </aside>
 <main class="display-main">
  <section class="display-calendar" aria-label="Task calendar"><iframe id="display-calendar" title="Month calendar and date details"></iframe></section>
- <footer class="display-footer"><div class="display-quick" id="display-quick"></div><span id="display-sync" role="status"></span></footer>
+ <p id="display-sync" role="status" hidden></p>
  <p id="display-error" role="alert" hidden></p>
 </main>
+<dialog id="display-settings-dialog" aria-label="Settings"><iframe id="display-settings-frame" title="General settings"></iframe></dialog>
 <script src="/display.js"></script>
+<script src="/display-chat.js"></script>
 </body>
 </html>
