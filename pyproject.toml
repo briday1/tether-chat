@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # Distribution name; the application displays tether.
 name = "tether-chat"
-version = "2026.34"
+version = "2026.35"
 description = "Local-first task and action-item assistant"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -103,7 +103,7 @@ body.drawer-open{overflow:hidden}
 .topnav .brand,.topnav .brand .brand-word{color:var(--text)!important}
 .topnav .brand .brand-word>span{color:var(--accent)!important}
 .reference-close,.settings #closeSettings{display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 38px!important;width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border:1px solid var(--line)!important;border-radius:9px!important;background:var(--soft)!important;color:var(--text)!important;cursor:pointer}.reference-close{float:right;margin:0!important}.reference-close svg,.settings #closeSettings svg{display:block;flex:none}.reference-close:focus-visible,.settings #closeSettings:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.actions-section .edit-task-button{display:inline-flex;align-items:center;width:auto!important;min-height:28px;padding:4px 9px!important;font-size:12px!important;line-height:18px;border-radius:6px}
+.actions-section .edit-task-button,.actions-section .task-context-button{display:inline-flex;align-items:center;width:auto!important;min-height:28px;padding:4px 9px!important;font-size:12px!important;line-height:18px;border-radius:6px}
 .category-row{border:1px solid var(--line)!important;border-left-width:1px!important;background:color-mix(in srgb,var(--category-color,var(--accent)) 13%,var(--paper))!important}
 .category-row:hover{background:color-mix(in srgb,var(--category-color,var(--accent)) 20%,var(--paper))!important}
 .category-row.selected{background:color-mix(in srgb,var(--category-color,var(--accent)) 22%,var(--paper))!important;border-color:var(--category-color,var(--accent))!important}
@@ -186,3 +186,5 @@ html::-webkit-scrollbar-thumb{border-color:var(--page)}
 .composer-actions .composer-button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .composer-actions .composer-button:disabled{opacity:.55;cursor:default}
 .composer-actions .composer-button svg{pointer-events:none}
+
+.actions-section .task-context-button{margin-inline-start:6px}

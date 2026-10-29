@@ -132,7 +132,7 @@ function drawBoard(){
   const pane=el('section','actions-section');pane.append(el('h2','section-heading','Action items'));
   pane.append(el('p','hint',active.title));
   const edit=el('button','secondary edit-task-button','Edit task');edit.onclick=()=>open(active.id);pane.append(edit);
-  const contextButton=el('button','secondary','Use as chat context');contextButton.type='button';contextButton.onclick=()=>{location.href='/?task_context='+encodeURIComponent(active.id)+'&workspace='+encodeURIComponent(window.tetherWorkspace||'work')};pane.append(contextButton);
+  const contextButton=el('button','secondary task-context-button','Use as chat context');contextButton.type='button';contextButton.onclick=()=>{location.href='/?task_context='+encodeURIComponent(active.id)+'&workspace='+encodeURIComponent(window.tetherWorkspace||'work')};pane.append(contextButton);
   const items=el('div','action-items');pane.append(items);board.append(pane);
   api('/threads/'+encodeURIComponent(active.id)).then(t=>{
    if(selectedTask!==t.id||!pane.isConnected)return;
