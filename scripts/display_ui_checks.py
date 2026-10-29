@@ -223,7 +223,7 @@ def check_calendar_week_preference(page, screen):
         assert result==value,result
 
     def open_calendar(query):
-        frame.evaluate("(n,query)=>{const url=new URL(n.src);url.search=new URLSearchParams(query);n.src=url.href}",query)
+        frame.evaluate("(n,query)=>{const url=new URL(n.contentWindow.location.href);url.search=new URLSearchParams(query);n.src=url.href}",query)
         from urllib.parse import urlparse, parse_qs
         frame.element_handle().content_frame().wait_for_url(lambda url: parse_qs(urlparse(url).query).get('check')==[query['check']],wait_until='domcontentloaded')
 
