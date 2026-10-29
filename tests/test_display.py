@@ -55,7 +55,8 @@ def test_display_dashboard_fits_without_changing_chat_snapshots():
     page=(ROOT/'tether/snapshot.html').read_text()
     assert '100dvh' in css and 'minmax(0,1fr)' in css
     assert "layout:'display'" in script
-    assert "(compact||weekends)?7:5" in page
+    assert "cols=single?1:7,weekStart=0" in page
+    assert "cols===5" not in page
     assert 'grid-template-rows:repeat(var(--rows,1),minmax(0,1fr))' in page
     assert "more.onclick=()=>selectDate(iso)" in page
     assert "id=\"view-week\"" not in (ROOT/'tether/display.html').read_text()
@@ -91,7 +92,8 @@ def test_display_clean_layout_starts_on_today_not_saved_anchor():
     assert 'id="display-clock-time"' in page
     assert "+' - '+" not in script
     assert "replace(/\\s/g,'')" not in script
-    assert script.index('refresh(true); // First frame') < script.index("fetch('/api/preferences')")
+    assert 'refresh(true); // First frame' in script
+    assert "/api/preferences" not in script
 
 
 def test_display_back_forward_cache_keeps_refresh_and_resets_today():

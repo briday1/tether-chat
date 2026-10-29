@@ -22,7 +22,8 @@ def test_snapshot_actual_records(tmp_path,monkeypatch):
     result=png("2026-10-22","2026-10-25",theme="ocean",scale=2)
     image=Image.open(io.BytesIO(result))
     assert image.format=="PNG"
-    assert image.width==2200 and 250<image.height<500
+    # The explicit range crosses Sunday, so the calendar includes two rows.
+    assert image.width==2200 and 450<image.height<600
     assert png("2026-10-22","2026-10-25",theme="ocean",scale=2)==result
 
 def test_range_validation(tmp_path,monkeypatch):
@@ -40,11 +41,11 @@ def test_content_sizing_partial_ranges_and_complete_exports(tmp_path,monkeypatch
     import xml.etree.ElementTree as ET
     from tether.snapshot_export import svg
     monkeypatch.setenv('TETHER_DB',str(tmp_path/'test.sqlite3'));store.init()
-    # A weekend-only empty range still has a complete Monday–Friday row.
+    # A weekend crossing Sunday spans two complete Sunday–Saturday rows.
     week=Image.open(io.BytesIO(png('2026-10-26','2026-11-01',scale=1)))
     weekend=Image.open(io.BytesIO(png('2026-10-31','2026-11-01',scale=1)))
     month=Image.open(io.BytesIO(png('2026-10-01','2026-10-31',scale=1)))
-    assert weekend.height==week.height<200
+    assert weekend.height==week.height<300
     assert month.height>week.height*2
     for n in range(6):
         task=store.create('Review & approve <draft> '+str(n),categories=['Projects','Product'])
@@ -98,3 +99,21 @@ def test_snapshot_summary_is_a_preview_but_task_details_are_complete(tmp_path, m
     record = snapshot('2026-10-30', '2026-10-30')['days'][0]['tasks'][0]
     assert record['summary'] == text[:300]
     assert store.get(task['id'])['summary'] == text
+
+
+def test_exports_ignore_reminder_week_preference(tmp_path, monkeypatch):
+    from tether.snapshot_export import _layout, svg
+    import xml.etree.ElementTree as ET
+    monkeypatch.setenv('TETHER_DB', str(tmp_path/'week.sqlite3'));store.init()
+    for preference in range(7):
+        store.set_preferences({'week_start':preference})
+        _,cols,rows,*_=_layout('2026-10-01','2026-10-31',None,'light')
+        assert cols==7 and len(rows)==5
+        assert rows[0][0]['date']==date(2026,9,27)
+        assert rows[-1][-1]['date']==date(2026,10,31)
+        labels=[e.text for e in ET.fromstring(svg('2026-11-01','2026-11-07')).iter() if e.tag.endswith('text')]
+        assert labels[1:8]==['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+        _,cols,rows,*_=_layout('2026-10-31','2026-11-01',None,'light')
+        assert cols==7 and len(rows)==2
+        _,cols,rows,*_=_layout('2026-11-01','2026-11-01',None,'light')
+        assert cols==1 and len(rows)==1 and rows[0][0]['date']==date(2026,11,1)

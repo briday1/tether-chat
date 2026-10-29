@@ -355,7 +355,7 @@ export class Model {
       days.push({date:iso,tasks:due,activity:events.filter(e => e.occurred_at.slice(0,10) === iso)});
     }
     for (const event of events) activityTypes[event.kind] = (activityTypes[event.kind] || 0) + 1;
-    return {start,end,category:category || null,week_start:this.preferences().week_start,days,insights:{scheduled_due:days.reduce((n,d) => n+d.tasks.length,0),
+    return {start,end,category:category || null,week_start:0,days,insights:{scheduled_due:days.reduce((n,d) => n+d.tasks.length,0),
       activity_events:events.length,active_days:days.filter(d => d.activity.length).length,categories:categoryCounts,activity_types:activityTypes},
     notice:'Task and action reminders and deadlines use local calendar dates. Activity uses recorded UTC dates. No historical changes are inferred.'};
   }
@@ -414,7 +414,9 @@ export function day(value) {
   if (!Number.isFinite(+date) || date.toISOString().slice(0,10) !== value) throw new Problem('Invalid calendar date');
   return date;
 }
-export function snapshotRange(text, today = new Date(),weekStart=1) {
+export function snapshotRange(text, today = new Date(),weekStart=0) {
+  // Compatibility argument only; calendars always run Sunday through Saturday.
+  weekStart=0;
   text = text.trim().toLowerCase();
   text = text.replace(/^\/snapshot\s+(week|month)$/, '/snapshot this $1').replace(/^\/snapshot\s+day$/, '/snapshot today');
   if (!/\bsnapshots?\b|\bcalendar (report|view|summary)\b|\bvisual (task |activity )?(report|summary)\b/.test(text)) return null;

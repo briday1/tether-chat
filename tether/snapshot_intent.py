@@ -10,7 +10,9 @@ def _month_offset(today, offset):
     year,month=divmod(index,12)
     return date(year,month+1,1),date(year,month+1,monthrange(year,month+1)[1])
 
-def resolve(message, today=None,week_start=1):
+def resolve(message, today=None,week_start=0):
+    # Kept as an ignored compatibility argument: reminder preferences never rotate calendars.
+    week_start=0
     text=message.strip().lower()
     text=re.sub(r"^/snapshot\s+(week|month)\s*$",r"/snapshot this \1",text)
     text=re.sub(r"^/snapshot\s+day\s*$","/snapshot today",text)
@@ -45,8 +47,7 @@ def resolve(message, today=None,week_start=1):
     return start.isoformat(),end.isoformat()
 
 def respond(message,today=None):
-    from . import store
-    dates=resolve(message,today,store.preferences()['week_start'])
+    dates=resolve(message,today)
     if dates is None:return None
     start,end=dates
     snapshot(start,end)  # Validate and keep errors deterministic, without a provider request.

@@ -123,6 +123,8 @@ def check_display_header(page, screen):
     expect(screen.locator('#display-clock-time')).to_have_text('5:28 PM')
     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-28')
 
+    check_calendar_week_preference(page, screen)
+
     from task_details_ui_checks import check_task_details
     check_task_details(page, screen)
     from display_packing_ui_checks import check_display_packing
@@ -198,3 +200,68 @@ def check_display_settings(page, screen):
 
     from quick_chat_ui_checks import check_quick_chat
     check_quick_chat(page, screen)
+
+
+def check_calendar_week_preference(page, screen):
+    """Reminder defaults never rotate Display or chat day/week/month calendars."""
+    from playwright.sync_api import expect
+    calendar=screen.frame_locator('#display-calendar')
+    frame=screen.locator('#display-calendar')
+    original_url=calendar.locator('body').evaluate('()=>location.href')
+    original_viewport=page.viewport_size
+    preferences=screen.locator('body').evaluate("async()=>await (await fetch(new URL('api/preferences',location.href).href)).json()")
+    workspace=screen.locator('body').evaluate("()=>window.tetherWorkspace||'work'")
+    artifacts=Path('artifacts');artifacts.mkdir(exist_ok=True)
+    weekdays=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+
+    def save(value):
+        result=screen.locator('body').evaluate("""async(_,value)=>{
+          const r=await fetch(new URL('api/preferences',location.href).href,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
+          if(!r.ok)throw Error('Preferences failed: '+r.status);
+          return await (await fetch(new URL('api/preferences',location.href).href)).json();
+        }""",value)
+        assert result==value,result
+
+    def open_calendar(query):
+        frame.evaluate("(n,query)=>{const url=new URL(n.contentWindow.location.href);url.search=new URLSearchParams(query);n.src=url.href}",query)
+        from urllib.parse import urlparse, parse_qs
+        frame.element_handle().content_frame().wait_for_url(lambda url: parse_qs(urlparse(url).query).get('check')==[query['check']],wait_until='domcontentloaded')
+
+    try:
+        for preference in (0,1,3):
+            save({**preferences,'week_start':preference})
+            open_calendar({'start':'2026-10-01','end':'2026-10-31','embed':'1','layout':'display','workspace':workspace,'check':str(preference)})
+            expect(calendar.locator('#weekdays span')).to_have_text(weekdays)
+            expect(calendar.locator('#grid > .day').first).to_have_attribute('data-date','2026-09-27')
+            expect(calendar.locator('#grid > .day').last).to_have_attribute('data-date','2026-10-31')
+            expect(calendar.locator('#grid > .day')).to_have_count(35)
+            if preference==3:
+                for width,height in ((1280,900),(320,640)):
+                    page.set_viewport_size({'width':width,'height':height})
+                    assert calendar.locator('body').evaluate('()=>document.documentElement.scrollWidth<=innerWidth')
+                    page.screenshot(path=str(artifacts/f'display-calendar-sunday-{workspace}-{width}.png'))
+                page.set_viewport_size(original_viewport)
+        # A bare snapshot uses the current local Sunday, not Wednesday's reminder default.
+        open_calendar({'embed':'1','workspace':workspace,'check':'week'})
+        expect(calendar.locator('#grid')).to_have_class('grid week')
+        expect(calendar.locator('#weekdays span')).to_have_text(weekdays)
+        expect(calendar.locator('#grid > .day')).to_have_count(7)
+        expect(calendar.locator('#grid > .day').first).to_have_attribute('data-date','2026-10-25')
+        expect(calendar.locator('#grid > .day').last).to_have_attribute('data-date','2026-10-31')
+        expect(calendar.locator('.task-marker')).to_have_count(0)
+        calendar.locator('.sheet').screenshot(path=str(artifacts/f'display-calendar-chat-week-{workspace}.png'))
+        # Explicit single-day snapshots retain a single expanded day, without weekday headers.
+        open_calendar({'start':'2026-10-28','end':'2026-10-28','embed':'1','workspace':workspace,'check':'day'})
+        expect(calendar.locator('#grid')).to_have_class('grid single')
+        expect(calendar.locator('#grid > .day')).to_have_count(1)
+        expect(calendar.locator('#grid > .day')).to_have_attribute('data-date','2026-10-28')
+        expect(calendar.locator('#weekdays')).to_be_hidden()
+        expect(calendar.locator('.task-marker')).to_have_count(0)
+        current=screen.locator('body').evaluate("async()=>await (await fetch(new URL('api/preferences',location.href).href)).json()")
+        assert current=={**preferences,'week_start':3},current
+    finally:
+        save(preferences)
+        page.set_viewport_size(original_viewport)
+        frame.evaluate('(n,url)=>n.src=url',original_url)
+    expect(calendar.locator('#weekdays span')).to_have_text(weekdays)
+    expect(calendar.locator('#date-panel')).to_have_attribute('data-date','2026-10-28')

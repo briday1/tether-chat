@@ -48,7 +48,7 @@ def main():
                     return page.locator('#app-frame').evaluate('(e,args)=>e.contentWindow.fetch("/tether-chat/api"+args.path,{method:args.method,headers:{"Content-Type":"application/json"},body:args.body===null?undefined:JSON.stringify(args.body)}).then(r=>r.json())',{'path':path,'method':method,'body':body})
                 def send(text):frame.get_by_label('Message tether').fill(text);frame.get_by_role('button',name='Send',exact=True).click()
                 frame.get_by_role('button',name='Settings',exact=True).click()
-                expect(frame.get_by_label('First day of the week')).to_have_value('1');expect(frame.get_by_label('Morning',exact=True)).to_have_value('09:00');expect(frame.get_by_label('Night',exact=True)).to_have_value('21:00')
+                expect(frame.get_by_label('Beginning of the week')).to_have_value('1');expect(frame.get_by_label('Morning',exact=True)).to_have_value('09:00');expect(frame.get_by_label('Night',exact=True)).to_have_value('21:00')
                 frame.get_by_label('Provider API base URL').fill('https://provider.example/v1');frame.get_by_label('API key',exact=True).fill('synthetic-key')
                 expect(frame.locator('#modelStatus')).to_contain_text('1 tool-calling model');expect(frame.get_by_label('Model',exact=True)).to_have_value('tool-mini')
                 expect(frame.locator('select#model')).to_be_visible();expect(frame.locator('#model option')).to_have_count(1)
@@ -56,7 +56,7 @@ def main():
                 if os.environ.get('TETHER_MODEL_PICKER_SCREENSHOT'):frame.locator('#provider').screenshot(path=os.environ['TETHER_MODEL_PICKER_SCREENSHOT'])
                 frame.get_by_role('button',name='Save AI connection',exact=True).click();expect(frame.locator('#providerStatus')).to_contain_text('saved')
                 frame.locator('#otherSettings > summary').click()
-                frame.get_by_label('First day of the week').select_option('0');frame.get_by_label('Morning',exact=True).fill('10:30');frame.get_by_label('Night',exact=True).fill('22:15');frame.get_by_role('button',name='Save preferences',exact=True).click();expect(frame.locator('#preferencesStatus')).to_contain_text('saved')
+                frame.get_by_label('Beginning of the week').select_option('0');frame.get_by_label('Morning',exact=True).fill('10:30');frame.get_by_label('Night',exact=True).fill('22:15');frame.get_by_role('button',name='Save preferences',exact=True).click();expect(frame.locator('#preferencesStatus')).to_contain_text('saved')
                 frame.get_by_role('button',name='Close settings',exact=True).click();page.reload()
                 assert api('/preferences')=={'week_start':0,'morning_time':'10:30','night_time':'22:15'}
                 send('Remind me to make a dentist appointment next week')

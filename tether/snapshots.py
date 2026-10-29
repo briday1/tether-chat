@@ -78,7 +78,7 @@ def snapshot(start: str, end: str, category: str = "") -> dict:
     due=[t for d in days for t in d["tasks"]]
     categories=Counter(c for t in due for c in t["categories"])
     kinds=Counter(e["kind"] for e in events)
-    return {"start":start,"end":end,"category":category or None,"week_start":db.preferences()['week_start'],"days":days,
+    return {"start":start,"end":end,"category":category or None,"week_start":0,"days":days,
             "insights":{"scheduled_due":len(due),"activity_events":len(events),
                         "active_days":sum(bool(d["activity"]) for d in days),
                         "categories":dict(sorted(categories.items())),

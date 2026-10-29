@@ -160,7 +160,7 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     return {answer:response.choices[0].message.content||'What is the latest on this item?',actions:[]};
   }
   async function localResponse(text){
-    const range=snapshotRange(text,new Date(),await read(m=>m.preferences().week_start));
+    const range=snapshotRange(text,new Date());
     if(range){const [start,end]=range;await read(m=>m.snapshot(start,end));const url='/snapshots?'+new URLSearchParams({start,end});
       return {answer:`[Calendar · ${start} — ${end}](${url})`,snapshot:{start,end,url}}}
     if(!text.startsWith('/'))return null;
