@@ -143,3 +143,15 @@ def test_main_settings_gear_matches_borderless_display():
         assert 'border:0;border-radius:0;background:none;cursor:pointer}.settings-gear' in page
         assert '.settings-gear:focus-visible{outline:2px solid var(--accent)' in page
         assert 'class="settings-gear" aria-label="Settings" title="Settings"' in page
+
+
+def test_dashboard_cell_packing_is_scoped_and_observable():
+    page=(ROOT/'tether/snapshot.html').read_text()
+    assert "if(dashboard&&month){cell.displayRecords=records" in page
+    assert "records.slice(0,3)" in page  # Chat month keeps abstract markers.
+    assert "requestAnimationFrame(()=>{packingFrame=0;packDisplayCells()})" in page
+    assert "if(cell.packingKey===key)continue" in page
+    assert "cell.dataset.totalCount=records.length" in page
+    assert "cell.dataset.visibleCount=plan.visible" in page
+    assert "cell.dataset.hiddenCount=plan.more" in page
+    assert "display-item-title" in page and "display-item-context" in page

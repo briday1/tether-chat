@@ -88,7 +88,7 @@ def _dispatch(name,args):
     if name=="list_threads":return store.list_threads(args.get("query",""))[:100]
     if name=="overview":return store.overview()
     if name=="recurring_items":return {"due":store.recurring_due(),"all":[t for t in store.list_threads() if t.get("recurrence")]}
-    if name=="set_recurrence":return store.update(args["id"],{"recurrence":args.get("frequency"),"next_occurrence":args.get("next_occurrence")}) or {"error":"Not found"}
+    if name=="set_recurrence":return store.update(args["id"],{"recurrence":args.get("frequency"),"next_occurrence":args.get("next_occurrence"),**{key:args[key] for key in ("recurrence_end","recurrence_timezone") if key in args}}) or {"error":"Not found"}
     if name=="complete_occurrence":return store.complete_occurrence(args["id"],args.get("description","Completed recurring occurrence"))
     if name=="daily_brief":return {"brief":store.daily_brief()}
     if name=="archive_thread":return store.archive_thread(args["id"],args.get("archive",True))
@@ -130,7 +130,7 @@ TOOLS=[
  spec("list_archived","Find archived tasks that can be restored",{"query":S}),
  spec("overview","Get currently tracked, due, waiting and settled thoughts",{}),
  spec("recurring_items","Retrieve recurring commitments and their next occurrences",{}),
- spec("set_recurrence","Set or clear recurring schedule. Specify next occurrence as timezone-aware ISO datetime, separate from deadline or bring to attention.",{"id":S,"frequency":{"type":"string","enum":["daily","weekly","monthly","quarterly","yearly"]},"next_occurrence":S},["id","frequency","next_occurrence"]),
+ spec("set_recurrence","Set or clear recurring schedule. Specify next occurrence as timezone-aware ISO datetime or YYYY-MM-DD calendar date, separate from deadline or bring to attention. Optional recurrence_end is inclusive YYYY-MM-DD; recurrence_timezone is an IANA zone to preserve local time through daylight saving.",{"id":S,"frequency":{"type":["string","null"],"enum":["daily","weekly","monthly","quarterly","yearly",None]},"next_occurrence":{"type":["string","null"]},"recurrence_end":{"type":["string","null"]},"recurrence_timezone":{"type":["string","null"]}},["id","frequency","next_occurrence"]),
  spec("complete_occurrence","Record completion of current recurring occurrence, keep history and advance the next scheduled time",{"id":S,"description":S},["id"]),
  spec("daily_brief","Generate a concise daily brief of due, active and waiting items",{}),
  spec("list_threads","Find existing thoughts before deciding to create a duplicate",{"query":S}),

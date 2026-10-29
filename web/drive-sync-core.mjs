@@ -1,6 +1,7 @@
+import {calendarDate,recurrenceValue,recurrenceZone} from './recurrence.mjs';
 /* Transport-independent, multi-value register journal. No credentials or chat data. */
 export const FIELDS = Object.freeze({
-  task:['id','title','summary','state','categories','revisit_at','due_at','recurrence','next_occurrence','archived_at','created_at','updated_at'],
+  task:['id','title','summary','state','categories','revisit_at','due_at','recurrence','next_occurrence','recurrence_end','recurrence_anchor','recurrence_timezone','archived_at','created_at','updated_at'],
   entry:['id','thread_id','kind','body','done','due_at','revisit_at','created_at'],
   note:['id','action_id','body','created_at','updated_at'],
 });
@@ -12,6 +13,7 @@ const own=(object,key)=>Object.hasOwn(object,key);
 const plain=value=>!!value&&typeof value==='object'&&!Array.isArray(value)&&(Object.getPrototypeOf(value)===null||Object.getPrototypeOf(Object.getPrototypeOf(value))===null);
 const idPattern=/^[A-Za-z0-9_-]{1,128}$/;
 const historyId=/^[A-Za-z0-9_-]{8,100}$/;
+const recurrenceFields=['recurrence_end','recurrence_anchor','recurrence_timezone'];
 const nullableDates=new Set(['due_at','revisit_at','next_occurrence','archived_at']);
 function validDate(value,nullable=false){
   if(value===null&&nullable)return true;
@@ -37,6 +39,7 @@ function validateValue(type,field,value,id){
   else if(field==='body')valid=text(20000,true);
   else if(field==='state')valid=['open','waiting','paused','settled'].includes(value);
   else if(field==='categories')valid=Array.isArray(value)&&value.length>=1&&value.length<=20&&value.every(v=>typeof v==='string'&&!!v.trim()&&v.length<=80)&&new Set(value.map(v=>v.toLowerCase())).size===value.length;
+  else if(field==='recurrence_end'||field==='recurrence_anchor'||field==='recurrence_timezone'||field==='next_occurrence'){try{if(value!==null){if(typeof value!=='string'||!value)throw new Error('Invalid recurrence value');if(field==='recurrence_end')calendarDate(value);else if(field==='recurrence_timezone')recurrenceZone(value);else recurrenceValue(value)}}catch(_){valid=false}}
   else if(field==='recurrence')valid=[null,'daily','weekly','monthly','quarterly','yearly'].includes(value);
   else if(field==='kind')valid=['thought','question','action','decision','update'].includes(value);
   else if(field==='done')valid=[true,false,0,1].includes(value);
@@ -51,7 +54,7 @@ export function validateRecords(records){
   if(new TextEncoder().encode(encoded).length>20*1024*1024)throw new SyncError('Shared Home data exceeds the 20 MB limit');
   for(const [key,row] of Object.entries(records)){
     const [type,id]=recordKey(key);
-    if(!plain(row)||Object.keys(row).length!==FIELDS[type].length||FIELDS[type].some(field=>!own(row,field)))throw new SyncError('Private, unsupported or missing field in shared record');
+    if(!plain(row)||Object.keys(row).some(field=>!FIELDS[type].includes(field))||FIELDS[type].some(field=>!own(row,field)&&!(type==='task'&&recurrenceFields.includes(field))))throw new SyncError('Private, unsupported or missing field in shared record');
     for(const [field,value] of Object.entries(row))validateValue(type,field,value,id);
     if(type==='entry'&&!own(records,'task:'+row.thread_id))throw new SyncError('Entry references a missing task');
     if(type==='note'&&(!own(records,'entry:'+row.action_id)||records['entry:'+row.action_id]?.kind!=='action'))throw new SyncError('Note references a missing action');
@@ -62,7 +65,7 @@ export function project(state){
   const records={};for(const [type,list] of [['task',state.tasks],['entry',state.entries],['note',state.notes]])for(const row of list||[]){
     const out={};for(const field of FIELDS[type]){
       if(row[field]!==undefined)out[field]=clone(row[field]);
-      else if(nullableDates.has(field)||field==='recurrence')out[field]=null;
+      else if(nullableDates.has(field)||field==='recurrence'||recurrenceFields.includes(field))out[field]=null;
       else if(field==='summary')out[field]='';
       else if(field==='categories')out[field]=[row.category||'Unsorted'];
     }
@@ -149,6 +152,7 @@ export function materialize(log,preferred={}){
   for(const [key,row] of Object.entries(records))if(key.startsWith('entry:')&&!records['task:'+row.thread_id])delete records[key];
   for(const [key,row] of Object.entries(records))if(key.startsWith('note:')&&!records['entry:'+row.action_id])delete records[key];
   for(const [key,row] of Object.entries(records))if(key.startsWith('task:')||key.startsWith('note:'))row.updated_at=[...byRecord.get(key).values()].flatMap(vs=>vs.map(v=>v.when)).sort((a,b)=>Date.parse(a)-Date.parse(b)||a.localeCompare(b)).at(-1)||row.created_at;
+  for(const [key,row] of Object.entries(records))if(key.startsWith('task:'))for(const field of recurrenceFields)if(!own(row,field))row[field]=null;
   validateRecords(records);return {records,conflicts};
 }
 export function resolve(log,key,field,value,actor,id){

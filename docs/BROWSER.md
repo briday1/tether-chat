@@ -64,7 +64,7 @@ The assistant receives existing category names and recent task context before de
 
 “Next day” means tomorrow morning; “next week” uses the preferred first day of the next week; “next month” means the first of the next month; “next year” means January 1. The browser uses your device's local calendar, including daylight saving changes. Explicit days/times take precedence. A reminder to make an appointment does not invent the appointment's date or a deadline.
 
-Snapshots show task and action reminders, recurring next occurrences, and deadlines. Labels distinguish Reminder and Due; dates on the same item/day appear together. Action cards open the selected action. Calendar views and exports honor the saved first day of the week. Scheduled dates use your local calendar; logged activity retains its recorded UTC day.
+Snapshots show task and action reminders, recurring occurrences within the requested date range, and deadlines. Labels distinguish Reminder and Due; dates on the same item/day appear together. Action cards open the selected action. Calendar views and exports honor the saved first day of the week. Scheduled dates use your local calendar; logged activity retains its recorded UTC day.
 
 ## Confirmed address lookup
 
@@ -116,8 +116,8 @@ installed tether-chat application instead when keeping the products separate.
 Existing Home data stays in its Home database. Device access is not prevented by
 this product separation; it is not encryption or a separate user account.
 
-Display provides week/month navigation, fixed calendar cells, scrollable daily
-items and date/task previews. **Use as chat context** pins a task to conversation;
+Display provides month navigation, fixed calendar cells, and a scrollable date
+panel with task details. **Use as chat context** pins a task to conversation;
 remove the chip to dismiss it. Pins do not restrict ordinary task tools.
 
 For optional household collaboration, use **Settings → Share Home**. Each person connects
@@ -127,11 +127,20 @@ their own Google account; the publisher configures Google once. Read
 ### Tablet Display
 
 Display opens a viewport-fitted month calendar suitable for a landscape household
- tablet. The menu button opens view/date/text/theme controls and links back to
-Conversation and Tasks. A day’s item count opens the full list on touchscreens;
+tablet. The menu links back to Conversation and Tasks; the gear opens Settings.
+Date cells use their available height for readable task titles and actual context
+when wide enough, or compact markers on narrow screens. More rows fit in larger
+cells; an overflow count reserves its own space only when some items cannot fit.
+Clicking or tapping a date or its items selects the full list in the date panel;
 long lists do not expand the month beyond the viewport. Portrait remains supported.
 The calendar rereads local data every minute while visible and follows the current
 date unless another date is selected. This does not call an AI provider or reload
 software. Shared updates still depend on an open, connected household session;
 Display shows offline, paused, reconnect, conflict, or stale-sync warnings rather
 than treating a refreshed local calendar as proof of a recent remote sync.
+
+### Repeating household tasks
+
+Home and Work use the same Repeat controls in the task editor: daily, weekly, monthly, quarterly, or yearly, with an optional inclusive end date. Leave the end date empty to keep repeating. Future calendar appearances are projections of one saved task, not extra tasks or completed activity. Completing the current occurrence moves its next date forward; a finished series keeps its history. The sidebar and task detail show the occurrence selected in the calendar.
+
+New timed schedules save their timezone so daylight saving changes preserve the intended local time. Older schedules without a saved timezone keep their original fixed-offset behavior until their schedule is edited. Monthly and yearly projections clamp short months while retaining the original day for later months. Date-only schedules remain calendar dates. Household sync and portable backups include the recurrence end, anchor, and timezone. Update every household device before editing schedules with these new fields.

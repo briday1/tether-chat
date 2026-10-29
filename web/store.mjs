@@ -1,4 +1,5 @@
 /* Browser task engine. All writes are committed in a single IndexedDB transaction. */
+import {calendarDate,recurrenceValue,recurrenceZone,scheduleDay,recurrenceDue,occurrences,nextOccurrence} from './recurrence.mjs';
 import {requestLocation} from './locations.mjs';
 import {briefNote} from './notes.mjs';
 import {preferences,DEFAULT_PREFERENCES,resolveReminder,chooseCategories,taskKey} from './decisions.mjs';
@@ -142,7 +143,7 @@ export class Model {
     }).map(t => {
       const active = t.state !== 'settled' && !t.archived_at;
       const attention_due = !!(active && t.revisit_at && t.revisit_at <= stamp);
-      const recurring_due = !!(active && t.recurrence && t.next_occurrence && t.next_occurrence <= stamp);
+      const recurring_due = !!(active && t.recurrence && t.next_occurrence && recurrenceDue(t,stamp));
       return {...t, entry_count: this.s.entries.filter(e => e.thread_id === t.id).length,
         attention_due, recurring_due, due: attention_due || recurring_due,
         deadline_due: !!(active && t.due_at && t.due_at.slice(0,10) <= stamp.slice(0,10))};
@@ -153,7 +154,7 @@ export class Model {
     if (typeof summary !== 'string') throw new Problem('Details must be text');
     const cats = categories(names), stamp = this.clock(), id = uid();
     this.s.tasks.push({id, title, summary, state: 'open', categories: cats, category: cats[0],
-      revisit_at: null, due_at: null, recurrence: null, next_occurrence: null, due_action: null,
+      revisit_at: null, due_at: null, recurrence: null, next_occurrence: null, recurrence_end:null, recurrence_anchor:null, recurrence_timezone:null, due_action: null,
       action_config: {}, action_prompt: null, archived_at: null, notified_for: null,
       recurring_notified_for: null, created_at: stamp, updated_at: stamp});
     return this.get(id);
@@ -168,7 +169,10 @@ export class Model {
         changes[key] = value || '';
       } else if (key === 'state') {
         if (!states.includes(value)) throw new Problem('Invalid task state'); changes.state = value;
-      } else if (['due_at', 'revisit_at', 'next_occurrence', 'archived_at'].includes(key)) changes[key] = timestamp(value);
+      } else if (['next_occurrence','recurrence_anchor'].includes(key)) {try{changes[key]=recurrenceValue(value)}catch(error){throw new Problem(error.message)}}
+      else if(key==='recurrence_end'){try{changes[key]=value===null?null:calendarDate(value)}catch(error){throw new Problem(error.message)}}
+      else if(key==='recurrence_timezone'){try{changes[key]=recurrenceZone(value)}catch(error){throw new Problem(error.message)}}
+      else if (['due_at', 'revisit_at', 'archived_at'].includes(key)) changes[key] = timestamp(value);
       else if (key === 'recurrence') {
         if (value !== null && !frequencies.includes(value)) throw new Problem('Invalid recurrence'); changes[key] = value;
       } else if (key === 'due_action') {
@@ -186,6 +190,12 @@ export class Model {
       changes.categories = categories(fields.categories ?? [fields.category]); changes.category = changes.categories[0];
     }
     if ('revisit_at' in changes) changes.notified_for = null;
+    const sameOccurrence=(a,b)=>a===b||!!a&&!!b&&(a.length===10)===(b.length===10)&&Date.parse(a)===Date.parse(b);
+    const scheduleChanged=['recurrence','next_occurrence','recurrence_timezone'].some(key=>key in changes&&(key==='next_occurrence'?!sameOccurrence(changes[key],task[key]):changes[key]!==task[key]));
+    if(scheduleChanged&&!('recurrence_anchor' in changes))changes.recurrence_anchor=changes.next_occurrence===undefined?task.next_occurrence:changes.next_occurrence;
+    if('next_occurrence' in changes)changes.recurring_notified_for=null;
+    if('recurrence' in changes&&!changes.recurrence)Object.assign(changes,{next_occurrence:null,recurrence_anchor:null,recurrence_end:null,recurrence_timezone:null});
+    const updated={...task,...changes};if(updated.recurrence_end&&updated.next_occurrence&&updated.recurrence_end<scheduleDay(updated.next_occurrence,updated.recurrence_timezone))throw new Problem('Repeat end cannot be before the next occurrence');
     Object.assign(task, changes, {updated_at: this.clock()}); return this.get(id);
   }
   setCategories(id, names, mode = 'replace') {
@@ -293,12 +303,8 @@ export class Model {
   complete(id, description = 'Completed recurring occurrence') {
     const task = this.task(id);
     if (!task.recurrence || !task.next_occurrence) throw new Problem('This task does not have a recurring date');
-    let next = advance(task.next_occurrence, task.recurrence), count = 0;
-    while (next <= this.clock()) {
-      if (++count > 1200) throw new Problem('Too many missed occurrences; set the next occurrence date first');
-      next = advance(next, task.recurrence);
-    }
-    this.update(id, {next_occurrence: next}); this.record(id, description, 'milestone'); return this.get(id);
+    let next;try{next=nextOccurrence(task,this.clock())}catch(error){throw new Problem(error.message)}
+    this.update(id, {next_occurrence: next,recurrence_anchor:task.recurrence_anchor||task.next_occurrence}); this.record(id, description, 'milestone'); return this.get(id);
   }
   attention() {
     const active = this.list().filter(t => !t.archived_at && t.state !== 'settled'), lookup = new Map(active.map(t => [t.id,t]));
@@ -322,16 +328,17 @@ export class Model {
     const scheduled=[];
     const add=(task,action=null)=>{
       const record=action||task,dates=new Map();
-      for(const [field,kind] of [['due_at','deadline'],['revisit_at','reminder'],...(!action?[['next_occurrence','reminder']]:[])]){
+      for(const [field,kind] of [['due_at','deadline'],['revisit_at','reminder'],...(!action&&!task.recurrence?[['next_occurrence','reminder']]:[])]){
         const date=localDay(record[field]);if(!date||date<start||date>end)continue;
         if(!dates.has(date))dates.set(date,new Set());dates.get(date).add(kind);
       }
+      const projected=new Map();if(!action)for(const item of occurrences(task,start,end)){projected.set(item.date,item.value);if(!dates.has(item.date))dates.set(item.date,new Set());dates.get(item.date).add('recurrence')}
       for(const [date,kinds] of dates)scheduled.push({id:task.id,task_id:task.id,action_id:action?.id||null,title:action?.body||task.title,task_title:task.title,
         category:task.category,categories:task.categories,state:action?.done?'settled':task.state,date,schedule_kinds:[...kinds],
         summary:(task.summary||'').slice(0,300),location:(this.s.location_requests||[]).filter(r=>r.task_id===task.id&&r.status==='saved'&&r.selected?.address).at(-1)?.selected.address||'',
         note_preview:(action?this.notes(action.id).at(-1)?.body:this.s.entries.filter(e=>e.thread_id===task.id&&e.kind!=='action').at(-1)?.body)?.slice(0,240)||'',
-        due_at:record.due_at||null,revisit_at:record.revisit_at||null,next_occurrence:action?null:task.next_occurrence||null,
-        schedule_label:[kinds.has('deadline')?'Due':'',kinds.has('reminder')?'Reminder':'',action?.done?'Done':''].filter(Boolean).join(' · '),
+        due_at:record.due_at||null,revisit_at:record.revisit_at||null,next_occurrence:action?null:projected.get(date)||task.next_occurrence||null,occurrence_at:projected.get(date)||null,is_projection:!!projected.get(date)&&Date.parse(projected.get(date))!==Date.parse(task.next_occurrence),recurrence:action?null:task.recurrence||null,recurrence_end:action?null:task.recurrence_end||null,
+        schedule_label:[kinds.has('deadline')?'Due':'',kinds.has('reminder')?'Reminder':'',kinds.has('recurrence')?'Repeats':'',action?.done?'Done':''].filter(Boolean).join(' · '),
         href:action?'/board#action/'+task.id+'/'+action.id:'/board#task/'+task.id});
     };
     for(const task of tasks){add(task);for(const action of this.s.entries.filter(e=>e.thread_id===task.id&&e.kind==='action'))add(task,action)}
@@ -368,7 +375,7 @@ export class Model {
       case 'set_due_date': return this.update(args.id, {due_at:args.when});
       case 'set_category': return this.update(args.id, {categories:[args.category]});
       case 'set_categories': return this.setCategories(args.id, args.categories, args.mode || 'replace');
-      case 'set_recurrence': return this.update(args.id, {recurrence:args.frequency || null,next_occurrence:args.next_occurrence || null});
+      case 'set_recurrence': return this.update(args.id, {recurrence:args.frequency || null,next_occurrence:args.next_occurrence || null,...Object.fromEntries(['recurrence_end','recurrence_timezone'].filter(key=>key in args).map(key=>[key,args[key]]))});
       case 'complete_occurrence': return this.complete(args.id,args.description);
       case 'recurring_items': return {due:this.list().filter(t => t.recurring_due),all:this.list().filter(t => t.recurrence && !t.archived_at)};
       case 'archive_thread': return this.update(args.id, {archived_at:args.archive === false ? null : this.clock()});

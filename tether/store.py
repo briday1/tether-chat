@@ -1,4 +1,5 @@
 from . import environment
+from . import recurrence as recurrence_rules
 import os, sqlite3, json
 from pathlib import Path
 from uuid import uuid4
@@ -41,6 +42,8 @@ CREATE TABLE IF NOT EXISTS assistant_context(id INTEGER PRIMARY KEY CHECK(id=1),
         if "notified_for" not in columns:c.execute("ALTER TABLE threads ADD COLUMN notified_for TEXT")
         if "due_at" not in columns:c.execute("ALTER TABLE threads ADD COLUMN due_at TEXT")
         if "recurrence" not in columns:c.execute("ALTER TABLE threads ADD COLUMN recurrence TEXT")
+        for name in ("recurrence_end", "recurrence_anchor", "recurrence_timezone"):
+            if name not in columns:c.execute(f"ALTER TABLE threads ADD COLUMN {name} TEXT")
         if "next_occurrence" not in columns:c.execute("ALTER TABLE threads ADD COLUMN next_occurrence TEXT")
         if "due_action" not in columns:c.execute("ALTER TABLE threads ADD COLUMN due_action TEXT")
         if "action_config" not in columns:c.execute("ALTER TABLE threads ADD COLUMN action_config TEXT")
@@ -88,7 +91,7 @@ def list_threads(q=""):
     for t in rows:
         t["attention_due"]=bool(t["revisit_at"] and t["revisit_at"]<=now() and t["state"]!="settled" and not t.get("archived_at"))
         t["deadline_due"]=bool(t.get("due_at") and t["due_at"][:10]<=now()[:10] and t["state"]!="settled")
-        t["recurring_due"]=bool(t.get("recurrence") and t.get("next_occurrence") and t["next_occurrence"]<=now() and t["state"]!="settled")
+        t["recurring_due"]=bool(t.get("recurrence") and t.get("next_occurrence") and recurrence_rules.is_due(t["next_occurrence"],now()) and t["state"]!="settled" and not t.get("archived_at"))
         t["due"]=t["attention_due"] or t["recurring_due"]
     for t in rows:t["action_config"]=json.loads(t["action_config"] or "{}")
     return sorted(rows,key=lambda t:not t["due"])
@@ -164,7 +167,7 @@ def capture(title,summary='',categories=None,remind_at=None,existing_id=None):
         c.execute('INSERT OR REPLACE INTO assistant_context(id,task_id) VALUES(1,?)',(id,))
     return {**get(id),'reused':existing is not None}
 def update(id,fields):
-    allowed={"archived_at","title","summary","state","revisit_at","due_at","category","categories","recurrence","next_occurrence","due_action","action_config","action_prompt"}
+    allowed={"archived_at","title","summary","state","revisit_at","due_at","category","categories","recurrence","next_occurrence","recurrence_end","recurrence_anchor","recurrence_timezone","due_action","action_config","action_prompt"}
     fields={k:v for k,v in fields.items() if k in allowed}
     names=None
     if "categories" in fields:
@@ -174,6 +177,21 @@ def update(id,fields):
         names=normalize_categories([fields["category"]]);fields["category"]=names[0]
     if "archived_at" in fields and fields["archived_at"] not in (None,) and not isinstance(fields["archived_at"],str):raise ValueError("Invalid archive timestamp")
     if "recurrence" in fields and fields["recurrence"] not in (None,"daily","weekly","monthly","quarterly","yearly"):raise ValueError("Invalid recurrence")
+    previous = get(id)
+    if previous and any(key in fields for key in ('recurrence', 'next_occurrence', 'recurrence_end', 'recurrence_anchor', 'recurrence_timezone')):
+        combined = {**previous, **fields}
+        recurrence_rules.validate_zone(combined.get('recurrence_timezone'))
+        recurrence_rules.validate_end(combined.get('recurrence_end'))
+        for key in ('next_occurrence', 'recurrence_anchor'):
+            if combined.get(key) is not None:recurrence_rules.parse(combined[key], combined.get('recurrence_timezone'))
+        schedule_changed = any(key in fields and fields[key] != previous.get(key) for key in ('recurrence', 'recurrence_timezone')) or ('next_occurrence' in fields and not recurrence_rules.equivalent(fields['next_occurrence'], previous.get('next_occurrence')))
+        if schedule_changed or not combined.get('recurrence_anchor'):
+            fields['recurrence_anchor'] = combined.get('next_occurrence')
+        if combined.get('recurrence') is None:
+            fields.update(next_occurrence=None, recurrence_anchor=None, recurrence_end=None, recurrence_timezone=None)
+        elif combined.get('next_occurrence') and recurrence_rules.ended(combined['next_occurrence'], combined.get('recurrence_end'), combined.get('recurrence_timezone')):
+            raise ValueError('Repeat end cannot be before the next occurrence')
+        if schedule_changed:fields['recurring_notified_for'] = None
     if "action_prompt" in fields and fields["action_prompt"] is not None and (not isinstance(fields["action_prompt"],str) or len(fields["action_prompt"])>1000):raise ValueError("Action description too long")
     if "due_action" in fields and fields["due_action"] not in (None,"activity_report"):raise ValueError("Invalid due action")
     if "action_config" in fields:
@@ -294,7 +312,10 @@ def claim_notifications():
             for date_field,claim_field in schedules:
                 stamp=item[date_field]
                 if not stamp or item[claim_field]==stamp:continue
-                try:due=datetime.fromisoformat(stamp.replace("Z","+00:00"))
+                try:
+                    if date_field == 'next_occurrence' and len(stamp) == 10:
+                        due=datetime.fromisoformat(stamp).astimezone()
+                    else:due=datetime.fromisoformat(stamp.replace("Z","+00:00"))
                 except ValueError:continue
                 if due.tzinfo is None:continue
                 if not (current-timedelta(hours=24)<=due<=current):continue
@@ -379,36 +400,20 @@ def configure_due_action(thread_id,action="activity_report",period="week",catego
     return update(thread_id,{"due_action":"activity_report","action_config":{"period":period,"category":category}})
 
 def advance_occurrence(value,frequency):
-    from calendar import monthrange
-    from datetime import timedelta
-    dt=datetime.fromisoformat(value.replace("Z","+00:00"))
-    if dt.tzinfo is None:raise ValueError("Recurrence must include timezone")
-    if frequency=="daily":return (dt+timedelta(days=1)).isoformat()
-    if frequency=="weekly":return (dt+timedelta(days=7)).isoformat()
-    months={"monthly":1,"quarterly":3,"yearly":12}
-    if frequency not in months:raise ValueError("Invalid recurrence")
-    offset=months[frequency]
-    year=dt.year+(dt.month-1+offset)//12
-    month=(dt.month-1+offset)%12+1
-    return dt.replace(year=year,month=month,day=min(dt.day,monthrange(year,month)[1])).isoformat()
+    return recurrence_rules.at(value, frequency, 1)
 
 def recurring_due():
     return [t for t in list_threads() if t.get("recurrence") and t.get("next_occurrence")
-            and t["next_occurrence"]<=now() and t["state"]!="settled" and not t.get("archived_at")]
+            and recurrence_rules.is_due(t["next_occurrence"],now()) and t["state"]!="settled" and not t.get("archived_at")]
 
 def complete_occurrence(thread_id,description="Completed recurring occurrence"):
     t=get(thread_id)
     if not t or not t.get("recurrence") or not t.get("next_occurrence"):
         raise ValueError("Not a recurring thread")
     original=t["next_occurrence"]
-    next_date=advance_occurrence(original,t["recurrence"])
-    # Skip missed periods without generating a backlog of duplicate tasks.
-    for _ in range(1200):
-        if next_date>now():break
-        next_date=advance_occurrence(next_date,t["recurrence"])
-    else:raise ValueError("Recurrence interval exceeded safe limit")
+    next_date=recurrence_rules.next_after(t, now())
     with conn() as c:
-        c.execute("UPDATE threads SET next_occurrence=?,updated_at=? WHERE id=?",(next_date,now(),thread_id))
+        c.execute("UPDATE threads SET next_occurrence=?,recurrence_anchor=COALESCE(recurrence_anchor,?),recurring_notified_for=NULL,updated_at=? WHERE id=?",(next_date,original,now(),thread_id))
     record_activity(thread_id,description,"milestone")
     return get(thread_id)
 
