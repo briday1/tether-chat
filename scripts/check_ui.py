@@ -168,6 +168,8 @@ def main():
                     from recurrence_ui_checks import check_recurrence
                     check_recurrence(page, page)
                     page.goto(base+'/',wait_until='networkidle')
+                from composer_ui_checks import check_composer_controls
+                check_composer_controls(page,page,'work-conversation')
                 # Reproduce a desktop upgrade with an old script still in the
                 # WebView cache. Its matchReferences hook must remain harmless.
                 legacy=(ROOT/'tests/fixtures/legacy-chat-2026-16.js').read_text()
