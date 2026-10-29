@@ -89,10 +89,10 @@ def get(id):
 def list_threads(q=""):
     rows=with_categories(query("SELECT t.*,(SELECT COUNT(*) FROM entries e WHERE e.thread_id=t.id) entry_count FROM threads t WHERE title LIKE ? OR summary LIKE ? OR EXISTS(SELECT 1 FROM entries e WHERE e.thread_id=t.id AND e.body LIKE ?) OR EXISTS(SELECT 1 FROM thread_categories tc WHERE tc.thread_id=t.id AND tc.name LIKE ?) OR EXISTS(SELECT 1 FROM action_notes n JOIN entries e ON e.id=n.action_id WHERE e.thread_id=t.id AND n.body LIKE ?) ORDER BY updated_at DESC",("%"+q+"%",)*5))
     for t in rows:
-        t["attention_due"]=bool(t["revisit_at"] and t["revisit_at"]<=now() and t["state"]!="settled" and not t.get("archived_at"))
-        t["deadline_due"]=bool(t.get("due_at") and t["due_at"][:10]<=now()[:10] and t["state"]!="settled")
-        t["recurring_due"]=bool(t.get("recurrence") and t.get("next_occurrence") and recurrence_rules.is_due(t["next_occurrence"],now()) and t["state"]!="settled" and not t.get("archived_at"))
-        t["due"]=t["attention_due"] or t["recurring_due"]
+        t["attention_due"]=bool(t["revisit_at"] and recurrence_rules.is_due(t["revisit_at"],now()) and t["state"]!="settled" and not t.get("archived_at"))
+        t["deadline_due"]=bool(t.get("due_at") and recurrence_rules.deadline_due(t["due_at"],now()) and t["state"]!="settled")
+        t["recurring_due"]=bool(t.get("recurrence") and t.get("next_occurrence") and recurrence_rules.is_due(t["next_occurrence"],now()) and (not t.get("revisit_at") or recurrence_rules.is_due(t["revisit_at"],now())) and t["state"]!="settled" and not t.get("archived_at"))
+        t["due"]=t["attention_due"] or (t["recurring_due"] and not t.get("revisit_at"))
     for t in rows:t["action_config"]=json.loads(t["action_config"] or "{}")
     return sorted(rows,key=lambda t:not t["due"])
 def create(title,summary="",categories=None):
@@ -249,8 +249,8 @@ def update_action(id,fields):
         if key in fields and fields[key] is not None:
             stamp=fields[key]
             try:
-                dt=datetime.fromisoformat(stamp.replace("Z","+00:00"))
-                if dt.tzinfo is None:raise ValueError()
+                dt,date_only=recurrence_rules.parse(stamp)
+                if date_only and key!="due_at":raise ValueError()
             except (ValueError,AttributeError):raise ValueError("Action date needs a timezone-aware ISO datetime")
     if "done" in fields:fields["done"]=int(bool(fields["done"]))
     if "revisit_at" in fields:fields["notified_for"]=None
@@ -308,7 +308,7 @@ def claim_notifications():
         for row in rows:
             item=dict(row)
             schedules=[("revisit_at","notified_for")]
-            if item["recurrence"]:schedules.append(("next_occurrence","recurring_notified_for"))
+            if item["recurrence"] and (not item["revisit_at"] or recurrence_rules.is_due(item["revisit_at"],current.isoformat())):schedules.append(("next_occurrence","recurring_notified_for"))
             for date_field,claim_field in schedules:
                 stamp=item[date_field]
                 if not stamp or item[claim_field]==stamp:continue
@@ -399,23 +399,44 @@ def configure_due_action(thread_id,action="activity_report",period="week",catego
     if action!="activity_report":raise ValueError("Unsupported action")
     return update(thread_id,{"due_action":"activity_report","action_config":{"period":period,"category":category}})
 
+def set_recurrence(thread_id,frequency,next_occurrence,attention_mode=None,**options):
+    """Choose recurring attention explicitly; omission preserves independent reminders."""
+    if attention_mode not in (None,'occurrence','independent'):raise ValueError('Invalid recurrence attention mode')
+    if attention_mode=='occurrence' and (not frequency or not next_occurrence):
+        raise ValueError('Occurrence attention requires a recurring schedule')
+    fields={'recurrence':frequency,'next_occurrence':next_occurrence,**options}
+    if attention_mode=='occurrence':fields['revisit_at']=None
+    return update(thread_id,fields)
+
 def advance_occurrence(value,frequency):
     return recurrence_rules.at(value, frequency, 1)
 
 def recurring_due():
     return [t for t in list_threads() if t.get("recurrence") and t.get("next_occurrence")
-            and recurrence_rules.is_due(t["next_occurrence"],now()) and t["state"]!="settled" and not t.get("archived_at")]
+            and recurrence_rules.is_due(t["next_occurrence"],now()) and (not t.get("revisit_at") or recurrence_rules.is_due(t["revisit_at"],now())) and t["state"]!="settled" and not t.get("archived_at")]
 
-def complete_occurrence(thread_id,description="Completed recurring occurrence"):
-    t=get(thread_id)
-    if not t or not t.get("recurrence") or not t.get("next_occurrence"):
-        raise ValueError("Not a recurring thread")
-    original=t["next_occurrence"]
-    next_date=recurrence_rules.next_after(t, now())
+def complete_occurrence(thread_id,description="Completed recurring occurrence",occurrence_at=None):
+    """Complete one identified cycle atomically; an unscoped retry never eats tomorrow."""
+    stamp=now()
     with conn() as c:
-        c.execute("UPDATE threads SET next_occurrence=?,recurrence_anchor=COALESCE(recurrence_anchor,?),recurring_notified_for=NULL,updated_at=? WHERE id=?",(next_date,original,now(),thread_id))
-    record_activity(thread_id,description,"milestone")
-    return get(thread_id)
+        c.execute("BEGIN IMMEDIATE")
+        row=c.execute("SELECT * FROM threads WHERE id=?",(thread_id,)).fetchone()
+        if not row or not row['recurrence']:raise ValueError("Not a recurring thread")
+        t=dict(row);original=t['next_occurrence']
+        reason=None
+        if occurrence_at is not None and not recurrence_rules.equivalent(occurrence_at,original):reason='occurrence_changed'
+        elif not original:reason='no_remaining_occurrence'
+        elif t['state']=='settled' or t.get('archived_at'):reason='inactive'
+        elif occurrence_at is None and not recurrence_rules.is_due(original,stamp):reason='not_due'
+        if reason:
+            completion={'completed':False,'occurrence_at':occurrence_at,'reason':reason}
+        else:
+            if not isinstance(description,str) or not description.strip():raise ValueError('Completion description required')
+            next_date=recurrence_rules.next_after(t,stamp)
+            c.execute("UPDATE threads SET next_occurrence=?,recurrence_anchor=COALESCE(recurrence_anchor,?),recurring_notified_for=NULL,updated_at=? WHERE id=?",(next_date,original,stamp,thread_id))
+            c.execute("INSERT INTO activity(id,thread_id,kind,body,occurred_at,recorded_at) VALUES(?,?,?,?,?,?)",(uuid4().hex,thread_id,'milestone',description,stamp,stamp))
+            completion={'completed':True,'occurrence_at':original,'next_occurrence':next_date}
+    return {**get(thread_id),'completion':completion}
 
 def archive_thread(thread_id,archive=True):
     if not get(thread_id):raise ValueError("Thread not found")

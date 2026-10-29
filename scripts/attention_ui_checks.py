@@ -47,3 +47,19 @@ def check_attention_updates(page, ui, api_base, board_url, board_path, embedded=
     api('/threads/'+task['id'],'PATCH',{'revisit_at':'2035-01-01T12:00:00Z'})
     expect(parent).to_have_count(0,timeout=6000)
     expect(ui.get_by_label('Message tether')).to_have_value('Keep my unsent Attention draft')
+
+    # Child-only attention disappears without creating parent urgency; independent
+    # parent reminders above remain intact. A future projected cycle is not due.
+    child_only=api('/threads','POST',{'title':'Child-only attention regression'})
+    child=api('/threads/'+child_only['id']+'/entries','POST',{'kind':'action','body':'Dismiss this child'})
+    api('/actions/'+child['id'],'PATCH',{'revisit_at':'2020-01-01T12:00:00Z'})
+    child_card=ui.locator('#due button[data-action-id="'+child['id']+'"]')
+    expect(child_card).to_be_visible(timeout=6000)
+    api('/actions/'+child['id'],'PATCH',{'done':True})
+    expect(child_card).to_have_count(0,timeout=6000)
+    expect(ui.locator('#due button[data-task-id="'+child_only['id']+'"]')).to_have_count(0)
+    repeating=api('/threads','POST',{'title':'Future occurrence attention regression'})
+    api('/threads/'+repeating['id'],'PATCH',{'recurrence':'daily','next_occurrence':'2035-01-01'})
+    result=api('/threads/'+repeating['id']+'/complete-occurrence','POST',{})
+    assert not result['completion']['completed'] and result['next_occurrence']=='2035-01-01'
+    assert not any(item['task_id']==repeating['id'] for item in api('/attention')['items'])

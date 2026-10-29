@@ -106,3 +106,11 @@ test('snapshot summary is bounded while full task details remain available',()=>
   assert.equal(m.snapshot('2026-10-30','2026-10-30').days[0].tasks[0].summary,text.slice(0,300));
   assert.equal(m.get(task.id).summary,text);
 });
+
+test('action attention compares instants rather than ISO text offsets',()=>{
+  const m=new Model(emptyState(),()=> '2026-10-29T18:00:00Z'),t=m.create('Parent'),a=m.add(t.id,'action','Future local time');
+  m.updateAction(a.id,{revisit_at:'2026-10-29T17:00:00-04:00'});
+  assert.deepEqual(m.attention().items,[]);
+  m.updateAction(a.id,{revisit_at:'2026-10-29T20:00:00+04:00'});
+  assert.equal(m.attention().items[0].action_id,a.id);
+});

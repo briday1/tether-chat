@@ -376,3 +376,45 @@ test('an unacknowledged stopped outbox is atomically interrupted before any prov
   assert.equal((await api('/chat/jobs','POST',{...body,stop_requested:false})).data.status,'interrupted');
   await new Promise(r=>setTimeout(r,20));assert.equal(calls,0);assert.equal(db.state.messages.length,1);
 });
+
+test('curation cannot resurrect completed children or future occurrences as parent attention',async t=>{
+  let ids=[];const {api}=await setup(t,()=>provider({content:JSON.stringify({items:ids.map(id=>({id,reason:'Due today'}))})}));
+  await save(api);
+  const parent=(await api('/threads','POST',{title:'Parent with finished child'})).data;
+  const action=(await api('/threads/'+parent.id+'/entries','POST',{kind:'action',body:'Child'})).data;
+  await api('/actions/'+action.id,'PATCH',{done:true});
+  const future=(await api('/threads','POST',{title:'Tomorrow'})).data;
+  await api('/threads/'+future.id,'PATCH',{recurrence:'daily',next_occurrence:'2035-01-01'});
+  ids=[parent.id,future.id];
+  assert.deepEqual((await api('/attention?force=true')).data.items,[]);
+  await api('/threads/'+parent.id,'PATCH',{revisit_at:'2020-01-01T12:00:00Z'});
+  assert.deepEqual((await api('/attention')).data.items.map(i=>i.id),[parent.id]);
+});
+
+test('daily reminder capture never injects one-shot dates and requires a recurrence tool',async t=>{
+  let count=0,db;const setupResult=await setup(t,()=>{
+    count++;
+    if(count===1)return provider({content:null,tool_calls:[{id:'daily-capture',function:{name:'capture',arguments:'{"title":"Daily check-in"}'}}]});
+    if(count===3){assert.equal(db.state.tasks[0].revisit_at,null);return provider({content:null,tool_calls:[{id:'daily-schedule',function:{name:'set_recurrence',arguments:JSON.stringify({id:db.state.tasks[0].id,frequency:'daily',next_occurrence:'2035-01-01T09:00:00Z',attention_mode:'occurrence'})}}]})}
+    return provider({content:'Captured.'});
+  },new MemoryDB(),new Locks(),{config:{...config,tools:[...config.tools,{type:'function',function:{name:'set_recurrence',parameters:{required:['id','frequency','next_occurrence']}}}]}});
+  db=setupResult.db;const {api}=setupResult;
+  await save(api);await api('/chat/jobs','POST',{request_id:'daily-capture-regression',text:'Remind me daily starting tomorrow'});
+  await waitFor(()=>db.state.jobs[0]?.status==='done');
+  assert.equal(count,4);assert.equal(db.state.tasks[0].recurrence,'daily');
+  assert.equal(db.state.tasks[0].revisit_at,null);assert.equal(db.state.tasks[0].due_at,null);
+});
+
+test('claimed independent reminders do not hide later recurrence notifications',async t=>{
+  const original=globalThis.Notification,shown=[];
+  globalThis.Notification=class {static permission='granted';constructor(title){shown.push(title)}};
+  t.after(()=>{if(original===undefined)delete globalThis.Notification;else globalThis.Notification=original});
+  const {api,db,runtime}=await setup(t),task=(await api('/threads','POST',{title:'Daily notification'})).data;
+  const old=new Date(Date.now()-3600000).toISOString(),occurrence=new Date(Date.now()-60000).toISOString();
+  await api('/threads/'+task.id,'PATCH',{recurrence:'daily',next_occurrence:occurrence,revisit_at:old});
+  db.state.notificationClaims[task.id+':'+old]=old;
+  await runtime.notifications();assert.deepEqual(shown,['Daily notification']);
+  await runtime.notifications();assert.equal(shown.length,1);
+  await api('/threads/'+task.id,'PATCH',{next_occurrence:new Date(Date.now()-30000).toISOString(),revisit_at:'2035-01-01T12:00:00Z'});
+  await runtime.notifications();assert.equal(shown.length,1);
+});

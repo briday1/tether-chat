@@ -2,6 +2,7 @@
 import re
 from datetime import datetime
 from urllib.parse import quote
+from .recurrence import local_day
 
 
 def text(value):
@@ -19,20 +20,20 @@ def task_table(tasks, details=None):
                 continue
             schedules = []
             if entry.get('due_at'):
-                schedules.append('due ' + entry['due_at'][:10])
+                schedules.append('due ' + local_day(entry['due_at']))
             if entry.get('revisit_at'):
-                schedules.append('Bring to attention ' + entry['revisit_at'][:10])
+                schedules.append('Bring to attention ' + local_day(entry['revisit_at']))
             actions.append(entry['body'] + (' (' + '; '.join(schedules) + ')' if schedules else ''))
         context = task.get('summary', '')
         if actions:
             context += (' ' if context else '') + 'Next: ' + '; '.join(actions)
         when = []
         if task.get('due_at'):
-            when.append('Due ' + task['due_at'][:10])
+            when.append('Due ' + local_day(task['due_at']))
         if task.get('revisit_at'):
-            when.append('Bring to attention ' + task['revisit_at'][:10])
+            when.append('Bring to attention ' + local_day(task['revisit_at']))
         if task.get('recurrence') and task.get('next_occurrence'):
-            when.append('Next occurrence ' + task['next_occurrence'][:10])
+            when.append('Next occurrence ' + local_day(task['next_occurrence']))
         if task.get('state') in ('waiting', 'paused', 'settled'):
             when.append({'waiting': 'Waiting', 'paused': 'Paused', 'settled': 'Done'}[task['state']])
         lines.append(f"| [{text(task['title'])}](/board#task/{quote(task['id'], safe='')}) | {text(context)} | {text('; '.join(when))} |")
@@ -79,12 +80,15 @@ def check_in(task, action, path):
         parts.append('Latest note: ' + text(action['notes'][-1]['body']))
     facts = []
     if selected.get('due_at'):
-        facts.append(('Due date', selected['due_at'][:10]))
+        facts.append(('Due date', local_day(selected['due_at'])))
     for label, value in [('Bring to attention', selected.get('revisit_at')),
                          ('Next occurrence', task.get('next_occurrence') if not action and task.get('recurrence') else None)]:
         if value:
-            local = datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone()
-            facts.append((label, local.strftime('%a, %b %d, %Y · %H:%M %Z')))
+            if len(value) == 10:
+                facts.append((label, value))
+            else:
+                local = datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone()
+                facts.append((label, local.strftime('%a, %b %d, %Y · %H:%M %Z')))
     if facts:
         parts.append('| Detail | Value |\n| --- | --- |\n' + '\n'.join(f'| {label} | {text(value)} |' for label, value in facts))
     parts.append('What is the latest on this ' + ('action' if action else 'task') + '—is it complete, blocked, or still in progress?')

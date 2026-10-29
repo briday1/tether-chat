@@ -6,13 +6,7 @@ from . import store
 
 
 def _due(stamp):
-    if not stamp:
-        return False
-    try:
-        value = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
-        return value.tzinfo is not None and value <= datetime.now(timezone.utc)
-    except (ValueError, TypeError):
-        return False
+    return store.recurrence_rules.is_due(stamp, store.now())
 
 
 def items(force=False):

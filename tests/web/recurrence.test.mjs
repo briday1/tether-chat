@@ -14,9 +14,9 @@ test('daily projections fill only requested range without materializing tasks or
 test('monthly anchor clamps February and restores original month day after completion',()=>{
  const {model:m,id}=setup({recurrence:'monthly',next_occurrence:'2026-01-31'},'2026-01-31T01:00:00Z');
  assert.deepEqual(rows(m,'2026-01-01','2026-04-30').map(r=>r.date),['2026-01-31','2026-02-28','2026-03-31','2026-04-30']);
- m.complete(id);assert.equal(m.get(id).next_occurrence,'2026-02-28');assert.equal(m.get(id).recurrence_anchor,'2026-01-31');
+ m.complete(id,undefined,'2026-01-31');assert.equal(m.get(id).next_occurrence,'2026-02-28');assert.equal(m.get(id).recurrence_anchor,'2026-01-31');
  m.update(id,{recurrence:'monthly',next_occurrence:'2026-02-28',summary:'Unchanged schedule'});assert.equal(m.get(id).recurrence_anchor,'2026-01-31');
- m.complete(id);assert.equal(m.get(id).next_occurrence,'2026-03-31');assert.equal(m.s.activity.length,2);
+ m.complete(id,undefined,'2026-02-28');assert.equal(m.get(id).next_occurrence,'2026-03-31');assert.equal(m.s.activity.length,2);
 });
 test('inclusive end bounds projections and completion exhaustion retains one task and history',()=>{
  const {model:m,id}=setup({recurrence:'weekly',next_occurrence:'2026-01-01',recurrence_end:'2026-01-15'},'2026-01-15T12:00:00Z');
@@ -68,3 +68,46 @@ test('legacy portable and journal without recurrence metadata import with safe d
 });
 
 test('old task can import its own backup without a false metadata conflict',()=>{const {model:m,id}=setup({recurrence:'monthly',next_occurrence:'2026-01-31'});for(const field of ['recurrence_anchor','recurrence_end','recurrence_timezone'])delete m.s.tasks[0][field];assert.equal(importData(m.s,exportData(m.s)).added.tasks,0);const changed=exportData(m.s);changed.data.tasks[0].recurrence_end='2026-06-30';assert.throws(()=>importData(m.s,changed),/different version/)});
+test('completion retries do not consume tomorrow and occurrence identity permits intentional early completion',()=>{
+ const {model:m,id}=setup({recurrence:'daily',next_occurrence:'2026-01-31',recurrence_end:'2026-02-01',due_at:'2026-01-31T12:00:00Z',revisit_at:'2026-01-31T12:00:00Z'},'2026-01-31T13:00:00Z');
+ const first=m.complete(id);assert.equal(first.next_occurrence,'2026-02-01');assert.equal(first.completion.occurrence_at,'2026-01-31');
+ assert.equal(m.complete(id).next_occurrence,'2026-02-01');assert.equal(m.s.activity.length,1);
+ assert.equal(m.complete(id,undefined,'2026-01-31').next_occurrence,'2026-02-01');assert.equal(m.s.activity.length,1);
+ assert.equal(m.get(id).revisit_at,'2026-01-31T12:00:00.000Z');assert.equal(m.get(id).due_at,'2026-01-31T12:00:00.000Z');
+ assert.equal(m.complete(id,undefined,'2026-02-01').next_occurrence,null);assert.equal(m.complete(id,undefined,'2026-02-01').next_occurrence,null);assert.equal(m.s.activity.length,2);
+});
+test('explicit future attention overrides an already-due recurrence',()=>{
+ const {model:m,id}=setup({recurrence:'daily',next_occurrence:'2026-01-31',revisit_at:'2026-01-31T21:00:00Z'},'2026-01-31T18:00:00Z');
+ assert.equal(m.list()[0].due,false);assert.equal(m.attention().items.length,0);
+ m.update(id,{revisit_at:null});assert.equal(m.list()[0].due,true);
+});
+test('calendar deadlines preserve date-only identity across backup and sharing',()=>{
+ const {model:m,id}=setup({due_at:'2026-01-31'},'2026-01-31T13:00:00Z');
+ const a=m.add(id,'action','Deadline');m.updateAction(a.id,{due_at:'2026-02-01'});
+ assert.equal(m.get(id).due_at,'2026-01-31');assert.equal(m.get(id).entries[0].due_at,'2026-02-01');
+ assert.equal(m.list()[0].deadline_due,true);
+ const imported=validateBackup(exportData(m.s));assert.equal(imported.tasks[0].due_at,'2026-01-31');
+ const records=project(m.s);validateRecords(records);
+});
+test('date-only due flags respect local rollover on either side of UTC and DST',async()=>{
+ const {execFileSync}=await import('node:child_process');
+ for(const [TZ,stamp,today,tomorrow] of [['America/Los_Angeles','2026-11-01T06:30:00Z','2026-10-31','2026-11-01'],['Pacific/Kiritimati','2026-10-31T10:30:00Z','2026-11-01','2026-11-02']]){
+  const script=`import assert from 'node:assert/strict';import {Model,emptyState} from './web/store.mjs';const m=new Model(emptyState(),()=>${JSON.stringify(stamp)});const t=m.create('Boundary');m.update(t.id,{recurrence:'daily',next_occurrence:${JSON.stringify(tomorrow)},due_at:${JSON.stringify(tomorrow)}});assert.equal(m.list()[0].due,false);assert.equal(m.list()[0].deadline_due,false);m.update(t.id,{next_occurrence:${JSON.stringify(today)},due_at:${JSON.stringify(today)}});assert.equal(m.list()[0].due,true);assert.equal(m.list()[0].deadline_due,true);`;
+  execFileSync(process.execPath,['--input-type=module','-e',script],{cwd:new URL('../../',import.meta.url),env:{...process.env,TZ}});
+ }
+});
+test('repeating reminder creation switches a captured one-shot to occurrence attention explicitly',()=>{
+ const m=new Model(emptyState(),()=> '2026-01-31T13:00:00Z');
+ const t=m.capture({title:'Daily check-in',remind_at:'2026-01-31T12:00:00Z'});
+ m.dispatch('set_recurrence',{id:t.id,frequency:'daily',next_occurrence:'2026-01-31T12:00:00Z',attention_mode:'occurrence'});
+ assert.equal(m.get(t.id).revisit_at,null);assert.equal(m.attention().items.length,1);
+ assert.equal(m.dispatch('complete_occurrence',{id:t.id}).completion.completed,true);
+ assert.equal(m.attention().items.length,0);assert.ok(m.get(t.id).next_occurrence.startsWith('2026-02-01'));
+});
+test('recurrence attention mode omission and independent retain one-shot, occurrence retains deadline',()=>{
+ const {model:m,id}=setup({revisit_at:'2026-01-31T12:00:00Z',due_at:'2026-02-15'});
+ const args={id,frequency:'daily',next_occurrence:'2026-01-31'};
+ for(const extra of [{},{attention_mode:'independent'}]){m.dispatch('set_recurrence',{...args,...extra});assert.ok(m.get(id).revisit_at)}
+ assert.throws(()=>m.dispatch('set_recurrence',{...args,attention_mode:'invented'}));
+ m.dispatch('set_recurrence',{...args,attention_mode:'occurrence'});assert.equal(m.get(id).revisit_at,null);assert.equal(m.get(id).due_at,'2026-02-15');
+});

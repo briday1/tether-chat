@@ -63,9 +63,47 @@ def test_attention_suggestions_do_not_cross_database_paths(tmp_path,monkeypatch)
     """Copied/imported IDs must not leak suggestions between Home and Work."""
     task={'id':'same-imported-id','title':'Shared old title','summary':'','state':'open','due':False,'updated_at':'2026-01-01','revisit_at':None,'recurrence':None}
     monkeypatch.setattr(store,'list_threads',lambda:[task])
+    monkeypatch.setattr(store,'query',lambda *a,**k:[])
     monkeypatch.setattr(ai,'public_config',lambda:{'has_key':True})
     monkeypatch.setattr(ai,'request',lambda *a,**k:{'choices':[{'message':{'content':'{"items":[{"id":"same-imported-id","reason":"Work-only suggestion"}]}'}}]})
     monkeypatch.setattr(store,'path',lambda:tmp_path/'work.sqlite3')
     assert ai.attention(force=True)['items'][0]['reason']=='Work-only suggestion'
     monkeypatch.setattr(store,'path',lambda:tmp_path/'home.sqlite3')
     assert ai.attention()['items']==[]
+
+
+def test_completed_children_cannot_be_reselected_as_parent_attention(records):
+    task=store.create('Parent', 'Follow up on the child action')
+    action=store.add(task['id'], 'action', 'Child')
+    store.update_action(action['id'], {'done': True})
+    records.setattr(ai, 'request', lambda *a, **k: {'choices':[{'message':{'content':json.dumps({'items':[{'id':task['id'],'reason':'Child needs attention'}]})}}]})
+    assert attention.items(True)['items']==[]
+    store.update(task['id'], {'revisit_at':'2020-01-01T12:00:00Z'})
+    assert [i['id'] for i in attention.items()['items']]==[task['id']]
+
+
+def test_future_scheduled_task_cannot_be_promoted_by_curation(records):
+    task=store.create('Tomorrow, not today')
+    store.update(task['id'], {'recurrence':'daily','next_occurrence':'2035-01-01'})
+    records.setattr(ai, 'request', lambda *a, **k: {'choices':[{'message':{'content':json.dumps({'items':[{'id':task['id'],'reason':'Due today'}]})}}]})
+    assert attention.items(True)['items']==[]
+    store.update(task['id'], {'due_at':'2020-01-01'})
+    assert [i['id'] for i in attention.items()['items']]==[task['id']]
+
+
+def test_child_change_invalidates_parent_suggestion_even_with_same_clock(records):
+    records.setattr(store, 'now', lambda:'2026-10-29T18:00:00+00:00')
+    task=store.create('Parent')
+    action=store.add(task['id'],'action','Child')
+    records.setattr(ai, 'request', lambda *a, **k: {'choices':[{'message':{'content':json.dumps({'items':[{'id':task['id'],'reason':'Child needs attention'}]})}}]})
+    assert attention.items(True)['items']
+    store.update_action(action['id'], {'revisit_at':'2035-01-01T12:00:00Z'})
+    assert attention.items()['items']==[]
+
+
+def test_rescheduled_children_do_not_recreate_parent_attention(records):
+    task=store.create('Parent')
+    child=store.add(task['id'],'action','Child')
+    store.update_action(child['id'],{'revisit_at':'2035-01-01T12:00:00Z'})
+    records.setattr(ai,'request',lambda *a,**k:{'choices':[{'message':{'content':json.dumps({'items':[{'id':task['id'],'reason':'Child due'}]})}}]})
+    assert attention.items(True)['items']==[]

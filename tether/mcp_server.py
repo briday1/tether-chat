@@ -2,6 +2,7 @@
 import os
 from . import environment
 import sys
+from typing import Literal
 from mcp.server.fastmcp import FastMCP
 from . import store as db
 mcp=FastMCP("tether-chat",host="127.0.0.1",port=int(environment.get("TETHER_MCP_PORT","8766")))
@@ -130,13 +131,13 @@ def recurring_items()->dict:
     """See all recurring threads and their next occurrences."""
     return {"due":db.recurring_due(),"all":[t for t in db.list_threads() if t.get("recurrence")]}
 @mcp.tool()
-def set_recurrence(thread_id:str,frequency:str|None,next_occurrence:str|None,recurrence_end:str|None=None,recurrence_timezone:str|None=None)->dict:
-    """Replace the complete repeat schedule (daily/weekly/monthly/quarterly/yearly). Omitted end/timezone clears those options; pass existing values to retain them. End date is inclusive; IANA timezone preserves DST wall time. Null frequency clears repeats."""
-    return db.update(thread_id,{"recurrence":frequency,"next_occurrence":next_occurrence,"recurrence_end":recurrence_end,"recurrence_timezone":recurrence_timezone}) or {"error":"Thread not found"}
+def set_recurrence(thread_id:str,frequency:str|None,next_occurrence:str|None,recurrence_end:str|None=None,recurrence_timezone:str|None=None,attention_mode:Literal["occurrence","independent"]|None=None)->dict:
+    """Replace the complete repeat schedule (daily/weekly/monthly/quarterly/yearly). Omitted end/timezone clears those options; pass existing values to retain them. End date is inclusive; IANA timezone preserves DST wall time. Null frequency clears repeats. For repeating reminders use attention_mode="occurrence": next_occurrence is the attention schedule and the one-shot revisit_at is cleared. "independent" or omission preserves separately intended one-off reminders. Due dates never change."""
+    return db.set_recurrence(thread_id,frequency,next_occurrence,attention_mode,recurrence_end=recurrence_end,recurrence_timezone=recurrence_timezone) or {"error":"Thread not found"}
 @mcp.tool()
-def complete_recurring_occurrence(thread_id:str,description:str="Completed recurring occurrence")->dict:
-    """Log completing a cycle and schedule the next recurrence."""
-    return db.complete_occurrence(thread_id,description)
+def complete_recurring_occurrence(thread_id:str,description:str="Completed recurring occurrence",occurrence_at:str|None=None)->dict:
+    """Complete a due cycle. Pass its next_occurrence as occurrence_at for an idempotent explicit/early completion; inspect completion.completed. Independent deadlines/reminders are unchanged."""
+    return db.complete_occurrence(thread_id,description,occurrence_at)
 @mcp.tool()
 def set_task_due_action(thread_id:str,action:str="activity_report",period:str="week",category:str="")->dict:
     """Attach an activity report to a task's reminder (or action='none' to clear)."""

@@ -39,7 +39,7 @@ function validateValue(type,field,value,id){
   else if(field==='body')valid=text(20000,true);
   else if(field==='state')valid=['open','waiting','paused','settled'].includes(value);
   else if(field==='categories')valid=Array.isArray(value)&&value.length>=1&&value.length<=20&&value.every(v=>typeof v==='string'&&!!v.trim()&&v.length<=80)&&new Set(value.map(v=>v.toLowerCase())).size===value.length;
-  else if(field==='recurrence_end'||field==='recurrence_anchor'||field==='recurrence_timezone'||field==='next_occurrence'){try{if(value!==null){if(typeof value!=='string'||!value)throw new Error('Invalid recurrence value');if(field==='recurrence_end')calendarDate(value);else if(field==='recurrence_timezone')recurrenceZone(value);else recurrenceValue(value)}}catch(_){valid=false}}
+  else if(field==='recurrence_end'||field==='recurrence_anchor'||field==='recurrence_timezone'||field==='next_occurrence'||field==='due_at'){try{if(value!==null){if(typeof value!=='string'||!value)throw new Error('Invalid recurrence value');if(field==='recurrence_end')calendarDate(value);else if(field==='recurrence_timezone')recurrenceZone(value);else recurrenceValue(value)}}catch(_){valid=false}}
   else if(field==='recurrence')valid=[null,'daily','weekly','monthly','quarterly','yearly'].includes(value);
   else if(field==='kind')valid=['thought','question','action','decision','update'].includes(value);
   else if(field==='done')valid=[true,false,0,1].includes(value);

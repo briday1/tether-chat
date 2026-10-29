@@ -73,3 +73,25 @@ def test_desktop_serves_shared_note_assets(tmp_path,monkeypatch):
             assert path in page
             response=client.get(path)
             assert response.status_code==200 and len(response.content)>100
+
+
+def test_date_only_occurrence_is_not_rendered_as_midnight():
+    from tether.notes import check_in
+    result=check_in({'id':'r','title':'Tomorrow','recurrence':'daily','next_occurrence':'2026-10-30'},None,'/board#task/r')
+    assert '| Next occurrence | 2026-10-30 |' in result
+
+
+def test_date_labels_match_local_deadline_day_and_preserve_calendar_dates():
+    import os,time
+    if not hasattr(time,'tzset'):pytest.skip('Process timezone switching unavailable')
+    previous=os.environ.get('TZ')
+    try:
+        os.environ['TZ']='America/Los_Angeles';time.tzset()
+        task={'id':'dates','title':'Dates','due_at':'2026-10-30T00:30:00Z','revisit_at':'2026-10-30T00:30:00Z','recurrence':'daily','next_occurrence':'2026-10-30T00:30:00Z','entries':[{'kind':'action','body':'Calendar deadline','due_at':'2026-10-30'}]}
+        table=notes.task_table([task]);check=notes.check_in(task,None,'/board#task/dates')
+        assert 'Due 2026-10-29' in table and 'Next occurrence 2026-10-29' in table and 'Bring to attention 2026-10-29' in table
+        assert 'due 2026-10-30' in table and '| Due date | 2026-10-29 |' in check
+    finally:
+        if previous is None:os.environ.pop('TZ',None)
+        else:os.environ['TZ']=previous
+        time.tzset()
