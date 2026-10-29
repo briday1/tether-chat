@@ -26,7 +26,7 @@
   dialog.querySelector('button').onclick=close;
   dialog.addEventListener('cancel',event=>{event.preventDefault();close()});
   dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close()}});
-  window.addEventListener('popstate',()=>{button.disabled=false;if(history.state?.tetherDisplayOverlay==='chat')open(false);else{dismiss();button.focus()}});
+  window.addEventListener('popstate',()=>{const owned=dialog.open||button.disabled;button.disabled=false;if(history.state?.tetherDisplayOverlay==='chat')open(false);else if(owned){dismiss();button.focus()}});
   window.addEventListener('message',event=>{
     if(event.source!==frame.contentWindow||event.origin!==location.origin)return;
     if(event.data?.type==='tether:chat-close')close();
