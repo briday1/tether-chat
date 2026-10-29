@@ -14,6 +14,8 @@ class SubmitMessage(BaseModel):
     text: str = Field(default='', max_length=50000)
     request_id: str = Field(min_length=8, max_length=100)
     attention: AttentionTarget | None = None
+    stop_requested: bool = False
+    interrupt_job_id: str | None = Field(default=None, min_length=8, max_length=100)
     task_context: list[str] | None = Field(default=None, max_length=10)
 
 @router.get('/api/chat/state')
@@ -29,10 +31,18 @@ def submit(data: SubmitMessage):
             if any(not store.get(task_id) for task_id in ids):
                 raise ValueError('A selected context task no longer exists. Remove it and try again.')
             context = {'kind': 'task_context', 'task_ids': ids}
+        if data.interrupt_job_id:
+            context = {**(context or {}), 'interrupt_job_id': data.interrupt_job_id}
         message = attention.prompt(data.attention.task_id, data.attention.action_id) if data.attention else data.text
-        return chat_jobs.submit(message, data.request_id, context)
+        return chat_jobs.submit(message, data.request_id, context, stop_requested=data.stop_requested)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
+
+
+@router.post('/api/chat/jobs/{job_id}/cancel')
+def cancel(job_id: str):
+    try: return chat_jobs.cancel(job_id)
+    except ValueError as exc: raise HTTPException(404, str(exc)) from None
 
 
 class ActionNote(BaseModel):

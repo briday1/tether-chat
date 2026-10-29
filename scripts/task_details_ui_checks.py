@@ -69,8 +69,13 @@ def check_task_details(page, screen):
         page.screenshot(path=str(artifacts / f'display-{workspace}-task-details-{width}.png'))
     page.set_viewport_size({'width': 1280, 'height': 900})
     calendar.locator('#task-detail-close').focus()
+    calendar.locator('body').evaluate('''()=>{window.detailEvents=[];for(const type of ['keydown','cancel','popstate'])addEventListener(type,e=>detailEvents.push({type:e.type,key:e.key,state:history.state}),true)}''')
     page.keyboard.press('Escape')
-    expect(dialog).to_be_hidden()
+    try:
+        expect(dialog).to_be_hidden()
+    except AssertionError:
+        print('Task detail dismissal diagnostics:', calendar.locator('body').evaluate('()=>({events:window.detailEvents,state:history.state,focus:document.activeElement?.id,open:document.querySelector("#task-detail").open})'))
+        raise
     expect(card).to_be_focused()
     card.click()
     expect(dialog).to_be_visible()

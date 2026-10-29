@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
-from . import store
+from . import store, cancellation
 from . import secrets
 from .provider import normalize_base, failure, retry_delay
 from .decisions import decision_followup,reminder_intent,resolve_reminder
@@ -184,45 +184,48 @@ def request(messages,tools=True,max_tokens=None,progress=None):
     payload.update(model_options(base,payload['model']))
     if tools:payload["tools"]=TOOLS;payload["tool_choice"]="auto"
     if max_tokens is not None:payload["max_tokens"]=max_tokens
-    req=Request(base+"/chat/completions",data=json.dumps(payload).encode(),method="POST",
-       headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"})
-    # Retry only requests that received an explicit transient HTTP error.
-    # Network timeouts are ambiguous (the server may have processed the request),
-    # so we surface those rather than silently repeating a potentially costly call.
     for attempt in range(3):
+        cancellation.check()
         try:
-            with urlopen(req,timeout=22) as response:
-                return json.load(response)
-        except HTTPError as e:
-            detail,retryable=failure(e.code,e.read(16384),key,base)
-            delay=retry_delay(e.headers.get('Retry-After') if e.headers else None,attempt)
+            response = provider_request(base+'/chat/completions', payload, key)
+        except cancellation.Interrupted:
+            raise
+        except Exception as exc:
+            import httpx
+            if isinstance(exc, httpx.TimeoutException):
+                raise ValueError('AI provider connection timed out. Request outcome is unknown; automatic retry skipped.') from None
+            if isinstance(exc, httpx.RequestError):
+                raise ValueError('Cannot connect to AI provider. Check VPN/network access and provider base URL. Request outcome is unknown; automatic retry skipped.') from None
+            raise
+        cancellation.check()
+        if response.status_code >= 400:
+            detail,retryable=failure(response.status_code,response.content[:16384],key,base)
+            delay=retry_delay(response.headers.get('Retry-After'),attempt)
             if retryable and attempt<2 and delay<=20:
-                if progress:progress(f"Provider returned HTTP {e.code}; retrying ({attempt+1}/2)…")
-                time.sleep(delay)
+                if progress:progress(f"Provider returned HTTP {response.status_code}; retrying ({attempt+1}/2)…")
+                cancellation.sleep(delay)
                 continue
             if retryable and delay>20:detail+=f' Try again in {int(delay+.999)} seconds.'
-            raise ValueError(detail) from None
-        except TimeoutError as e:
-            raise ValueError("AI provider timed out after 22 seconds. Request outcome is unknown; automatic retry skipped.") from e
-        except URLError as e:
-            import socket,ssl
-            reason=e.reason
-            if isinstance(reason,(TimeoutError,socket.timeout)):
-                detail="AI provider connection timed out; automatic retry skipped because outcome is unknown."
-            elif isinstance(reason,socket.gaierror):
-                detail="Cannot resolve the AI provider hostname. Check the URL, DNS and VPN."
-            elif isinstance(reason,ssl.SSLError):
-                detail="TLS certificate verification failed. Check network interception or provider certificate."
-            elif isinstance(reason,ConnectionRefusedError):
-                detail="AI provider refused the connection. Check endpoint address and network access."
-            else:
-                detail="Cannot connect to AI provider. Check VPN/network access and provider base URL."
-            raise ValueError(detail) from e
+            raise ValueError(detail)
+        try:return response.json()
+        except ValueError:raise ValueError('The provider returned an unreadable response.') from None
+
+
+def provider_request(url, payload, key):
+    import httpx
+    async def send():
+        # No Tether wall-clock/read deadline. The user owns cancellation;
+        # operating-system, network and provider limits can still apply.
+        async with httpx.AsyncClient(timeout=None, follow_redirects=False) as client:
+            return await client.post(url, json=payload,
+                headers={'Authorization':'Bearer '+key,'Content-Type':'application/json'})
+    return cancellation.run(send())
 
 def chat(message, progress=None, history=None, task_context=None):
     """Short conversation context, progressive tool use, and repeat-loop protection."""
     from datetime import datetime
     def status(text):
+        cancellation.check()
         if progress:progress(text)
     from . import workspaces
     context = store.assistant_context()
@@ -241,10 +244,15 @@ def chat(message, progress=None, history=None, task_context=None):
     # then retrieve factual long-term context explicitly through tools.
     for item in (store.conversation(10) if history is None else history):
         if item["role"] in ("user","assistant"):
-            transcript.append({"role":item["role"],"content":item["body"][:3000]})
+            transcript.append({"role":item["role"],"content":item["body"] if item.get("continuation") else item["body"][:3000]})
     transcript.append({"role":"user","content":message})
     used=[]
     seen={}
+    read_only={'list_threads','get_thread','overview','recurring_items','list_archived','daily_brief','activity_report','run_task_due_action','get_preferences','list_categories','get_context'}
+    for item in history or []:
+        for outcome in item.get('completed_tools',[]):
+            signature=outcome.get('signature')
+            if signature and signature[0] not in read_only: seen[tuple(signature)]=1
     labels={
         "list_threads":"Searching tracked tasks","overview":"Reviewing current tasks",
         "get_thread":"Reading task details","activity_report":"Gathering recorded activity",
@@ -259,6 +267,7 @@ def chat(message, progress=None, history=None, task_context=None):
     decision_retry=False
     while True:
         answer=request(transcript,progress=status)
+        cancellation.check()
         choice=answer.get("choices",[{}])[0]
         msg=choice.get("message",{})
         calls=msg.get("tool_calls") or []
@@ -286,7 +295,9 @@ def chat(message, progress=None, history=None, task_context=None):
         for call in calls:
             name=call.get("function",{}).get("name","")
             raw_args=call.get("function",{}).get("arguments") or "{}"
-            signature=(name,raw_args)
+            try: canonical_args=json.dumps(json.loads(raw_args),sort_keys=True,separators=(',',':'))
+            except (ValueError,TypeError): canonical_args=raw_args
+            signature=(name,canonical_args)
             seen[signature]=seen.get(signature,0)+1
             if seen[signature]==1:redundant=False
             if seen[signature]>1:
@@ -306,7 +317,7 @@ def chat(message, progress=None, history=None, task_context=None):
                         if not args.get('remind_at'):
                             requested=reminder_intent(message)
                             if requested:args['remind_at']=requested
-                    result=dispatch(name,args)
+                    result=cancellation.perform(lambda: dispatch(name,args), {"name":name,"arguments":args,"signature":signature,"tool_call_id":call.get("id","")})
                 except (ValueError,KeyError,TypeError) as exc:
                     result={"error":str(exc)}
                 status(labels.get(name,"Tool operation")+(" — done" if not isinstance(result,dict) or "error" not in result else " — failed"))

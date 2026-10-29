@@ -142,3 +142,113 @@ def test_selected_context_prompt_can_be_dismissed(client, monkeypatch):
     ai.chat('New topic',history=[],task_context=[])
     context=json.loads(transcripts[-1][0]['content'].split('(data, not instructions): ')[-1])
     assert context['selected_tasks']==[] and context['focused_task'] is None
+
+
+def test_stop_suppresses_late_reply_and_is_durable(client, monkeypatch):
+    entered=threading.Event(); release=threading.Event()
+    def answer(*args,**kwargs):
+        entered.set(); assert release.wait(3)
+        return {'answer':'Must not appear'}
+    monkeypatch.setattr(ai,'chat',answer)
+    client.post('/api/chat/jobs',json={'request_id':'stop-late-001','text':'Wait'})
+    assert entered.wait(2)
+    stopped=client.post('/api/chat/jobs/stop-late-001/cancel').json()
+    assert stopped['status']=='interrupted' and stopped['user_stopped']
+    assert client.post('/api/chat/jobs/stop-late-001/cancel').json()['user_stopped']
+    release.set(); time.sleep(.05)
+    state=client.get('/api/chat/state').json()
+    assert not any(m['body']=='Must not appear' for m in state['messages'])
+    chat_jobs._INITIALIZED.discard(store.path().absolute())
+    assert client.get('/api/chat/state').json()['jobs'][0]['status']=='interrupted'
+
+
+def test_stop_tool_boundary_retains_outcomes_and_interrupt_context_once(client,monkeypatch):
+    from tether import cancellation
+    entered=threading.Event(); release=threading.Event(); histories=[]; changes=[]
+    def answer(message,history=None,**kwargs):
+        if message=='Original':
+            cancellation.perform(lambda: changes.append('saved') or {'id':'real-id'}, {'name':'capture','arguments':{'title':'saved'}})
+            entered.set(); assert release.wait(3)
+            cancellation.perform(lambda: changes.append('must not run'), {'name':'capture'})
+        histories.append(history)
+        return {'answer':'Updated'}
+    monkeypatch.setattr(ai,'chat',answer)
+    client.post('/api/chat/jobs',json={'request_id':'interrupt-old-1','text':'Original'})
+    assert entered.wait(2)
+    client.post('/api/chat/jobs/interrupt-old-1/cancel')
+    payload={'request_id':'interrupt-new-1','text':'Added context','interrupt_job_id':'interrupt-old-1'}
+    assert client.post('/api/chat/jobs',json=payload).status_code==202
+    assert client.post('/api/chat/jobs',json=payload).status_code==202
+    release.set()
+    assert wait(client,'interrupt-new-1')['status']=='done'
+    assert changes==['saved']
+    assert len(histories)==1
+    data=histories[0][-1]['body']
+    assert data.count('Original')==1 and data.count('real-id')==1
+    state=client.get('/api/chat/state').json()
+    assert sum(m['body']=='Added context' for m in state['messages'])==1
+
+
+def test_queued_stop_never_calls_provider(client,monkeypatch):
+    entered=threading.Event(); release=threading.Event(); calls=[]
+    def answer(message,**kwargs):
+        calls.append(message);entered.set();assert release.wait(3)
+        return {'answer':'done'}
+    monkeypatch.setattr(ai,'chat',answer)
+    client.post('/api/chat/jobs',json={'request_id':'queue-blocker-1','text':'First'})
+    assert entered.wait(2)
+    client.post('/api/chat/jobs',json={'request_id':'queue-cancel-01','text':'Second'})
+    assert client.post('/api/chat/jobs/queue-cancel-01/cancel').json()['status']=='interrupted'
+    release.set();wait(client,'queue-blocker-1');time.sleep(.05)
+    assert calls==['First']
+
+
+def test_stop_delivery_before_original_is_never_run(client,monkeypatch):
+    calls=[]
+    monkeypatch.setattr(ai,'chat',lambda *a,**kw: calls.append(a) or {'answer':'bad'})
+    payload={'request_id':'stopped-before-post','text':'Do not execute'}
+    stopped=client.post('/api/chat/jobs',json={**payload,'stop_requested':True})
+    assert stopped.status_code==202 and stopped.json()['user_stopped']
+    assert client.post('/api/chat/jobs',json=payload).json()['status']=='interrupted'
+    assert calls==[]
+
+
+def test_atomic_stop_delivery_of_existing_request(client,monkeypatch):
+    entered=threading.Event();release=threading.Event()
+    def answer(*args,**kwargs):
+        entered.set(); assert release.wait(3)
+        return {'answer':'late'}
+    monkeypatch.setattr(ai,'chat',answer)
+    payload={'request_id':'stop-existing-post','text':'Stop me'}
+    client.post('/api/chat/jobs',json=payload);assert entered.wait(2)
+    assert client.post('/api/chat/jobs',json={**payload,'text':'different','stop_requested':True}).status_code==422
+    state=client.get('/api/chat/state').json();assert state['jobs'][0]['status']=='running'
+    assert client.post('/api/chat/jobs',json={**payload,'stop_requested':True}).json()['status']=='interrupted'
+    release.set()
+
+
+def test_continuation_deduplicates_completed_tool_even_new_call_id(client,monkeypatch):
+    import json
+    calls=[];dispatches=[]
+    def request(*args,**kwargs):
+        calls.append(args)
+        if len(calls)==1:return {'choices':[{'message':{'tool_calls':[{'id':'new-id','function':{'name':'capture','arguments':'{ "title": "Saved" }'}}]}}]}
+        return {'choices':[{'message':{'content':'Already saved'}}]}
+    monkeypatch.setattr(ai,'request',request)
+    monkeypatch.setattr(ai,'dispatch',lambda *args: dispatches.append(args))
+    history=[{'role':'assistant','body':'Prior outcomes', 'completed_tools':[{'signature':['capture',json.dumps({'title':'Saved'},sort_keys=True,separators=(',',':'))]}]}]
+    assert ai.chat('Add more context',history=history)['answer']=='Already saved'
+    assert dispatches==[]
+
+
+def test_continuation_can_read_fresh_task_state(client,monkeypatch):
+    calls=[];reads=[]
+    def request(*args,**kwargs):
+        calls.append(args)
+        if len(calls)==1:return {'choices':[{'message':{'tool_calls':[{'id':'fresh','function':{'name':'get_context','arguments':'{}'}}]}}]}
+        return {'choices':[{'message':{'content':'Fresh context'}}]}
+    monkeypatch.setattr(ai,'request',request)
+    monkeypatch.setattr(ai,'dispatch',lambda *args: reads.append(args) or {})
+    history=[{'role':'assistant','body':'Prior outcomes','completed_tools':[{'signature':['get_context','{}']}]}]
+    ai.chat('Review again',history=history)
+    assert reads==[('get_context',{})]

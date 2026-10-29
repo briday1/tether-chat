@@ -76,7 +76,7 @@
   function step(direction){const date=new Date(anchor+'T12:00:00');if(view==='month'){date.setDate(1);date.setMonth(date.getMonth()+direction)}else date.setDate(date.getDate()+7*direction);anchor=iso(date);followingToday=false;refresh(true)}
   $('#display-previous').onclick=()=>step(-1);$('#display-next').onclick=()=>step(1);
   $('#display-today').onclick=()=>{followingToday=true;refresh(true);frame.contentWindow?.postMessage({type:'tether:snapshot-today'},location.origin)};
-  frame.addEventListener('load',()=>{detailOpen=false;$('.display-bar').inert=false;const chat=$('#display-quick-chat');if(chat)chat.inert=false;theme()});
+  frame.addEventListener('load',()=>{detailOpen=false;$('.display-bar').inert=false;const chat=$('#display-quick-chat');if(chat){chat.inert=false;chat.style.visibility=''}theme()});
   new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
@@ -84,7 +84,7 @@
     if(event.data?.type==='tether:snapshot-detail'){
       detailOpen=event.data.open===true;
       $('.display-bar').inert=detailOpen;
-      const chat=$('#display-quick-chat');if(chat)chat.inert=detailOpen;
+      const chat=$('#display-quick-chat');if(chat){chat.inert=detailOpen;chat.style.visibility=detailOpen?'hidden':''}
       if(!detailOpen)refresh();
       return;
     }

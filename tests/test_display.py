@@ -114,3 +114,8 @@ def test_task_detail_reload_and_pending_panel_requests_are_guarded():
     assert "delete state.tetherSnapshotDetail;history.replaceState" in snapshot
     assert "if(request!==selectionRevision||detail.open)return" in snapshot
     assert "queueMicrotask(()=>{if(!detail.open&&!detailClosing)load()})" in snapshot
+
+def test_task_details_escape_is_handled_in_embedded_document():
+    snapshot = (ROOT / 'tether/snapshot.html').read_text(encoding='utf-8')
+    assert "if(event.key==='Escape'&&detail.open)" in snapshot
+    assert "event.stopPropagation();closeDetail()" in snapshot

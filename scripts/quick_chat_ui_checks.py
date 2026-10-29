@@ -57,6 +57,7 @@ def check_quick_chat(page, screen):
           w.quickState={messages:[{id:'quick-user',role:'user',body:payload.text}],jobs:[{id:payload.request_id,user_message_id:'quick-user',status:'running',updated_at:'1',progress:[]}]};
           return new Response(JSON.stringify({id:payload.request_id}),{status:200});
         }
+        if(path.includes('/api/chat/jobs/')&&path.endsWith('/cancel')&&options.method==='POST'){const job=w.quickState.jobs[0];job.status='interrupted';job.user_stopped=true;job.updated_at='stop';return Response.json(job)}
         if(path.endsWith('/api/chat/state'))return new Response(JSON.stringify(w.quickState),{status:200});
         return original(input,options);
       };
@@ -71,6 +72,21 @@ def check_quick_chat(page, screen):
     button.click()
     assert field.evaluate('(n)=>n.ownerDocument.defaultView.quickPosts.length===1')
     expect(chat.locator('.bubble.user').filter(has_text='Mock quick chat request')).to_have_count(1)
+    # Explicit Stop and interrupt keep the composer editable, preserve the draft,
+    # and submit added context once; closing the overlay above did not stop it.
+    expect(chat.locator('#stop-chat')).to_be_visible()
+    expect(chat.locator('#send')).to_have_text('Interrupt')
+    field.fill('Additional context for the same request')
+    field.press('Enter')
+    expect(field).to_have_value('')
+    assert field.evaluate("n=>{const p=n.ownerDocument.defaultView.quickPosts;return p.length===2&&p[1].interrupt_job_id===p[0].request_id}")
+    field.fill('Keep this draft while stopping')
+    chat.locator('#stop-chat').click()
+    expect(chat.locator('.chat-pending')).to_contain_text('Stopped. Completed changes are kept.')
+    expect(chat.locator('#stop-chat')).to_be_hidden()
+    expect(field).to_have_value('Keep this draft while stopping')
+    expect(chat.locator('#send')).to_have_text('Send')
+    field.fill('')
     # Completed queue state notifies Display without replacing its calendar iframe.
     screen.locator('#display-calendar').evaluate('(n)=>n.dataset.retainedCalendar="yes"')
     field.evaluate('''n=>{const w=n.ownerDocument.defaultView;w.quickState.jobs[0].status='done';w.quickState.jobs[0].updated_at='2';w.dispatchEvent(new Event('online'))}''')
@@ -104,7 +120,10 @@ def check_quick_chat(page, screen):
     field.fill('Mobile draft line\n' * 40)
     assert field.evaluate('''n=>{const w=n.ownerDocument.defaultView;return n.scrollHeight>n.clientHeight&&n.getBoundingClientRect().height<=Math.min(200,w.innerHeight*.3)+1}''')
     assert chat.locator('#chat').evaluate('(n)=>n.clientHeight>80')
-    field.fill('')
+    workspace=field.evaluate("n=>n.ownerDocument.defaultView.tetherWorkspace||'work'")
+    page.screenshot(path=f'artifacts/display-{workspace}-quick-chat-320.png', full_page=True)
     page.set_viewport_size({'width':1280,'height':900})
+    page.screenshot(path=f'artifacts/display-{workspace}-quick-chat-1280.png', full_page=True)
+    field.fill('')
     screen.get_by_role('button', name='Close quick chat', exact=True).click()
     expect(screen.locator('#display-title')).to_have_text(title)
