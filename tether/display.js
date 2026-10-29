@@ -16,10 +16,10 @@
     if(event.key==='Tab'){const focusable=[...$('#display-sidebar').querySelectorAll('button,a,input,select')].filter(el=>!el.disabled);const first=focusable[0],last=focusable.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}}
   });
   const settingsDialog=$('#display-settings-dialog'),settingsFrame=$('#display-settings-frame');
-  function dismissSettings(){settingsDialog.close();settingsFrame.removeAttribute('src');$('#display-settings').focus();syncStatus()}
-  function closeSettings(){if(history.state?.tetherDisplayOverlay==='settings')history.back();else dismissSettings()}
-  function openSettings(){if(settingsDialog.open)return;settingsFrame.src='/?settings=display';settingsDialog.showModal()}
-  window.addEventListener('popstate',()=>{if(history.state?.tetherDisplayOverlay==='settings')openSettings();else if(settingsDialog.open)dismissSettings()});
+  function dismissSettings(){settingsDialog.close();settingsFrame.contentWindow.location.replace('about:blank');$('#display-settings').focus();syncStatus()}
+  function closeSettings(){if(!settingsDialog.open)return;dismissSettings();if(history.state?.tetherDisplayOverlay==='settings'){$('#display-settings').disabled=true;history.back()}}
+  function openSettings(){if(settingsDialog.open)return;settingsFrame.contentWindow.location.replace('/?settings=display');settingsDialog.showModal()}
+  window.addEventListener('popstate',()=>{const closing=$('#display-settings').disabled;$('#display-settings').disabled=false;if(history.state?.tetherDisplayOverlay==='settings')openSettings();else if(settingsDialog.open)dismissSettings();else if(closing)$('#display-settings').focus()});
   $('#display-settings').onclick=()=>{openSettings();history.pushState({...history.state,tetherDisplayOverlay:'settings'},'',location.href)};
   settingsDialog.addEventListener('cancel',event=>{event.preventDefault();closeSettings()});
   settingsDialog.addEventListener('click',event=>{if(event.target===settingsDialog){const box=settingsDialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)closeSettings()}});
