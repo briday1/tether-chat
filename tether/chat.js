@@ -1,5 +1,7 @@
 /* The server owns the queue. Closing/navigating this page never cancels a job. */
 (() => {
+ // A settings-only Display drawer must not replay the conversation outbox.
+ if(document.documentElement.hasAttribute('data-settings-embed'))return;
  const chat=document.querySelector('#chat');if(!chat)return;
  const workspace=window.tetherWorkspace||'work';
  const suffix=workspace==='work'?'':'-'+workspace;
@@ -62,7 +64,7 @@
   jobs=state.jobs||[];const byUser=new Map(jobs.map(j=>[j.user_message_id,j]));const accepted=new Set(jobs.map(j=>j.id));
   // Tools can save changes before a reply finishes, including a failed reply.
   const stamp=JSON.stringify(jobs.map(j=>[j.id,j.status,j.updated_at,j.progress]));
-  if(stamp!==jobStamp){jobStamp=stamp;queueAttention();refreshReferences()}
+  if(stamp!==jobStamp){jobStamp=stamp;queueAttention();refreshReferences();window.dispatchEvent(new Event('tether:chat-state-changed'))}
   const desired=[];
   for(const row of state.messages||[]){desired.push(messageNode(row));const job=byUser.get(row.id);if(job&&job.status!=='done')desired.push(pendingNode(job))}
   desired.push(...(window.tetherLocationCards?.(state.locations)||[]));

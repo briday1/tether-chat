@@ -128,6 +128,12 @@ def snapshot_png(start:str,end:str,category:str="",theme:str="sage",scale:int=2)
 
 @app.get('/workspace.js')
 def workspace_script():return FileResponse(Path(__file__).with_name('workspace.js'),media_type='application/javascript')
+@app.get('/display-chat.js')
+def display_chat_script():return FileResponse(Path(__file__).with_name('display-chat.js'),media_type='application/javascript')
+
+@app.get('/chat-embed.js')
+def chat_embed_script():return FileResponse(Path(__file__).with_name('chat-embed.js'),media_type='application/javascript')
+
 @app.get('/display.js')
 def display_script():return FileResponse(Path(__file__).with_name('display.js'),media_type='application/javascript')
 @app.get('/display.css')

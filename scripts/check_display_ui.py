@@ -41,9 +41,7 @@ def main():
                 screen = page.frame_locator('#app-frame')
                 from display_ui_checks import check_display_header
                 check_display_header(page, screen)
-                screen.locator('#display-menu').click()
-                screen.locator('#today').click()
-                screen.locator('#display-close').click()
+                screen.locator('#display-today').click()
                 calendar = screen.frame_locator('#display-calendar')
                 expect(calendar.locator('#date-panel-title')).to_have_text('Today')
                 expect(calendar.locator('#date-panel-items .task')).to_have_count(9)
@@ -53,11 +51,15 @@ def main():
                 expect(calendar.locator('.downloads, #png, #svg')).to_have_count(0)
                 heights = calendar.locator('.day').evaluate_all('(nodes)=>nodes.map(n=>n.getBoundingClientRect().height)')
                 assert max(heights) - min(heights) <= 1, heights
-                # Hovering a busy date updates only the fixed sidebar; all seven items are available.
+                # Hover and focus do not select; explicit click updates only the fixed sidebar.
                 other = calendar.locator('[data-date="'+dates['other']+'"] .day-date')
                 if other.count():
                     before = calendar.locator('#grid').bounding_box()
                     other.hover()
+                    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                    other.focus()
+                    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                    other.click()
                     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
                     expect(calendar.locator('#date-panel-items .task')).to_have_count(7)
                     expect(calendar.locator('[data-date="'+dates['other']+'"] .day-more')).to_have_text('+4 more')
@@ -71,16 +73,17 @@ def main():
                     expect(calendar.locator('#date-panel-title')).to_have_text('Today')
                     expect(calendar.locator('#date-panel-items .task')).to_have_count(9)
                     # Keyboard selection and sidebar interaction preserve an active reading session.
+                    other.hover()
                     other.focus()
+                    expect(calendar.locator('#date-panel-title')).to_have_text('Today')
+                    page.keyboard.press('Space')
                     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
                     calendar.locator('#date-panel').dispatch_event('keydown', {'key': 'ArrowDown'})
                     page.clock.fast_forward(16000)
                     expect(calendar.locator('#date-panel-title')).to_have_text('Today')
                 # Six-row historical month stays fixed, while Today is fetched outside its range.
-                screen.locator('#display-menu').click()
-                screen.locator('#display-date').fill('2027-05-15')
-                screen.locator('#display-date').dispatch_event('change')
-                screen.locator('#display-close').click()
+                for _ in range(7):
+                    screen.locator('#display-next').click()
                 calendar = screen.frame_locator('#display-calendar')
                 expect(calendar.locator('.day')).to_have_count(42)
                 expect(calendar.locator('#date-panel-title')).to_have_text('Today')
@@ -100,11 +103,12 @@ def main():
                 expect(calendar.locator('#date-panel-items')).to_contain_text('No scheduled items')
                 page.clock.fast_forward(16000)
                 expect(calendar.locator('#date-panel-title')).to_have_text('Today')
-                # Existing stored week preference cannot put Display back in week mode.
+                # Reopening always starts in the current month, not a persisted historical month.
                 page.reload()
                 screen = page.frame_locator('#app-frame')
                 calendar = screen.frame_locator('#display-calendar')
-                expect(calendar.locator('.day')).to_have_count(42)
+                expect(screen.locator('#display-title')).to_have_text('October 2026')
+                expect(calendar.locator('#date-panel')).to_have_attribute('data-date', dates['today'])
                 expect(screen.locator('#view-week')).to_have_count(0)
                 # Chat week/month embeds use the same date panel, with expanded week cards.
                 screen.locator('#display-menu').click()
@@ -129,7 +133,11 @@ def main():
                 week=snapshot('/snapshot '+dates['today']+' to '+dates['other'])
                 expect(week.locator('.today .day-items .task')).to_have_count(9)
                 expect(week.locator('.today .task-marker')).to_have_count(0)
-                week.locator('[data-date="'+dates['other']+'"] .day-date').click()
+                week_other=week.locator('[data-date="'+dates['other']+'"] .day-date')
+                week_other.hover()
+                week_other.focus()
+                expect(week.locator('#date-panel-title')).to_have_text('Today')
+                page.keyboard.press('Enter')
                 expect(week.locator('#date-panel-items .task')).to_have_count(7)
                 expect(week.locator('#date-panel')).to_have_attribute('data-date', dates['other'])
                 # Midnight changes the default Today panel without requiring a reload.

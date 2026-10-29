@@ -23,7 +23,9 @@ def test_calendar_has_fixed_cells_and_accessible_detail_paths():
     page=(ROOT/'tether/snapshot.html').read_text()
     assert 'height:108px;overflow:hidden' in page
     assert '.day-items{min-height:0;overflow:hidden' in page
-    assert "dateButton.onclick=dateButton.onfocus" in page
+    assert "dateButton.onclick=()=>selectDate(iso)" in page
+    assert "onfocus=" not in page
+    assert "pointerenter" not in page
     assert 'dialog.showModal()' not in page
     assert 'id="date-panel"' in page and '15000' in page
     assert "records.slice(0,3)" in page
@@ -55,7 +57,7 @@ def test_display_dashboard_fits_without_changing_chat_snapshots():
     assert "layout:'display'" in script
     assert "(compact||weekends)?7:5" in page
     assert 'grid-template-rows:repeat(var(--rows,1),minmax(0,1fr))' in page
-    assert "more.onclick=more.onfocus=()=>selectDate(iso)" in page
+    assert "more.onclick=()=>selectDate(iso)" in page
     assert "id=\"view-week\"" not in (ROOT/'tether/display.html').read_text()
     assert "frame.style.height=" not in script
     assert 'Reconnect Google in Settings' in script
@@ -76,3 +78,26 @@ def test_display_header_navigation_and_local_date_clock():
     assert "hour12:true" in script
     assert "tether:snapshot-today" in script and "tether:snapshot-today" in snapshot
     assert "setAttribute('aria-current','date')" in snapshot
+
+
+def test_display_clean_layout_starts_on_today_not_saved_anchor():
+    page = (ROOT / 'tether/display.html').read_text()
+    script = (ROOT / 'tether/display.js').read_text()
+    for removed in ['display-quick', 'display-footer', 'display-date', 'display-density']:
+        assert f'id="{removed}"' not in page
+    assert 'saved.anchor' not in script
+    assert 'saved.followingToday' not in script
+    assert 'id="display-clock-date"' in page
+    assert 'id="display-clock-time"' in page
+    assert "+' - '+" not in script
+    assert "replace(/\\s/g,'')" not in script
+    assert script.index('refresh(true); // First frame') < script.index("fetch('/api/preferences')")
+
+
+def test_display_back_forward_cache_keeps_refresh_and_resets_today():
+    script = (ROOT / 'tether/display.js').read_text()
+    snapshot = (ROOT / 'tether/snapshot.html').read_text()
+    assert "if(!event.persisted){clearInterval(timer)" in script
+    assert "if(event.persisted){followingToday=true;refresh(true)" in script
+    assert "if(!event.persisted){clearInterval(refreshTimer)" in snapshot
+    assert "window.addEventListener('pageshow'" in snapshot
