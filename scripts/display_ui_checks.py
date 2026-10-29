@@ -209,16 +209,16 @@ def check_calendar_week_preference(page, screen):
     frame=screen.locator('#display-calendar')
     original_url=calendar.locator('body').evaluate('()=>location.href')
     original_viewport=page.viewport_size
-    preferences=screen.locator('body').evaluate("async()=>await (await fetch('/api/preferences')).json()")
+    preferences=screen.locator('body').evaluate("async()=>await (await fetch(new URL('api/preferences',location.href))).json()")
     workspace=screen.locator('body').evaluate("()=>window.tetherWorkspace||'work'")
     artifacts=Path('artifacts');artifacts.mkdir(exist_ok=True)
     weekdays=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
     def save(value):
         result=screen.locator('body').evaluate("""async(_,value)=>{
-          const r=await fetch('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
+          const r=await fetch(new URL('api/preferences',location.href),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
           if(!r.ok)throw Error('Preferences failed: '+r.status);
-          return await (await fetch('/api/preferences')).json();
+          return await (await fetch(new URL('api/preferences',location.href))).json();
         }""",value)
         assert result==value,result
 
@@ -257,7 +257,7 @@ def check_calendar_week_preference(page, screen):
         expect(calendar.locator('#grid > .day')).to_have_attribute('data-date','2026-10-28')
         expect(calendar.locator('#weekdays')).to_be_hidden()
         expect(calendar.locator('.task-marker')).to_have_count(0)
-        current=screen.locator('body').evaluate("async()=>await (await fetch('/api/preferences')).json()")
+        current=screen.locator('body').evaluate("async()=>await (await fetch(new URL('api/preferences',location.href))).json()")
         assert current=={**preferences,'week_start':3},current
     finally:
         save(preferences)
