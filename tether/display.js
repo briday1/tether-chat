@@ -4,7 +4,7 @@
   const mode=()=>window.tetherWorkspace || new URLSearchParams(location.search).get('workspace') || 'work';
   const storageKey=()=>`tether-display:${location.pathname}:${mode()}`;
   const iso=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-  let view='month',anchor=iso(new Date()),followingToday=true,weekStart=1,density='compact',revision=0,lastRange='',busy=false,detailOpen=false;
+  let view='month',anchor=iso(new Date()),followingToday=true,weekStart=1,density='compact',revision=0,lastRange='',busy=false,detailOpen=false,detailClosing=false;
   try{const saved=JSON.parse(localStorage.getItem(storageKey())||'{}');if(['compact','comfortable'].includes(saved.density))density=saved.density}catch(_){}
   function persist(){try{localStorage.setItem(storageKey(),JSON.stringify({density}))}catch(_){}}
   function sidebar(open){$('.display-main').inert=open;$('.display-bar').inert=open;const chat=$('#display-quick-chat');if(chat)chat.inert=open;$('#display-sidebar').hidden=!open;$('#display-backdrop').hidden=!open;$('#display-menu').setAttribute('aria-expanded',String(open));if(open)$('#display-close').focus();else $('#display-menu').focus()}
@@ -24,6 +24,22 @@
   settingsDialog.addEventListener('cancel',event=>{event.preventDefault();closeSettings()});
   settingsDialog.addEventListener('click',event=>{if(event.target===settingsDialog){const box=settingsDialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)closeSettings()}});
   window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===settingsFrame.contentWindow&&event.data?.type==='tether:settings-close')closeSettings();if(event.origin===location.origin&&event.source===settingsFrame.contentWindow&&event.data?.type==='tether:settings-theme'&&typeof event.data.theme==='string')document.documentElement.dataset.theme=event.data.theme});
+  // The dashboard owns modal history; nested calendar frames do not traverse it.
+  function showTaskDetail(task,push=true){
+    if(detailClosing)return;
+    if(push)history.pushState({...history.state,tetherDisplayOverlay:'task',tetherDisplayTask:task},'',location.href);
+    frame.contentWindow?.postMessage({type:'tether:snapshot-detail-open',task},location.origin);
+  }
+  function closeTaskDetail(){
+    if(detailClosing)return;
+    frame.contentWindow?.postMessage({type:'tether:snapshot-detail-close'},location.origin);
+    if(history.state?.tetherDisplayOverlay==='task'){detailClosing=true;history.back()}
+  }
+  window.addEventListener('popstate',()=>{
+    detailClosing=false;
+    if(history.state?.tetherDisplayOverlay==='task')showTaskDetail(history.state.tetherDisplayTask,false);
+    else {if(detailOpen)frame.contentWindow?.postMessage({type:'tether:snapshot-detail-close'},location.origin);else {$('.display-bar').inert=false;const chat=$('#display-quick-chat');if(chat){chat.inert=false;chat.style.visibility=''}}}
+  });
   function clock(){const now=new Date();$('#display-clock').dateTime=now.toISOString();$('#display-clock-date').textContent=now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});$('#display-clock-time').textContent=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}).replace(/\s+/g,' ')}
   async function syncStatus(){
     const label=$('#display-sync'),gear=$('#display-settings');
@@ -76,16 +92,21 @@
   function step(direction){const date=new Date(anchor+'T12:00:00');if(view==='month'){date.setDate(1);date.setMonth(date.getMonth()+direction)}else date.setDate(date.getDate()+7*direction);anchor=iso(date);followingToday=false;refresh(true)}
   $('#display-previous').onclick=()=>step(-1);$('#display-next').onclick=()=>step(1);
   $('#display-today').onclick=()=>{followingToday=true;refresh(true);frame.contentWindow?.postMessage({type:'tether:snapshot-today'},location.origin)};
-  frame.addEventListener('load',()=>{detailOpen=false;$('.display-bar').inert=false;const chat=$('#display-quick-chat');if(chat){chat.inert=false;chat.style.visibility=''}theme()});
+  frame.addEventListener('load',()=>{detailOpen=false;detailClosing=false;$('.display-bar').inert=false;const chat=$('#display-quick-chat');if(chat){chat.inert=false;chat.style.visibility=''}theme();if(history.state?.tetherDisplayOverlay==='task'){const state={...history.state};delete state.tetherDisplayOverlay;delete state.tetherDisplayTask;history.replaceState(state,'',location.href)}});
   new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
+    if(event.data?.type==='tether:snapshot-detail-request'){
+      if(event.data.action==='open'&&event.data.task&&/^[A-Za-z0-9_-]+$/.test(event.data.task.task_id||event.data.task.id||''))showTaskDetail(event.data.task);
+      else if(event.data.action==='close')closeTaskDetail();
+      return;
+    }
     // Task details are modal across the dock, not just inside the calendar iframe.
     if(event.data?.type==='tether:snapshot-detail'){
       detailOpen=event.data.open===true;
-      $('.display-bar').inert=detailOpen;
-      const chat=$('#display-quick-chat');if(chat){chat.inert=detailOpen;chat.style.visibility=detailOpen?'hidden':''}
-      if(!detailOpen)refresh();
+      const modal=detailOpen||detailClosing;$('.display-bar').inert=modal;
+      const chat=$('#display-quick-chat');if(chat){chat.inert=modal;chat.style.visibility=modal?'hidden':''}
+      if(!detailOpen&&!detailClosing)refresh();
       return;
     }
     // Dashboard owns iframe height; snapshot content fits that viewport.
