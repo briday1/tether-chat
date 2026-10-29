@@ -63,3 +63,10 @@ test('task reminder editor shows local wall time and preserves the instant on sa
   }
  }finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}
 });
+test('task deadline editor agrees with viewer-local day while preserving date-only values',()=>{
+ const previous=process.env.TZ;
+ try{process.env.TZ='America/Los_Angeles';const {ctx}=editor({});const input={value:''};ctx.$=()=>input;
+ const assignment=board.match(/\$\('#dueDate'\)\.value=[^;]+;/)[0];
+ for(const [value,day] of [['2026-10-30T00:30:00Z','2026-10-29'],['2026-10-30','2026-10-30']]){ctx.t={due_at:value};vm.runInContext(assignment,ctx);assert.equal(input.value,day)}
+ }finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}
+});

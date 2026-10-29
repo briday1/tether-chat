@@ -432,8 +432,11 @@ export async function createRuntime({config,db,network=globalThis.fetch.bind(glo
     const items=await write((m,s)=>{
       const result=[];for(const item of m.attention().items){
         if(result.length===3)break;
-        const entity=item.action_id?m.action(item.action_id):m.task(item.task_id),date=entity.revisit_at||entity.next_occurrence||entity.due_at;
-        const claim=(item.action_id||item.task_id)+':'+date;if(date && !s.notificationClaims[claim]){s.notificationClaims[claim]=now();result.push(item)}
+        const entity=item.action_id?m.action(item.action_id):m.task(item.task_id),stamp=m.clock();
+        const reached=date=>!!date&&recurrenceDue({next_occurrence:date},stamp);
+        const schedules=[entity.revisit_at,...(!item.action_id&&entity.recurrence&&(!entity.revisit_at||reached(entity.revisit_at))?[entity.next_occurrence]:[]),entity.due_at];
+        const date=schedules.find(date=>reached(date)&&!s.notificationClaims[(item.action_id||item.task_id)+':'+date]);
+        if(date){s.notificationClaims[(item.action_id||item.task_id)+':'+date]=now();result.push(item)}
       }return result;
     });
     const registration=await globalThis.navigator?.serviceWorker?.getRegistration(config.base);

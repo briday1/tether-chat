@@ -308,7 +308,7 @@ def claim_notifications():
         for row in rows:
             item=dict(row)
             schedules=[("revisit_at","notified_for")]
-            if item["recurrence"] and not item["revisit_at"]:schedules.append(("next_occurrence","recurring_notified_for"))
+            if item["recurrence"] and (not item["revisit_at"] or recurrence_rules.is_due(item["revisit_at"],current.isoformat())):schedules.append(("next_occurrence","recurring_notified_for"))
             for date_field,claim_field in schedules:
                 stamp=item[date_field]
                 if not stamp or item[claim_field]==stamp:continue

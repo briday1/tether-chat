@@ -147,11 +147,15 @@ def is_due(value, now):
         return False
 
 
+def local_day(value):
+    """Keep calendar dates literal, otherwise use the viewer-local calendar day."""
+    dt,date_only=parse(value)
+    return (dt.date() if date_only else dt.astimezone().date()).isoformat()
+
+
 def deadline_due(value, now):
     """Deadlines are day-granular in the viewer's calendar; reminders are instants."""
     try:
-        dt, date_only = parse(value)
-        day = dt.date() if date_only else dt.astimezone().date()
-        return day <= datetime.fromisoformat(now.replace('Z', '+00:00')).astimezone().date()
+        return local_day(value) <= datetime.fromisoformat(now.replace('Z', '+00:00')).astimezone().date().isoformat()
     except (ValueError, TypeError):
         return False

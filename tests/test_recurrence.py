@@ -254,3 +254,25 @@ def test_recurrence_attention_mode_is_explicit_and_preserves_deadline(database):
     with pytest.raises(ValueError):ai.dispatch('set_recurrence',{**args,'attention_mode':'invented'})
     result=ai.dispatch('set_recurrence',{**args,'attention_mode':'occurrence'})
     assert result['revisit_at'] is None and result['due_at']=='2026-02-15'
+
+
+def test_midnight_deadline_retains_timezone_in_task_and_action_api(database):
+    client=TestClient(app,base_url='http://127.0.0.1')
+    t=store.create('Midnight deadline');a=store.add(t['id'],'action','Midnight action')
+    for path in ('/api/threads/'+t['id'],'/api/actions/'+a['id']):
+        result=client.patch(path,json={'due_at':'2026-11-01T00:00:00-07:00'})
+        assert result.status_code==200 and result.json()['due_at']=='2026-11-01T00:00:00-07:00'
+
+
+def test_past_independent_reminder_does_not_disable_later_recurring_notifications(database):
+    from datetime import datetime,timezone,timedelta
+    current=datetime.now(timezone.utc)
+    t=store.create('Independent reminder and repeat')
+    past=(current-timedelta(minutes=5)).isoformat();occurrence=(current-timedelta(minutes=1)).isoformat()
+    store.update(t['id'],{'recurrence':'daily','next_occurrence':occurrence,'revisit_at':past})
+    with store.conn() as c:c.execute('UPDATE threads SET notified_for=? WHERE id=?',(past,t['id']))
+    claims=[n for n in store.claim_notifications() if n['id']==t['id']]
+    assert len(claims)==1 and claims[0]['revisit_at']==occurrence
+    assert not [n for n in store.claim_notifications() if n['id']==t['id']]
+    store.update(t['id'],{'revisit_at':(current+timedelta(hours=1)).isoformat(),'next_occurrence':(current-timedelta(seconds=1)).isoformat()})
+    assert not [n for n in store.claim_notifications() if n['id']==t['id']]

@@ -404,3 +404,17 @@ test('daily reminder capture never injects one-shot dates and requires a recurre
   assert.equal(count,4);assert.equal(db.state.tasks[0].recurrence,'daily');
   assert.equal(db.state.tasks[0].revisit_at,null);assert.equal(db.state.tasks[0].due_at,null);
 });
+
+test('claimed independent reminders do not hide later recurrence notifications',async t=>{
+  const original=globalThis.Notification,shown=[];
+  globalThis.Notification=class {static permission='granted';constructor(title){shown.push(title)}};
+  t.after(()=>{if(original===undefined)delete globalThis.Notification;else globalThis.Notification=original});
+  const {api,db,runtime}=await setup(t),task=(await api('/threads','POST',{title:'Daily notification'})).data;
+  const old=new Date(Date.now()-3600000).toISOString(),occurrence=new Date(Date.now()-60000).toISOString();
+  await api('/threads/'+task.id,'PATCH',{recurrence:'daily',next_occurrence:occurrence,revisit_at:old});
+  db.state.notificationClaims[task.id+':'+old]=old;
+  await runtime.notifications();assert.deepEqual(shown,['Daily notification']);
+  await runtime.notifications();assert.equal(shown.length,1);
+  await api('/threads/'+task.id,'PATCH',{next_occurrence:new Date(Date.now()-30000).toISOString(),revisit_at:'2035-01-01T12:00:00Z'});
+  await runtime.notifications();assert.equal(shown.length,1);
+});

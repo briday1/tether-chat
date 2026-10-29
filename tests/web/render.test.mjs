@@ -69,3 +69,12 @@ test('date-only next occurrence remains the same calendar date west of UTC',()=>
     assert.ok(note.includes('2026-10-30'));assert.ok(!note.includes('Oct 29'));
   } finally {if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}
 });
+test('deadline and schedule labels use viewer-local day without shifting date-only values',()=>{
+ const previous=process.env.TZ;
+ try{process.env.TZ='America/Los_Angeles';
+ const task={id:'dates',title:'Dates',due_at:'2026-10-30T00:30:00Z',revisit_at:'2026-10-30T00:30:00Z',recurrence:'daily',next_occurrence:'2026-10-30T00:30:00Z',entries:[{kind:'action',body:'Calendar deadline',due_at:'2026-10-30'}]};
+ const table=taskNote('Dates',[task]),check=checkInNote(task,null,'/board#task/dates');
+ assert.ok(table.includes('Due 2026-10-29')&&table.includes('Bring to attention 2026-10-29')&&table.includes('Next occurrence 2026-10-29'));
+ assert.ok(table.includes('due 2026-10-30'));assert.ok(check.includes('| Due date | 2026-10-29 |'));
+ }finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}
+});
