@@ -25,7 +25,8 @@ def check_task_context(page, ui, title):
             assert context.evaluate(style)==edit.evaluate(style)
             assert context.evaluate('n=>n.scrollWidth<=n.clientWidth'), 'Context label is clipped'
             assert ui.locator('body').evaluate('n=>n.ownerDocument.documentElement.scrollWidth<=n.ownerDocument.defaultView.innerWidth')
-            context.focus()
+            edit.focus()
+            page.keyboard.press('Tab')
             expect(context).to_be_focused()
             assert context.evaluate("n=>getComputedStyle(n).outlineStyle!=='none'")
             ui.locator('.actions-section').screenshot(path=f'artifacts/display-context-buttons-{workspace}-{theme}-{width}.png')
