@@ -36,6 +36,27 @@ class FreshHandler(SimpleHTTPRequestHandler):
     def log_message(self,*args):pass
 
 
+
+def update_settings_diagnostics(page, errors):
+    """Failure evidence only: no form values, stored credentials, or task content."""
+    try:
+        state=page.evaluate("""()=>{const frame=document.querySelector('#app-frame'),doc=frame?.contentDocument;
+          const settings=doc?.querySelector('#settings'),personal=doc?.querySelector('#householdPersonalProvider');
+          return {frameURL:frame?.contentWindow?.location.href,readyState:doc?.readyState,
+            settingsClass:settings?.className,settingsVisible:!!settings?.getClientRects().length,
+            personalProviderHidden:personal?.hidden,personalProviderVisible:!!personal?.getClientRects().length,
+            settingsHandler:typeof doc?.querySelector('#navsettings')?.onclick};}""")
+    except Exception as error:
+        state={'inspectionError':str(error)}
+    state['pageErrors']=errors
+    print('Update settings failure diagnostics: '+json.dumps(state),flush=True)
+    try:
+        Path('artifacts').mkdir(exist_ok=True)
+        page.screenshot(path='artifacts/display-update-settings-failure.png',timeout=5000)
+    except Exception as error:
+        print('Could not capture update settings screenshot: '+str(error),flush=True)
+
+
 def main():
     from playwright.sync_api import sync_playwright,expect
     with tempfile.TemporaryDirectory(prefix='tether-web-update-') as temporary:
@@ -88,7 +109,9 @@ def main():
                 # New workers activate without any Settings action, but do not
                 # navigate open documents or interrupt their active work.
                 page.evaluate("async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update()}")
-                update=context.new_page();update.goto(base+'update.html')
+                update=context.new_page();update_errors=[]
+                update.on('pageerror',lambda error:update_errors.append(str(error)))
+                update.goto(base+'update.html')
                 expect(update.locator('#status')).to_contain_text('Waiting for your current chat request')
                 assert update.url.endswith('/update.html')
                 assert update.evaluate('document.documentElement.scrollWidth<=innerWidth')
@@ -126,12 +149,23 @@ def main():
                 update.evaluate("async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update()}")
                 update.wait_for_timeout(1000)
                 expect(updated.locator('#browserVersion')).to_contain_text(version)
-                updated.get_by_role('link',name='Tasks',exact=True).click()
-                updated.get_by_role('link',name='Conversation',exact=True).click()
-                expect(updated.locator('#browserVersion')).to_contain_text(version)
-                expect(updated.get_by_label('Message tether')).to_have_value('Keep this launch-only draft.')
-                updated.get_by_role('button',name='Settings',exact=True).click()
-                updated.get_by_label('Provider API base URL').fill('https://unsaved.example/v1')
+                try:
+                    updated.get_by_role('link',name='Tasks',exact=True).click()
+                    # Frame navigation is asynchronous: do not click Conversation
+                    # in the departing screen before Tasks actually becomes visible.
+                    expect(updated.locator('#board')).to_be_visible()
+                    updated.get_by_role('link',name='Conversation',exact=True).click()
+                    expect(updated.get_by_label('Message tether')).to_be_visible()
+                    expect(updated.locator('#browserVersion')).to_contain_text(version)
+                    expect(updated.get_by_label('Message tether')).to_have_value('Keep this launch-only draft.')
+                    expect(updated.locator('#settings')).to_be_hidden()
+                    updated.get_by_role('button',name='Settings',exact=True).click()
+                    expect(updated.locator('#settings')).to_be_visible()
+                    expect(updated.locator('#householdPersonalProvider')).to_be_visible()
+                    updated.get_by_label('Provider API base URL').fill('https://unsaved.example/v1')
+                except Exception:
+                    update_settings_diagnostics(update,update_errors)
+                    raise
                 print('Update check: next launch adopts the new release',flush=True)
                 launched=context.new_page();launched.goto(base)
                 fresh=launched.frame_locator('#app-frame')
@@ -142,7 +176,9 @@ def main():
                 expect(updated.get_by_label('Provider API base URL')).to_have_value('https://unsaved.example/v1')
                 updated.get_by_role('button',name='Close settings',exact=True).click()
                 updated.get_by_role('link',name='Tasks',exact=True).click()
+                expect(updated.locator('#board')).to_be_visible()
                 updated.get_by_role('link',name='Conversation',exact=True).click()
+                expect(updated.get_by_label('Message tether')).to_be_visible()
                 expect(updated.locator('#browserVersion')).to_contain_text(version)
                 after=launched.evaluate(DB,'read')
                 for field in ('tasks','entries','settings'):assert after[field]==before[field]
