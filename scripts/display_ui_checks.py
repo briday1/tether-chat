@@ -177,11 +177,12 @@ def check_display_settings(page, screen):
     # Browser Back consumes only the overlay history entry.
     screen.locator('#display-settings').click()
     expect(settings.locator('#settings')).to_be_visible()
-    page.go_back()
+    # Same-document iframe history has no top-level load event to await.
+    screen.locator('body').evaluate('()=>history.back()')
     expect(dialog).to_be_hidden()
     expect(screen.locator('#display-title')).to_have_text('November 2026')
     expect(calendar.locator('body')).to_have_attribute('data-overlay-test','retained')
-    page.go_forward()
+    screen.locator('body').evaluate('()=>history.forward()')
     expect(dialog).to_be_visible()
     expect(settings.locator('#settings')).to_be_visible()
     settings.locator('#closeSettings').click()
