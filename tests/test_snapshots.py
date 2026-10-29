@@ -58,3 +58,43 @@ def test_content_sizing_partial_ranges_and_complete_exports(tmp_path,monkeypatch
     # Archived tasks keep their history but stop appearing as current obligations.
     store.archive_thread(task['id'])
     assert snapshot('2026-10-26','2026-11-01')['insights']['scheduled_due']==5
+
+def test_snapshot_context_is_real_and_task_scoped(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv('TETHER_DB', str(tmp_path/'context.sqlite3'))
+    store.init()
+    t = store.create('Dentist <check>', 'Bring insurance & questions')
+    other = store.create('Other task')
+    store.update(t['id'], {'due_at':'2026-10-30T18:30:00Z', 'revisit_at':'2026-10-30T16:00:00Z'})
+    store.add(t['id'], 'thought', 'Literal <script> note')
+    action = store.add(t['id'], 'action', 'Bring form')
+    store.update_action(action['id'], {'due_at':'2026-10-30T18:00:00Z'})
+    store.add_action_note(action['id'], 'Action-specific note')
+    with store.conn() as c:
+        c.execute('CREATE TABLE location_requests(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
+        for index, row in enumerate([
+            {'task_id':t['id'], 'status':'saved', 'selected':{'address':'123 Main Street'}},
+            {'task_id':other['id'], 'status':'saved', 'selected':{'address':'Private other place'}},
+            {'task_id':t['id'], 'status':'ready', 'selected':{'address':'Unconfirmed place'}},
+        ]):
+            c.execute('INSERT INTO location_requests VALUES(?,?)', (str(index), json.dumps(row)))
+    records = snapshot('2026-10-30', '2026-10-30')['days'][0]['tasks']
+    task = next(r for r in records if not r['action_id'])
+    item = next(r for r in records if r['action_id'])
+    assert task['summary'] == 'Bring insurance & questions'
+    assert task['location'] == item['location'] == '123 Main Street'
+    assert task['note_preview'] == 'Literal <script> note'
+    assert item['note_preview'] == 'Action-specific note'
+    assert task['due_at'] == '2026-10-30T18:30:00Z'
+    assert task['revisit_at'] == '2026-10-30T16:00:00Z'
+    assert item['revisit_at'] is None
+
+def test_snapshot_summary_is_a_preview_but_task_details_are_complete(tmp_path, monkeypatch):
+    monkeypatch.setenv('TETHER_DB', str(tmp_path/'preview.sqlite3'))
+    store.init()
+    text = 'Full task context. ' * 100
+    task = store.create('Long details', text)
+    store.update(task['id'], {'due_at':'2026-10-30T18:00:00Z'})
+    record = snapshot('2026-10-30', '2026-10-30')['days'][0]['tasks'][0]
+    assert record['summary'] == text[:300]
+    assert store.get(task['id'])['summary'] == text

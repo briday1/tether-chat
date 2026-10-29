@@ -14,7 +14,16 @@ from . import storage
 from .rendering import render
 from .ai import reflect
 
-app=FastAPI(title="tether-chat")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    yield
+    import asyncio
+    from . import chat_jobs
+    await asyncio.to_thread(chat_jobs.shutdown)
+
+app=FastAPI(title="tether-chat",lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware,allowed_hosts=["127.0.0.1","localhost","[::1]"])
 db.init()
 from threading import Lock

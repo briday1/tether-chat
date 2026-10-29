@@ -316,3 +316,63 @@ test('Work and unlabelled imports require explicit Home consent',async t=>{
   assert.equal((await api('/import','POST',{...incoming,home_import_confirmed:true})).status,200);
  }
 });
+
+test('Stop aborts a pending provider and late completion cannot run tools or overwrite status',async t=>{
+  let release,signal;const {api,db}=await setup(t,async(url,options)=>{signal=options.signal;await new Promise(r=>release=r);return provider({tool_calls:[{id:'late-tool',function:{name:'capture',arguments:'{"title":"Must not exist"}'}}]})});await save(api);
+  await api('/chat/jobs','POST',{request_id:'stop-pending-001',text:'Save a task'});await waitFor(()=>release);
+  const stopped=await api('/chat/jobs/stop-pending-001/cancel','POST',{});assert.equal(stopped.data.status,'interrupted');assert.ok(signal.aborted);
+  release();await new Promise(r=>setTimeout(r,20));assert.equal(db.state.tasks.length,0);assert.equal(db.state.jobs[0].status,'interrupted');assert.equal(db.state.messages.length,1);
+  assert.equal((await api('/chat/jobs/stop-pending-001/cancel','POST',{})).data.status,'interrupted');
+});
+test('interrupt includes completed outcome context once and starts new request without replaying tools',async t=>{
+  let count=0,waiting,continued;const {api,db}=await setup(t,async(url,options)=>{
+    count++;if(count===1)return provider({tool_calls:[{id:'saved-tool',function:{name:'capture',arguments:'{"title":"Saved before stop"}'}}]});
+    if(count===2){waiting=true;return new Promise(()=>{})}
+    continued=JSON.parse(options.body);return provider({content:'Updated context received.'});
+  });await save(api);await api('/chat/jobs','POST',{request_id:'interrupt-first',text:'Record the original request'});await waitFor(()=>waiting);
+  assert.equal(db.state.tasks.length,1);await api('/chat/jobs/interrupt-first/cancel','POST',{});
+  const body={request_id:'interrupt-second',text:'Actually add this detail',interrupt_job_id:'interrupt-first'};
+  assert.equal((await api('/chat/jobs','POST',body)).status,202);assert.equal((await api('/chat/jobs','POST',body)).status,202);
+  await waitFor(()=>db.state.jobs[1]?.status==='done');assert.equal(db.state.tasks.length,1);assert.equal(count,3);
+  assert.ok(JSON.stringify(continued).includes('Saved before stop'));assert.ok(JSON.stringify(continued).includes('Record the original request'));
+  assert.equal(continued.messages.filter(m=>m.content==='Actually add this detail').length,1);
+});
+test('Stop during response read and retry backoff does not retry',async t=>{
+  for(const mode of ['read','retry']){
+    let count=0,waiting=false;
+    const {api,db}=await setup(t,async()=>{count++;if(mode==='read')return {ok:true,json:()=>{waiting=true;return new Promise(()=>{})}};return new Response('busy',{status:429,headers:{'Retry-After':'1'}})},new MemoryDB(),new Locks(),{pause:()=>{waiting=true;return new Promise(()=>{})}});
+    await save(api);await api('/chat/jobs','POST',{request_id:'stop-'+mode+'-001',text:'Hello'});await waitFor(()=>waiting);
+    await api('/chat/jobs/stop-'+mode+'-001/cancel','POST',{});await new Promise(r=>setTimeout(r,15));assert.equal(count,1);assert.equal(db.state.jobs[0].status,'interrupted');
+  }
+});
+
+test('provider request has no application elapsed timeout beyond the old 60 second limit',async t=>{
+  let release,signal;const {api,db}=await setup(t,async(url,options)=>{signal=options.signal;return new Promise(resolve=>release=()=>resolve(provider({content:'Long request finished.'})))});await save(api);
+  t.mock.timers.enable({apis:['setTimeout']});
+  await api('/chat/jobs','POST',{request_id:'long-provider-001',text:'Take time'});
+  for(let i=0;i<30&&!release;i++)await Promise.resolve();assert.ok(release);
+  t.mock.timers.tick(65000);await Promise.resolve();assert.equal(signal.aborted,false);assert.equal(db.state.jobs[0].status,'running');
+  release();for(let i=0;i<40&&db.state.jobs[0].status!=='done';i++)await Promise.resolve();assert.equal(db.state.jobs[0].status,'done');
+  t.mock.timers.reset();
+});
+
+test('Stop in another tab aborts owner, queued Stop survives runtime reopen and is never replayed',async t=>{
+  const db=new MemoryDB(),locks=new Locks();let signal,calls=0;
+  const first=await setup(t,async(url,options)=>{calls++;signal=options.signal;return new Promise(()=>{})},db,locks);await save(first.api);
+  await first.api('/chat/jobs','POST',{request_id:'cross-tab-running',text:'First'});await waitFor(()=>signal);
+  await first.api('/chat/jobs','POST',{request_id:'cross-tab-queued',text:'Second'});
+  const second=await setup(t,()=>{throw Error('Must not replay')},db,locks);
+  await second.api('/chat/jobs/cross-tab-queued/cancel','POST',{});
+  await second.api('/chat/jobs/cross-tab-running/cancel','POST',{});
+  await waitFor(()=>signal.aborted);assert.equal(calls,1);assert.ok(db.state.jobs.every(j=>j.status==='interrupted'));
+  first.runtime.close();second.runtime.close();const third=await setup(t,()=>{throw Error('Must not replay after reload')},db,locks);
+  await third.api('/chat/state');assert.ok(db.state.jobs.every(j=>j.status==='interrupted'));
+});
+
+test('an unacknowledged stopped outbox is atomically interrupted before any provider call',async t=>{
+  let calls=0;const {api,db}=await setup(t,()=>{calls++;throw Error('Must not execute stopped outbox')});await save(api);
+  const body={request_id:'stopped-outbox-001',text:'Do not save this',stop_requested:true};
+  assert.equal((await api('/chat/jobs','POST',body)).data.status,'interrupted');
+  assert.equal((await api('/chat/jobs','POST',{...body,stop_requested:false})).data.status,'interrupted');
+  await new Promise(r=>setTimeout(r,20));assert.equal(calls,0);assert.equal(db.state.messages.length,1);
+});

@@ -16,7 +16,7 @@ html[data-chat-embed] .welcome h1{font-size:24px}html[data-chat-embed] .bubble{m
   window.addEventListener('message',event=>{
     if(event.source!==parent||event.origin!==location.origin)return;
     if(event.data?.type==='tether:chat-hide')window.dispatchEvent(new Event('tether:voice-suspend'));
-    if(event.data?.type==='tether:chat-focus'){theme();document.querySelector('#message')?.focus()}
+    if(event.data?.type==='tether:chat-focus'){theme();window.dispatchEvent(new Event('tether:composer-resize'));document.querySelector('#message')?.focus()}
   });
   document.addEventListener('keydown',event=>{
     // Let task/settings drawers and slash-command menus consume their own Escape.

@@ -1,5 +1,6 @@
 """Deterministic tether-chat calendar snapshot aggregation (no AI calls)."""
 from collections import Counter, defaultdict
+import json
 from datetime import date, timedelta,datetime
 from . import store as db
 
@@ -7,11 +8,24 @@ def snapshot(start: str, end: str, category: str = "") -> dict:
     first, last = date.fromisoformat(start), date.fromisoformat(end)
     if last < first or (last-first).days > 365:
         raise ValueError("Date range must be ordered and at most 366 days")
-    threads = db.with_categories(db.query("SELECT id,title,category,state,due_at,revisit_at,next_occurrence,created_at,archived_at FROM threads WHERE archived_at IS NULL"))
+    threads = db.with_categories(db.query("SELECT id,title,summary,category,state,due_at,revisit_at,next_occurrence,created_at,archived_at FROM threads WHERE archived_at IS NULL"))
     events = db.with_categories(db.query("SELECT a.thread_id,a.kind,a.body,a.occurred_at,t.title,t.category FROM activity a JOIN threads t ON t.id=a.thread_id WHERE substr(a.occurred_at,1,10)>=? AND substr(a.occurred_at,1,10)<=? ORDER BY a.occurred_at,a.id", (start,end)),"thread_id")
     if category:
         threads = [t for t in threads if category in t["categories"]]
         events = [e for e in events if category in e["categories"]]
+    # Only user-confirmed saved places are displayed; no lookup is performed.
+    locations = {}
+    if db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='location_requests'"):
+        for row in db.query("SELECT value FROM location_requests ORDER BY rowid"):
+            saved = json.loads(row['value'])
+            if saved.get('status') == 'saved' and saved.get('selected', {}).get('address'):
+                locations[saved['task_id']] = saved['selected']['address']
+    notes = {}
+    for row in db.query("SELECT thread_id,body FROM entries WHERE kind!='action' ORDER BY created_at,id"):
+        notes[row['thread_id']] = row['body']
+    action_notes = {}
+    for row in db.query("SELECT action_id,body FROM action_notes ORDER BY created_at,id"):
+        action_notes[row['action_id']] = row['body']
     byday = defaultdict(lambda: {"tasks":[], "activity":[]})
     def calendar_day(value):
         if not value:return None
@@ -28,6 +42,10 @@ def snapshot(start: str, end: str, category: str = "") -> dict:
             byday[day]['tasks'].append({'id':t['id'],'task_id':t['id'],'action_id':action['id'] if action else None,
               'title':action['body'] if action else t['title'],'task_title':t['title'],'category':t['category'],'categories':t['categories'],
               'state':'settled' if done else t['state'],'date':day,'schedule_kinds':kinds,
+              'summary':t.get('summary','')[:300],'location':locations.get(t['id'],''),
+              'note_preview':(action_notes.get(action['id'],'') if action else notes.get(t['id'],''))[:240],
+              'due_at':record.get('due_at'),'revisit_at':record.get('revisit_at'),
+              'next_occurrence':None if action else t.get('next_occurrence'),
               'schedule_label':' · '.join(label for label in ['Due' if 'deadline' in kinds else '', 'Reminder' if 'reminder' in kinds else '', 'Done' if done else ''] if label),
               'href':'/board#action/'+t['id']+'/'+action['id'] if action else '/board#task/'+t['id']})
     for t in threads:add(t)

@@ -101,3 +101,30 @@ def test_display_back_forward_cache_keeps_refresh_and_resets_today():
     assert "if(event.persisted){followingToday=true;refresh(true)" in script
     assert "if(!event.persisted){clearInterval(refreshTimer)" in snapshot
     assert "window.addEventListener('pageshow'" in snapshot
+
+
+def test_display_settings_uses_same_svg_as_other_views():
+    import re
+    pages = [(ROOT / 'tether' / name).read_text(encoding='utf-8') for name in ['display.html', 'index.html', 'board.html']]
+    icons = [re.search(r'id="(?:display-settings|navsettings)"[^>]*>(<svg.*?</svg>)', page).group(1) for page in pages]
+    assert len(set(icons)) == 1
+
+def test_task_detail_reload_and_pending_panel_requests_are_guarded():
+    snapshot = (ROOT / 'tether/snapshot.html').read_text(encoding='utf-8')
+    assert "delete state.tetherSnapshotDetail;history.replaceState" in snapshot
+    assert "if(request!==selectionRevision||detail.open)return" in snapshot
+    assert "queueMicrotask(()=>{if(!detail.open&&!detailClosing)load()})" in snapshot
+
+def test_task_details_escape_is_handled_in_embedded_document():
+    snapshot = (ROOT / 'tether/snapshot.html').read_text(encoding='utf-8')
+    assert "if(event.key==='Escape'&&detail.open)" in snapshot
+    assert "event.stopPropagation();closeDetail()" in snapshot
+
+def test_dashboard_task_history_is_owned_by_display_not_nested_snapshot():
+    snapshot = (ROOT / 'tether/snapshot.html').read_text(encoding='utf-8')
+    assert "const parentOwnsDetail=parent!==window&&params.get('layout')==='display'" in snapshot
+    assert "if(parentOwnsDetail&&push){parent.postMessage" in snapshot
+    assert "type:'tether:snapshot-detail-request',action:'open',task:t" in snapshot
+    assert "type:'tether:snapshot-detail-request',action:'close'" in snapshot
+    assert "if(parentOwnsDetail)return;if(history.state?.tetherSnapshotDetail)" in snapshot
+    assert "if(event.data?.type==='tether:snapshot-detail-close'){dismissDetail();detailClosing=false}" in snapshot

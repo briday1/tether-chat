@@ -328,6 +328,9 @@ export class Model {
       }
       for(const [date,kinds] of dates)scheduled.push({id:task.id,task_id:task.id,action_id:action?.id||null,title:action?.body||task.title,task_title:task.title,
         category:task.category,categories:task.categories,state:action?.done?'settled':task.state,date,schedule_kinds:[...kinds],
+        summary:(task.summary||'').slice(0,300),location:(this.s.location_requests||[]).filter(r=>r.task_id===task.id&&r.status==='saved'&&r.selected?.address).at(-1)?.selected.address||'',
+        note_preview:(action?this.notes(action.id).at(-1)?.body:this.s.entries.filter(e=>e.thread_id===task.id&&e.kind!=='action').at(-1)?.body)?.slice(0,240)||'',
+        due_at:record.due_at||null,revisit_at:record.revisit_at||null,next_occurrence:action?null:task.next_occurrence||null,
         schedule_label:[kinds.has('deadline')?'Due':'',kinds.has('reminder')?'Reminder':'',action?.done?'Done':''].filter(Boolean).join(' · '),
         href:action?'/board#action/'+task.id+'/'+action.id:'/board#task/'+task.id});
     };

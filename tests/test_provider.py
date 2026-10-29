@@ -4,6 +4,8 @@ import json
 from urllib.error import HTTPError
 import pytest
 from tether import ai
+import httpx
+from urllib.request import Request
 from tether.provider import failure,retry_delay
 
 
@@ -15,6 +17,14 @@ def connection(tmp_path,monkeypatch):
     monkeypatch.setattr(ai.secrets,'get',lambda:vault.get('key'))
     monkeypatch.setattr(ai.secrets,'set_key',lambda key:vault.update(key=key.strip()))
     monkeypatch.setattr(ai.secrets,'delete_key',lambda:vault.clear())
+    def transport(url,payload,key):
+        req=Request(url,data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+key},method='POST')
+        try:
+            with ai.urlopen(req,timeout=None) as result:
+                return httpx.Response(200,content=result.read())
+        except HTTPError as exc:
+            return httpx.Response(exc.code,content=exc.read(),headers=dict(exc.headers))
+    monkeypatch.setattr(ai,'provider_request',transport)
     return vault
 
 

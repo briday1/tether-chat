@@ -122,6 +122,9 @@ def check_display_header(page, screen):
     expect(screen.locator('#display-clock-time')).to_have_text('5:28 PM')
     expect(calendar.locator('#date-panel')).to_have_attribute('data-date', '2026-10-28')
 
+    from task_details_ui_checks import check_task_details
+    check_task_details(page, screen)
+
 
 def check_display_settings(page, screen):
     """General settings overlay preserves the dock and never resumes chat work."""
