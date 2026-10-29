@@ -6,9 +6,11 @@ const source=readFileSync(new URL('../../tether/chat.js',import.meta.url),'utf8'
 const helpers=source.slice(source.indexOf(' const sendPromises='),source.indexOf(' stopButton.onclick='));
 function setup({job=true,outbox=false,fetch}={}){
  const storage=new Map(),journal=outbox?{'request-001':{request_id:'request-001',text:'Original'}}:{},send={};
- const context={stopKey:'stops',stopping:false,jobs:job?[{id:'request-001',status:'running'}]:[],stopButton:{},document:{querySelector:()=>send},
+ const button=()=>({setAttribute(name,value){this[name]=value},focus(){context.document.activeElement=this}});
+ const input={value:''};
+ const context={stopKey:'stops',stopping:false,submitting:false,window:{addEventListener(){}},jobs:job?[{id:'request-001',status:'running'}]:[],stopButton:button(),interruptButton:button(),document:{querySelector:s=>s==='#message'?input:send},
   localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},readJournal:()=>journal,remember:p=>journal[p.request_id]=p,forget:id=>delete journal[id],sync:async()=>{},fetch};
- vm.createContext(context);vm.runInContext(helpers,context);return {context,journal,storage,run:code=>vm.runInContext(code,context)};
+ vm.createContext(context);vm.runInContext(helpers,context);send.focus=()=>context.document.activeElement=send;return {context,journal,storage,input,send,run:code=>vm.runInContext(code,context)};
 }
 test('Stop posts an atomic stopped outbox without awaiting the original pending send',async()=>{
  const calls=[];const state=setup({outbox:true,fetch:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({id:'request-001',status:'interrupted'})}}});
@@ -29,4 +31,16 @@ test('a reloaded accepted Stop blocks continuation until cancellation is confirm
  let calls=0;const state=setup({job:false,outbox:false,fetch:async()=>{calls++;throw Error('offline')}});
  state.storage.set('stops',JSON.stringify({'request-001':true}));assert.equal(state.run('activeIds().length'),1);
  await assert.rejects(state.run('stopActive()'),/offline/);assert.equal(calls,1);assert.equal(JSON.parse(state.storage.get('stops'))['request-001'],true);
+});
+
+test('send and Stop exchange one slot; added context exposes interrupt without hiding Stop',()=>{
+ const state=setup();state.run('updateControls()');assert.equal(state.send.hidden,true);assert.equal(state.context.stopButton.hidden,false);assert.equal(state.context.interruptButton.hidden,true);
+ state.input.value='Added context';state.run('updateControls()');assert.equal(state.context.stopButton.hidden,false);assert.equal(state.context.interruptButton.hidden,false);
+ state.context.stopping=true;state.run('updateControls()');assert.equal(state.context.stopButton.disabled,true);assert.equal(state.context.interruptButton.disabled,true);assert.equal(state.context.stopButton['aria-busy'],'true');
+ state.context.stopping=false;state.context.jobs=[];state.run('updateControls()');assert.equal(state.send.hidden,false);assert.equal(state.context.stopButton.hidden,true);assert.equal(state.context.interruptButton.hidden,true);
+});
+test('keyboard focus follows the same action slot and dictation cannot submit an interrupt',()=>{
+ const state=setup();state.context.document.activeElement=state.send;state.run('updateControls()');assert.equal(state.context.document.activeElement,state.context.stopButton);
+ state.input.value='Context';state.send.disabled=true;state.run('updateControls()');assert.equal(state.context.interruptButton.disabled,true);assert.equal(state.context.stopButton.disabled,false);
+ state.context.jobs=[];state.run('updateControls()');assert.equal(state.context.document.activeElement,state.send);
 });

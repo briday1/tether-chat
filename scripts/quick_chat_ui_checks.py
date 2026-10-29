@@ -9,6 +9,7 @@ def check_quick_chat(page, screen):
     title = screen.locator('#display-title').inner_text()
     button.click()
     expect(dialog).to_be_visible()
+    expect(dialog).not_to_contain_text('Requests keep running when closed')
     field = chat.locator('#message')
     expect(field).to_be_visible()
     expect(chat.locator('#voiceInput')).to_have_attribute('aria-pressed', 'false')
@@ -75,7 +76,8 @@ def check_quick_chat(page, screen):
     # Explicit Stop and interrupt keep the composer editable, preserve the draft,
     # and submit added context once; closing the overlay above did not stop it.
     expect(chat.locator('#stop-chat')).to_be_visible()
-    expect(chat.locator('#send')).to_have_text('Interrupt')
+    expect(chat.locator('#send')).to_be_hidden()
+    expect(chat.locator('#stop-chat')).to_have_attribute('aria-label', 'Stop')
     field.fill('Additional context for the same request')
     field.press('Enter')
     expect(field).to_have_value('')
@@ -85,7 +87,7 @@ def check_quick_chat(page, screen):
     expect(chat.locator('.chat-pending')).to_contain_text('Stopped. Completed changes are kept.')
     expect(chat.locator('#stop-chat')).to_be_hidden()
     expect(field).to_have_value('Keep this draft while stopping')
-    expect(chat.locator('#send')).to_have_text('Send')
+    expect(chat.locator('#send')).to_have_attribute('aria-label', 'Send')
     field.fill('')
     # Completed queue state notifies Display without replacing its calendar iframe.
     screen.locator('#display-calendar').evaluate('(n)=>n.dataset.retainedCalendar="yes"')
@@ -125,5 +127,7 @@ def check_quick_chat(page, screen):
     page.set_viewport_size({'width':1280,'height':900})
     page.screenshot(path=f'artifacts/display-{workspace}-quick-chat-1280.png', full_page=True)
     field.fill('')
+    from composer_ui_checks import check_composer_controls
+    check_composer_controls(page, chat, workspace + '-quick')
     screen.get_by_role('button', name='Close quick chat', exact=True).click()
     expect(screen.locator('#display-title')).to_have_text(title)

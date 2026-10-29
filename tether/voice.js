@@ -17,14 +17,14 @@
     mic.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>';
     cancel.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
     cancel.title='Discard this dictation';cancel.setAttribute('aria-label','Cancel voice input');
-    const send=document.querySelector('#send');send.before(mic,cancel);form.append(status);
+    const send=document.querySelector('#send');(send.closest('.composer-actions')||send).before(mic,cancel);form.append(status);
     let phase='idle',recognizer=null,session=null,generation=0,original='',acceptResults=false,settingInput=false,timer;
     const say=text=>{status.textContent=text};
     function refresh(){
       const active=phase!=='idle';mic.classList.toggle('listening',phase==='listening');
       mic.setAttribute('aria-pressed',String(active));mic.setAttribute('aria-busy',String(phase==='starting'||phase==='stopping'));
       mic.title=active?'Stop voice input':'Start voice input';mic.setAttribute('aria-label',mic.title);
-      cancel.hidden=!active;send.disabled=active;
+      cancel.hidden=!active;send.disabled=active;window.dispatchEvent(new Event('tether:composer-controls'));
     }
     function writeDraft(text){settingInput=true;input.value=text;input.dispatchEvent(new Event('input',{bubbles:true}));settingInput=false}
     function transcript(text){if(!acceptResults)return;writeDraft(original+(original&&text&&!/\s$/.test(original)?' ':'')+text)}
