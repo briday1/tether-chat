@@ -18,7 +18,7 @@ def serve_fixture():
     from tether import ai,store
     from tether.app import app
     import uvicorn
-    def fake(message,progress=None,history=None,task_context=None):
+    def fake(message,progress=None,history=None,task_context=None,action_context=None):
         if message=='Complete an Attention action before a simulated failure':
             task=next(task for task in store.list_threads() if task['title']=='Partial failure fixture')
             action=next(action for action in store.get(task['id'])['entries'] if action['kind']=='action')

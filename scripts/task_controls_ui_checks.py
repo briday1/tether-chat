@@ -65,14 +65,28 @@ def check_task_controls(page, screen):
 
     # Tomorrow pauses every attention reason for this task, including overdue
     # deadlines and child actions, while the actual deadlines stay visible.
+    # Read it in the legacy shape (future reminder without snoozed_until), which
+    # the task engine already understands. The list must use the same schedule.
+    screen.locator('body').evaluate('''(_,id)=>{
+      const original=window.fetch;window.restoreTaskControlFetch=()=>{window.fetch=original};
+      window.fetch=async(input,init={})=>{
+        const response=await original(input,init),path=new URL(typeof input==='string'?input:input.url,location.href).pathname;
+        if((init.method||'GET')!=='GET'||!response.ok||!(/\\/api\\/board$/.test(path)||path.endsWith('/api/threads/'+id)))return response;
+        const data=await response.json(),legacy=task=>{if(task.id===id)delete task.snoozed_until};
+        if(Array.isArray(data)){for(const group of data)for(const task of group.threads)legacy(task)}else legacy(data);
+        return new Response(JSON.stringify(data),{status:response.status,headers:response.headers});
+      };
+    }''', task['id'])
     screen.get_by_role('button', name='Bring '+task['title']+' to attention tomorrow', exact=True).click()
     expect(row.locator('.task-row-state')).to_have_text('Later')
     expect(screen.locator('.task-deadline')).to_contain_text('2020')
+    expect(screen.locator('.category-row').filter(has_text='Task controls').locator('.category-flag')).to_have_count(0)
     data = api('threads/'+task['id'])
-    assert data['due_at'] == '2020-01-01' and data['snoozed_until'] == data['revisit_at']
+    assert data['due_at'] == '2020-01-01' and data['revisit_at'] and 'snoozed_until' not in data
     assert not any(item['task_id'] == task['id'] for item in api('attention')['items'])
     screen.get_by_role('button', name='Resume attention for '+task['title'], exact=True).click()
     expect(screen.get_by_role('button', name='Resume attention for '+task['title'], exact=True)).to_have_count(0)
+    screen.locator('body').evaluate('()=>window.restoreTaskControlFetch()')
     assert not api('threads/'+task['id'])['snoozed_until']
 
     # The same control on an action leaves the parent and its siblings intact.

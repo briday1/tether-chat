@@ -59,7 +59,8 @@ function error(e){$('#error').textContent=e.message||String(e)}
 let selectedCategory=null,selectedTask=null,pendingAction=null,groupCache=[],showArchived=false,archivedCache=[],editingCategories=[];
 const pendingChanges=new Set();
 function dateLabel(value){return new Date(/^\d{4}-\d\d-\d\d$/.test(value)?value+'T12:00:00':value).toLocaleDateString()}
-function attentionPaused(item){return !!item.snoozed_until&&new Date(item.snoozed_until)>new Date()}
+const attentionTime=item=>item.snoozed_until||item.revisit_at;
+function attentionPaused(item){const when=attentionTime(item);return !!when&&new Date(when)>new Date()}
 function notice(message,undo){
  const target=$('#task-status');target.replaceChildren(el('span','',message));
  if(undo){const button=el('button','secondary small-button','Undo');button.type='button';button.onclick=async()=>{button.disabled=true;try{await undo();target.replaceChildren(el('span','','Change undone.'))}catch(err){error(err);button.disabled=false}};target.append(button)}
@@ -96,7 +97,7 @@ async function completeActionFromList(task,action,input){
 function attentionControls(task,action=null){
  const item=action||task,controls=el('div','attention-controls'),paused=attentionPaused(task)||attentionPaused(item);
  if(task.archived_at||task.state==='settled'||action?.done)return controls;
- const when=attentionPaused(task)?task.snoozed_until:item.snoozed_until;
+ const when=attentionPaused(task)?attentionTime(task):attentionTime(item);
  if(paused)controls.append(el('p','hint',(action&&attentionPaused(task)?'Task attention':'Attention')+' paused until '+new Date(when).toLocaleString()+'.'));
  const buttons=el('div','attention-control-buttons');buttons.append(el('span','muted','Attention:'));
  for(const [title,when] of [['Tomorrow','tomorrow'],...(paused?[['Resume now',null]]:[])]){
@@ -105,7 +106,7 @@ function attentionControls(task,action=null){
   const button=el('button','secondary small-button',when===null&&action&&target===task?'Resume task':title);button.type='button';button.setAttribute('aria-label',(when?'Bring '+(action?.body||task.title)+' to attention tomorrow':'Resume attention for '+(target===task?task.title:action.body)));
   button.onclick=async()=>{const key='defer:'+target.id;if(pendingChanges.has(key))return;pendingChanges.add(key);for(const control of buttons.querySelectorAll('button'))control.disabled=true;$('#error').textContent='';try{
    const result=await api('/'+kind+'/'+encodeURIComponent(target.id)+'/defer','POST',{when});
-   notice(when?'Attention moved to '+new Date(result.snoozed_until||result.revisit_at).toLocaleString()+'.'+(action&&attentionPaused(task)?' The task stays paused until '+new Date(task.snoozed_until).toLocaleString()+'.':''):'Attention resumed.');
+   notice(when?'Attention moved to '+new Date(attentionTime(result)).toLocaleString()+'.'+(action&&attentionPaused(task)?' The task stays paused until '+new Date(attentionTime(task)).toLocaleString()+'.':''):'Attention resumed.');
    if(action)closeActionDetails();await load();
   }catch(err){error(err)}finally{pendingChanges.delete(key);for(const control of buttons.querySelectorAll('button'))control.disabled=false}};
   buttons.append(button);
@@ -132,9 +133,9 @@ function taskCard(t,showCategory=false){
  heading.append(completionCheck(label,checked,pendingChanges.has('task:'+t.id)||!!t.recurrence&&(!t.next_occurrence||t.state==='settled'||!!t.archived_at)||!!t.archived_at&&!checked,input=>completeFromList(t,input)),title);card.append(heading);
  const categories=el('span','task-row-category');for(const name of taskCategories(t))categories.append(categoryTag(name));card.append(categories);
  const paused=attentionPaused(t),status=t.archived_at?'Archived':paused?'Later':t.due?'Attention':({open:'Active',waiting:'Waiting',paused:'Paused',settled:'Finished'}[t.state]||t.state);
- const state=el('span','task-row-state'+(t.due&&!paused?' due':''),status);if(paused)state.title='Attention paused until '+new Date(t.snoozed_until).toLocaleString();card.append(state);
+ const state=el('span','task-row-state'+(t.due&&!paused?' due':''),status);if(paused)state.title='Attention paused until '+new Date(attentionTime(t)).toLocaleString();card.append(state);
  card.append(el('span','task-row-repeat',t.recurrence?'↻ '+t.recurrence:''));
- card.append(el('span','task-row-date',t.due_at?'Due '+dateLabel(t.due_at):paused?'Attention '+dateLabel(t.snoozed_until):t.next_occurrence?'Next '+dateLabel(t.next_occurrence):t.revisit_at?'Attention '+dateLabel(t.revisit_at):''));
+ card.append(el('span','task-row-date',t.due_at?'Due '+dateLabel(t.due_at):paused?'Attention '+dateLabel(attentionTime(t)):t.next_occurrence?'Next '+dateLabel(t.next_occurrence):t.revisit_at?'Attention '+dateLabel(t.revisit_at):''));
  card.onclick=()=>{selectedTask=t.id;drawBoard()};if(selectedTask===t.id)card.classList.add('selected');
  return card;
 }
@@ -201,7 +202,7 @@ function drawBoard(){
     const row=el('article','action-list-row');row.dataset.actionId=a.id;
     const detailButton=el('button','action-row-open');detailButton.type='button';detailButton.append(el('span','action-row-title',a.body));
     row.append(completionCheck((a.done?'Reopen action ':'Complete action ')+a.body,!!a.done,pendingChanges.has('action:'+a.id)||!!t.archived_at,input=>completeActionFromList(t,a,input)),detailButton);row.classList.toggle('completed',!!a.done);
-    const reminder=attentionPaused(t)?t.snoozed_until:attentionPaused(a)?a.snoozed_until:a.revisit_at;
+    const reminder=attentionPaused(t)?attentionTime(t):attentionPaused(a)?attentionTime(a):a.revisit_at;
     const detail=[a.due_at?'Due '+dateLabel(a.due_at):'',reminder?(attentionPaused(t)||attentionPaused(a)?'Attention paused until ':'Attention ')+dateLabel(reminder):''].filter(Boolean).join(' · ');
     if(detail)detailButton.append(el('small','',detail));
     row.onclick=()=>openActionDetails(t,a);
