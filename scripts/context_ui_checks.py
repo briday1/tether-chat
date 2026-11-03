@@ -4,6 +4,12 @@ from pathlib import Path
 
 
 def check_task_context(page, ui, title):
+    # Earlier Attention checks retain their selection. This scenario starts
+    # with one fresh task context, using the same dismissal as a user.
+    ui.get_by_role('link',name='Conversation',exact=True).click()
+    expect(ui.locator('.chat-task-context')).to_have_count(1)
+    while ui.locator('.chat-context-chip button').count():
+        ui.locator('.chat-context-chip button').first.click()
     ui.get_by_role('link',name='Tasks',exact=True).click()
     ui.locator('.task-row').filter(has_text=title).click()
     context=ui.get_by_role('button',name='Use as chat context',exact=True)
