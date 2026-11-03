@@ -35,8 +35,9 @@ CREATE TABLE IF NOT EXISTS assistant_context(id INTEGER PRIMARY KEY CHECK(id=1),
         from .decisions import DEFAULT_PREFERENCES
         c.execute('INSERT OR IGNORE INTO user_preferences(id,value) VALUES(1,?)',(json.dumps(DEFAULT_PREFERENCES),))
         entry_columns={row[1] for row in c.execute("PRAGMA table_info(entries)")}
-        for name in ("due_at","revisit_at","notified_for"):
+        for name in ("due_at","revisit_at","notified_for","snoozed_until"):
             if name not in entry_columns:c.execute(f"ALTER TABLE entries ADD COLUMN {name} TEXT")
+        if "completed_by_task" not in entry_columns:c.execute("ALTER TABLE entries ADD COLUMN completed_by_task INTEGER NOT NULL DEFAULT 0")
         columns={row[1] for row in c.execute("PRAGMA table_info(threads)") }
         if "category" not in columns:c.execute("ALTER TABLE threads ADD COLUMN category TEXT NOT NULL DEFAULT 'Unsorted'")
         if "notified_for" not in columns:c.execute("ALTER TABLE threads ADD COLUMN notified_for TEXT")
@@ -50,12 +51,109 @@ CREATE TABLE IF NOT EXISTS assistant_context(id INTEGER PRIMARY KEY CHECK(id=1),
         if "recurring_notified_for" not in columns:c.execute("ALTER TABLE threads ADD COLUMN recurring_notified_for TEXT")
         if "action_prompt" not in columns:c.execute("ALTER TABLE threads ADD COLUMN action_prompt TEXT")
         if "archived_at" not in columns:c.execute("ALTER TABLE threads ADD COLUMN archived_at TEXT")
+        for name in ("snoozed_until", "deferred_occurrence"):
+            if name not in columns:c.execute(f"ALTER TABLE threads ADD COLUMN {name} TEXT")
         # Existing single-category records migrate once; subsequent starts preserve memberships.
         c.execute("""INSERT INTO thread_categories(thread_id,name,position)
                      SELECT id,category,0 FROM threads t
                      WHERE NOT EXISTS(SELECT 1 FROM thread_categories tc WHERE tc.thread_id=t.id)""")
+        _auto_archive(c, now())
 def query(sql,args=()):
     with conn() as c: return [dict(r) for r in c.execute(sql,args)]
+
+def is_snoozed(record, at=None):
+    """Future attention suppresses every nudge, without changing a real deadline.
+
+    The reminder fallback also respects older/imported records created before the
+    explicit snooze field existed. Invalid legacy dates must not hide work forever.
+    """
+    stamp = record.get('snoozed_until') or record.get('revisit_at')
+    if not stamp:return False
+    try:recurrence_rules.parse(stamp)
+    except (ValueError, TypeError):return False
+    return not recurrence_rules.is_due(stamp, at or now())
+
+def _attention_time(value):
+    if value is None:return None
+    try:
+        _, date_only = recurrence_rules.parse(value)
+        if date_only:raise ValueError()
+    except (ValueError, TypeError):
+        raise ValueError('Bring to attention needs a timezone-aware ISO datetime') from None
+    return value
+
+def _snooze_for(value, at):
+    return value if value and not recurrence_rules.is_due(value, at) else None
+
+def _auto_archive(connection, stamp, task_id=None):
+    """Archive only completed one-off work, retaining every dependent record."""
+    rows = connection.execute("""SELECT t.id FROM threads t
+        WHERE t.state='settled' AND t.archived_at IS NULL AND t.recurrence IS NULL
+        AND NOT EXISTS(SELECT 1 FROM entries e WHERE e.thread_id=t.id AND e.kind='action' AND e.done=0)
+        """ + (" AND t.id=?" if task_id else ""), (task_id,) if task_id else ()).fetchall()
+    ids = [row['id'] for row in rows]
+    connection.executemany('UPDATE threads SET archived_at=?,updated_at=? WHERE id=?',
+                           [(stamp, stamp, ident) for ident in ids])
+    return {'archived': len(ids), 'task_ids': ids}
+
+def auto_archive():
+    with conn() as c:
+        c.execute('BEGIN IMMEDIATE')
+        return _auto_archive(c, now())
+
+def _undo_task_completion(connection, task_id):
+    # A task checkbox records which child actions it completed. Undo must not
+    # reopen actions the user had already finished independently.
+    connection.execute("UPDATE entries SET done=0,completed_by_task=0 WHERE thread_id=? AND kind='action' AND completed_by_task=1", (task_id,))
+
+def complete_task(thread_id, done=True):
+    """Finish a whole one-off task atomically, or undo its bulk completion."""
+    if not isinstance(done, bool):raise ValueError('Completion must be true or false')
+    stamp = now()
+    with conn() as c:
+        c.execute('BEGIN IMMEDIATE')
+        task = c.execute('SELECT * FROM threads WHERE id=?', (thread_id,)).fetchone()
+        if not task:return None
+        if done:
+            if task['recurrence']:raise ValueError('Complete the current recurring occurrence instead of the whole task')
+            c.execute("UPDATE entries SET done=1,completed_by_task=1 WHERE thread_id=? AND kind='action' AND done=0", (thread_id,))
+            c.execute("UPDATE threads SET state='settled',updated_at=? WHERE id=?", (stamp, thread_id))
+            _auto_archive(c, stamp, thread_id)
+        else:
+            _undo_task_completion(c, thread_id)
+            c.execute("UPDATE threads SET state='open',archived_at=NULL,updated_at=? WHERE id=?", (stamp, thread_id))
+    return get(thread_id)
+
+def _defer_time(when, stamp):
+    # Null is an explicit resume operation, not an indefinite hidden state.
+    if when is None:return stamp
+    _attention_time(when)
+    if recurrence_rules.is_due(when, stamp):raise ValueError('Choose a future Bring to attention time')
+    return when
+
+def defer_task(thread_id, when):
+    """Postpone this task and its child nudges; preserve deadlines and cadence."""
+    stamp = now(); when = _defer_time(when, stamp)
+    with conn() as c:
+        c.execute('BEGIN IMMEDIATE')
+        row = c.execute('SELECT * FROM threads WHERE id=?', (thread_id,)).fetchone()
+        if not row:return None
+        if row['archived_at'] or row['state']=='settled':raise ValueError('Reopen this task before changing its attention time')
+        c.execute('UPDATE threads SET revisit_at=?,snoozed_until=?,deferred_occurrence=?,notified_for=NULL,updated_at=? WHERE id=?',
+                  (when, _snooze_for(when, stamp), row['next_occurrence'] if row['recurrence'] else None, stamp, thread_id))
+    return get(thread_id)
+
+def defer_action(action_id, when):
+    """Postpone one action only; unrelated sibling and parent schedules survive."""
+    stamp = now(); when = _defer_time(when, stamp)
+    with conn() as c:
+        c.execute('BEGIN IMMEDIATE')
+        row = c.execute("SELECT e.*,t.state,t.archived_at FROM entries e JOIN threads t ON t.id=e.thread_id WHERE e.id=? AND e.kind='action'", (action_id,)).fetchone()
+        if not row:return None
+        if row['done'] or row['archived_at'] or row['state']=='settled':raise ValueError('Reopen this action before changing its attention time')
+        c.execute('UPDATE entries SET revisit_at=?,snoozed_until=?,notified_for=NULL WHERE id=?', (when, _snooze_for(when, stamp), action_id))
+        c.execute('UPDATE threads SET updated_at=? WHERE id=?', (stamp, row['thread_id']))
+        return dict(c.execute('SELECT * FROM entries WHERE id=?', (action_id,)).fetchone())
 def normalize_categories(names):
     if not isinstance(names,list) or len(names)>20:raise ValueError("Use a list of at most 20 categories")
     result=[];seen=set()
@@ -87,11 +185,14 @@ def get(id):
     t["related"]=query("SELECT t.id,t.title FROM relations r JOIN threads t ON t.id=CASE WHEN r.a=? THEN r.b ELSE r.a END WHERE r.a=? OR r.b=?",(id,id,id))
     return t
 def list_threads(q=""):
+    auto_archive()
     rows=with_categories(query("SELECT t.*,(SELECT COUNT(*) FROM entries e WHERE e.thread_id=t.id) entry_count FROM threads t WHERE title LIKE ? OR summary LIKE ? OR EXISTS(SELECT 1 FROM entries e WHERE e.thread_id=t.id AND e.body LIKE ?) OR EXISTS(SELECT 1 FROM thread_categories tc WHERE tc.thread_id=t.id AND tc.name LIKE ?) OR EXISTS(SELECT 1 FROM action_notes n JOIN entries e ON e.id=n.action_id WHERE e.thread_id=t.id AND n.body LIKE ?) ORDER BY updated_at DESC",("%"+q+"%",)*5))
     for t in rows:
-        t["attention_due"]=bool(t["revisit_at"] and recurrence_rules.is_due(t["revisit_at"],now()) and t["state"]!="settled" and not t.get("archived_at"))
-        t["deadline_due"]=bool(t.get("due_at") and recurrence_rules.deadline_due(t["due_at"],now()) and t["state"]!="settled")
-        t["recurring_due"]=bool(t.get("recurrence") and t.get("next_occurrence") and recurrence_rules.is_due(t["next_occurrence"],now()) and (not t.get("revisit_at") or recurrence_rules.is_due(t["revisit_at"],now())) and t["state"]!="settled" and not t.get("archived_at"))
+        active = t["state"]!="settled" and not t.get("archived_at")
+        t["snoozed"] = is_snoozed(t)
+        t["attention_due"]=bool(active and not t['snoozed'] and t["revisit_at"] and recurrence_rules.is_due(t["revisit_at"],now()))
+        t["deadline_due"]=bool(active and t.get("due_at") and recurrence_rules.deadline_due(t["due_at"],now()))
+        t["recurring_due"]=bool(active and not t['snoozed'] and t.get("recurrence") and t.get("next_occurrence") and recurrence_rules.is_due(t["next_occurrence"],now()))
         t["due"]=t["attention_due"] or (t["recurring_due"] and not t.get("revisit_at"))
     for t in rows:t["action_config"]=json.loads(t["action_config"] or "{}")
     return sorted(rows,key=lambda t:not t["due"])
@@ -159,15 +260,15 @@ def capture(title,summary='',categories=None,remind_at=None,existing_id=None):
         if existing:
             current=[r['name'] for r in c.execute('SELECT name FROM thread_categories WHERE thread_id=? ORDER BY position',(id,))]
             if any(name.casefold()!='unsorted' for name in current):names=current
-            c.execute('UPDATE threads SET summary=?,revisit_at=?,notified_for=?,category=?,updated_at=? WHERE id=?',
-              (existing['summary'] or summary,reminder or existing['revisit_at'],None if reminder else existing['notified_for'],names[0],stamp,id))
-        else:c.execute('INSERT INTO threads(id,title,summary,category,revisit_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',(id,title.strip(),summary,names[0],reminder,stamp,stamp))
+            c.execute('UPDATE threads SET summary=?,revisit_at=?,snoozed_until=?,deferred_occurrence=?,notified_for=?,category=?,updated_at=? WHERE id=?',
+              (existing['summary'] or summary,reminder or existing['revisit_at'],_snooze_for(reminder,stamp) if reminder else existing['snoozed_until'],None if reminder else existing['deferred_occurrence'],None if reminder else existing['notified_for'],names[0],stamp,id))
+        else:c.execute('INSERT INTO threads(id,title,summary,category,revisit_at,snoozed_until,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',(id,title.strip(),summary,names[0],reminder,_snooze_for(reminder,stamp),stamp,stamp))
         c.execute('DELETE FROM thread_categories WHERE thread_id=?',(id,))
         c.executemany('INSERT INTO thread_categories(thread_id,name,position) VALUES(?,?,?)',[(id,name,i) for i,name in enumerate(names)])
         c.execute('INSERT OR REPLACE INTO assistant_context(id,task_id) VALUES(1,?)',(id,))
     return {**get(id),'reused':existing is not None}
 def update(id,fields):
-    allowed={"archived_at","title","summary","state","revisit_at","due_at","category","categories","recurrence","next_occurrence","recurrence_end","recurrence_anchor","recurrence_timezone","due_action","action_config","action_prompt"}
+    allowed={"archived_at","title","summary","state","revisit_at","snoozed_until","due_at","category","categories","recurrence","next_occurrence","recurrence_end","recurrence_anchor","recurrence_timezone","due_action","action_config","action_prompt"}
     fields={k:v for k,v in fields.items() if k in allowed}
     names=None
     if "categories" in fields:
@@ -192,6 +293,11 @@ def update(id,fields):
         elif combined.get('next_occurrence') and recurrence_rules.ended(combined['next_occurrence'], combined.get('recurrence_end'), combined.get('recurrence_timezone')):
             raise ValueError('Repeat end cannot be before the next occurrence')
         if schedule_changed:fields['recurring_notified_for'] = None
+        if schedule_changed and previous.get('deferred_occurrence'):
+            # Replacing a repeating schedule cannot retain a nudge attached to
+            # the removed cycle. An explicit new reminder remains independent.
+            if 'revisit_at' not in fields:fields['revisit_at'] = None
+            fields['deferred_occurrence'] = None
     if "action_prompt" in fields and fields["action_prompt"] is not None and (not isinstance(fields["action_prompt"],str) or len(fields["action_prompt"])>1000):raise ValueError("Action description too long")
     if "due_action" in fields and fields["due_action"] not in (None,"activity_report"):raise ValueError("Invalid due action")
     if "action_config" in fields:
@@ -204,14 +310,28 @@ def update(id,fields):
     if "category" in fields and (not isinstance(fields["category"],str) or not fields["category"].strip() or len(fields["category"])>80):raise ValueError("Invalid category")
     if "state" in fields and fields["state"] not in {"open","waiting","paused","settled"}:raise ValueError("Invalid state")
     if "title" in fields and not fields["title"].strip():raise ValueError("Title required")
+    for key in ('revisit_at', 'snoozed_until'):
+        if key in fields:_attention_time(fields[key])
     if fields:
-        if "revisit_at" in fields:fields["notified_for"]=None
-        fields["updated_at"]=now()
+        stamp = now()
+        if "revisit_at" in fields:
+            fields['notified_for']=None
+            fields['snoozed_until']=_snooze_for(fields['revisit_at'],stamp)
+            fields['deferred_occurrence']=None
+        fields["updated_at"]=stamp
         with conn() as c:
+            c.execute('BEGIN IMMEDIATE')
+            current = c.execute('SELECT state,archived_at FROM threads WHERE id=?', (id,)).fetchone()
+            reopening = bool(current and (('state' in fields and fields['state']!='settled' and current['state']=='settled') or ('archived_at' in fields and fields['archived_at'] is None and current['state']=='settled')))
+            if reopening:
+                fields['state']=fields.get('state') if fields.get('state') in ('open','waiting','paused') else 'open'
+                fields['archived_at']=None
+                _undo_task_completion(c,id)
             changed=c.execute("UPDATE threads SET "+",".join(k+"=?" for k in fields)+" WHERE id=?",(*fields.values(),id)).rowcount
             if changed and names is not None:
                 c.execute("DELETE FROM thread_categories WHERE thread_id=?",(id,))
                 c.executemany("INSERT INTO thread_categories(thread_id,name,position) VALUES(?,?,?)",[(id,name,i) for i,name in enumerate(names)])
+            if changed:_auto_archive(c,stamp,id)
     return get(id)
 def set_categories(id,categories,mode="replace"):
     """Replace, add, or remove memberships without creating duplicate task records."""
@@ -242,23 +362,38 @@ def add(id,kind,body):
     return query("SELECT * FROM entries WHERE id=?",(eid,))[0]
 def update_action(id,fields):
     """Update an individual action's dates or completion without changing its parent task."""
-    allowed={"due_at","revisit_at","done"}
+    allowed={"body","due_at","revisit_at","snoozed_until","done"}
     fields={k:v for k,v in fields.items() if k in allowed}
     if not fields:raise ValueError("No action fields")
-    for key in ("due_at","revisit_at"):
+    if 'body' in fields:
+        if not isinstance(fields['body'],str) or not fields['body'].strip() or len(fields['body'])>20000:raise ValueError('Action text must contain 1 to 20000 characters')
+        fields['body']=fields['body'].strip()
+    for key in ("due_at","revisit_at","snoozed_until"):
         if key in fields and fields[key] is not None:
             stamp=fields[key]
             try:
                 dt,date_only=recurrence_rules.parse(stamp)
                 if date_only and key!="due_at":raise ValueError()
             except (ValueError,AttributeError):raise ValueError("Action date needs a timezone-aware ISO datetime")
-    if "done" in fields:fields["done"]=int(bool(fields["done"]))
-    if "revisit_at" in fields:fields["notified_for"]=None
+    if "done" in fields:
+        if not isinstance(fields['done'],bool):raise ValueError('Completion must be true or false')
+        fields["done"]=int(fields["done"])
+        fields['completed_by_task']=0
+    stamp=now()
+    if "revisit_at" in fields:
+        fields["notified_for"]=None
+        fields['snoozed_until']=_snooze_for(fields['revisit_at'],stamp)
     with conn() as c:
+        c.execute('BEGIN IMMEDIATE')
         row=c.execute("SELECT thread_id FROM entries WHERE id=? AND kind='action'",(id,)).fetchone()
         if not row:return None
         c.execute("UPDATE entries SET "+",".join(k+"=?" for k in fields)+" WHERE id=?",(*fields.values(),id))
-        c.execute("UPDATE threads SET updated_at=? WHERE id=?",(now(),row["thread_id"]))
+        c.execute("UPDATE threads SET updated_at=? WHERE id=?",(stamp,row["thread_id"]))
+        if fields.get('done')==0:
+            # Reopening one action must make it reachable, without undoing any
+            # siblings that were completed by the task checkbox.
+            c.execute("UPDATE threads SET state='open',archived_at=NULL WHERE id=? AND state='settled'", (row['thread_id'],))
+        _auto_archive(c,stamp,row['thread_id'])
     return query("SELECT * FROM entries WHERE id=?",(id,))[0]
 
 def find_action(task_id,text):
@@ -267,9 +402,7 @@ def find_action(task_id,text):
     return None
 
 def toggle(id,done):
-    with conn() as c:c.execute("UPDATE entries SET done=? WHERE id=? AND kind='action'",(int(done),id))
-    rows=query("SELECT * FROM entries WHERE id=?",(id,))
-    return rows[0] if rows else None
+    return update_action(id, {'done':done})
 def link(a,b):
     if a==b:raise ValueError("Self-link")
     if not get(a) or not get(b):return False
@@ -298,17 +431,21 @@ def board():
 def claim_notifications():
     """Claim one reminder for each due timestamp, including recurring tasks."""
     from datetime import timedelta
-    current=datetime.now(timezone.utc)
+    current=datetime.fromisoformat(now().replace('Z','+00:00'))
     claimed=[]
     with conn() as c:
+        c.execute('BEGIN IMMEDIATE')
+        _auto_archive(c, current.isoformat())
         rows=c.execute("""SELECT id,title,revisit_at,notified_for,recurrence,next_occurrence,
-                              recurring_notified_for,due_action
+                              recurring_notified_for,due_action,snoozed_until,deferred_occurrence
                           FROM threads WHERE state!='settled' AND archived_at IS NULL
                           AND (revisit_at IS NOT NULL OR (recurrence IS NOT NULL AND next_occurrence IS NOT NULL))""").fetchall()
         for row in rows:
             item=dict(row)
+            if is_snoozed(item,current.isoformat()):continue
             schedules=[("revisit_at","notified_for")]
-            if item["recurrence"] and (not item["revisit_at"] or recurrence_rules.is_due(item["revisit_at"],current.isoformat())):schedules.append(("next_occurrence","recurring_notified_for"))
+            deferred_cycle = item.get('deferred_occurrence') and recurrence_rules.equivalent(item['deferred_occurrence'], item['next_occurrence'])
+            if item["recurrence"] and not deferred_cycle and (not item["revisit_at"] or recurrence_rules.is_due(item["revisit_at"],current.isoformat())):schedules.append(("next_occurrence","recurring_notified_for"))
             for date_field,claim_field in schedules:
                 stamp=item[date_field]
                 if not stamp or item[claim_field]==stamp:continue
@@ -327,10 +464,12 @@ def claim_notifications():
                     except (ValueError,TypeError) as exc:notice["report_error"]=str(exc)
                 c.execute(f"UPDATE threads SET {claim_field}=? WHERE id=?",(stamp,item["id"]))
                 claimed.append(notice)
-        for row in c.execute("""SELECT e.id,e.thread_id,e.body,e.revisit_at,e.notified_for,t.title
+        for row in c.execute("""SELECT e.id,e.thread_id,e.body,e.revisit_at,e.notified_for,e.snoozed_until,t.title,
+                   t.snoozed_until AS parent_snoozed_until,t.revisit_at AS parent_revisit_at
             FROM entries e JOIN threads t ON t.id=e.thread_id
             WHERE e.kind='action' AND e.done=0 AND e.revisit_at IS NOT NULL
             AND t.archived_at IS NULL AND t.state!='settled'""").fetchall():
+            if is_snoozed(dict(row),current.isoformat()) or is_snoozed({'snoozed_until':row['parent_snoozed_until'],'revisit_at':row['parent_revisit_at']},current.isoformat()):continue
             stamp=row["revisit_at"]
             if stamp==row["notified_for"]:continue
             try:due=datetime.fromisoformat(stamp.replace("Z","+00:00"))
@@ -412,8 +551,7 @@ def advance_occurrence(value,frequency):
     return recurrence_rules.at(value, frequency, 1)
 
 def recurring_due():
-    return [t for t in list_threads() if t.get("recurrence") and t.get("next_occurrence")
-            and recurrence_rules.is_due(t["next_occurrence"],now()) and (not t.get("revisit_at") or recurrence_rules.is_due(t["revisit_at"],now())) and t["state"]!="settled" and not t.get("archived_at")]
+    return [t for t in list_threads() if t['recurring_due']]
 
 def complete_occurrence(thread_id,description="Completed recurring occurrence",occurrence_at=None):
     """Complete one identified cycle atomically; an unscoped retry never eats tomorrow."""
@@ -434,6 +572,8 @@ def complete_occurrence(thread_id,description="Completed recurring occurrence",o
             if not isinstance(description,str) or not description.strip():raise ValueError('Completion description required')
             next_date=recurrence_rules.next_after(t,stamp)
             c.execute("UPDATE threads SET next_occurrence=?,recurrence_anchor=COALESCE(recurrence_anchor,?),recurring_notified_for=NULL,updated_at=? WHERE id=?",(next_date,original,stamp,thread_id))
+            if t.get('deferred_occurrence') and recurrence_rules.equivalent(t['deferred_occurrence'], original):
+                c.execute('UPDATE threads SET revisit_at=NULL,snoozed_until=NULL,deferred_occurrence=NULL,notified_for=NULL WHERE id=?', (thread_id,))
             c.execute("INSERT INTO activity(id,thread_id,kind,body,occurred_at,recorded_at) VALUES(?,?,?,?,?,?)",(uuid4().hex,thread_id,'milestone',description,stamp,stamp))
             completion={'completed':True,'occurrence_at':original,'next_occurrence':next_date}
     return {**get(thread_id),'completion':completion}

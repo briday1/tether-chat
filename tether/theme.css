@@ -188,3 +188,23 @@ html::-webkit-scrollbar-thumb{border-color:var(--page)}
 .composer-actions .composer-button svg{pointer-events:none}
 
 .actions-section .task-context-button{margin-inline-start:6px}
+
+/* Completion is available in the lists, with dates kept in the detail panel. */
+.task-row-heading{display:flex;align-items:center;gap:6px;min-width:0}
+.completion-check{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;min-width:28px;min-height:28px;margin:0;cursor:pointer}
+.completion-check input[type=checkbox]{width:18px;height:18px;min-width:18px;margin:0;padding:0;cursor:pointer}
+.completion-check:has(input:disabled){cursor:default;opacity:.6}
+.task-row-open,.action-row-open{display:block;flex:1;min-width:0;padding:0;border:0;border-radius:3px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.task-row-open .task-row-title{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task-row-open:focus-visible,.action-row-open:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+#board .action-list-row{flex-direction:row;align-items:center;gap:6px}
+.action-row-open{display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}
+.action-list-row.completed .action-row-title{color:var(--muted);text-decoration:line-through}
+.task-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--text)}
+.task-status:not(:empty){padding:10px 0}
+.task-status .small-button,.attention-controls .small-button,.actions-section>.small-button,.action-drawer>.small-button{width:auto!important;min-height:28px;padding:4px 9px!important;font-size:12px!important;line-height:18px;border-radius:6px}
+.attention-controls{margin-top:12px}
+.attention-controls:empty{display:none}
+.attention-control-buttons{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#board .task-deadline{margin:12px 0 0}
+.action-drawer>.small-button{margin-top:14px}

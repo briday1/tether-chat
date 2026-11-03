@@ -8,6 +8,12 @@ export const now = () => new Date().toISOString();
 export const uid = () => crypto.randomUUID ? crypto.randomUUID().replaceAll('-', '')
   : Array.from(crypto.getRandomValues(new Uint8Array(16)),value=>value.toString(16).padStart(2,'0')).join('');
 export const copy = value => structuredClone(value);
+export function isSnoozed(record, at = now()) {
+  const value = record.snoozed_until || record.revisit_at;
+  // Older records have only revisit_at. Invalid old dates must not hide work.
+  return !!(value && Number.isFinite(Date.parse(value)) && !recurrenceDue({next_occurrence:value}, at));
+}
+const snoozeFor = (value, at) => value && !recurrenceDue({next_occurrence:value}, at) ? value : null;
 const states = ['open', 'waiting', 'paused', 'settled'];
 const kinds = ['thought', 'question', 'action', 'decision', 'update'];
 const activities = ['progress', 'feedback', 'decision', 'blocker', 'milestone', 'other'];
@@ -54,7 +60,7 @@ export class Database {
       request.onblocked = () => reject(new Problem('Close other tether tabs to finish updating storage'));
     });
     this.db.onversionchange = () => this.db.close();
-    await this.write(state => {state.preferences=preferences(state.preferences||{});return null});
+    await this.write(state => {state.preferences=preferences(state.preferences||{});new Model(state).autoArchive();return null});
     return this;
   }
   read(fn) { return this.transaction(fn, 'readonly'); }
@@ -67,6 +73,7 @@ export class Database {
         try {
           const state = request.result || emptyState();
           if (state.schema !== SCHEMA) throw new Problem('This data needs a newer version of tether');
+          if (mode === 'readwrite') new Model(state).autoArchive();
           result = fn(state);
           if (result && typeof result.then === 'function') throw new Error('Database callbacks must be synchronous');
           result = copy(result);
@@ -80,7 +87,57 @@ export class Database {
   }
 }
 export class Model {
-  constructor(state, clock = now) { this.s = state; this.clock = clock; }
+  constructor(state, clock = now, {maintenance = true} = {}) { this.s = state; this.clock = clock; this.maintenance = maintenance; }
+  isSnoozed(record) { return isSnoozed(record, this.clock()); }
+  autoArchive(id = null) {
+    const ids = [], stamp = this.clock();
+    if (this.maintenance) for (const task of this.s.tasks) {
+      if ((!id || id === task.id) && task.state === 'settled' && !task.recurrence && !task.archived_at &&
+          !this.s.entries.some(e => e.thread_id === task.id && e.kind === 'action' && !e.done)) {
+        task.archived_at = stamp; task.updated_at = stamp; ids.push(task.id);
+      }
+    }
+    return {archived:ids.length, task_ids:ids};
+  }
+  undoTaskCompletion(id) {
+    for (const entry of this.s.entries) if (entry.thread_id === id && entry.kind === 'action' && entry.completed_by_task) {
+      entry.done = false; entry.completed_by_task = false;
+    }
+  }
+  completeTask(id, done = true) {
+    if (typeof done !== 'boolean') throw new Problem('Completion must be true or false');
+    const task = this.task(id);
+    if (done) {
+      if (task.recurrence) throw new Problem('Complete the current recurring occurrence instead of the whole task');
+      for (const entry of this.s.entries) if (entry.thread_id === id && entry.kind === 'action' && !entry.done) {
+        entry.done = true; entry.completed_by_task = true;
+      }
+      task.state = 'settled'; this.touch(id); this.autoArchive(id);
+    } else {
+      this.undoTaskCompletion(id); task.state = 'open'; task.archived_at = null; this.touch(id);
+    }
+    return this.get(id);
+  }
+  deferTime(when) {
+    if (when === null) return this.clock();
+    if (typeof when !== 'string' || when.length === 10) throw new Problem('Bring to attention needs a timezone-aware ISO datetime');
+    const value = timestamp(when);
+    if (!value || recurrenceDue({next_occurrence:value}, this.clock())) throw new Problem('Choose a future Bring to attention time');
+    return value;
+  }
+  deferTask(id, when) {
+    const value = this.deferTime(when), task = this.task(id);
+    if (task.archived_at || task.state === 'settled') throw new Problem('Reopen this task before changing its attention time');
+    Object.assign(task, {revisit_at:value, snoozed_until:snoozeFor(value,this.clock()),
+      deferred_occurrence:task.recurrence ? task.next_occurrence : null, notified_for:null});
+    this.touch(id); return this.get(id);
+  }
+  deferAction(id, when) {
+    const value = this.deferTime(when), action = this.action(id), task = this.task(action.thread_id);
+    if (action.done || task.archived_at || task.state === 'settled') throw new Problem('Reopen this action before changing its attention time');
+    Object.assign(action, {revisit_at:value, snoozed_until:snoozeFor(value,this.clock()), notified_for:null});
+    this.touch(task.id); return action;
+  }
   preferences(){return preferences(this.s.preferences||{})}
   setPreferences(fields){try{this.s.preferences=preferences({...this.preferences(),...fields});return copy(this.s.preferences)}catch(error){throw new Problem(error.message)}}
   categoryNames(){return [...new Set(this.s.tasks.flatMap(t=>t.categories||[t.category||'Unsorted']))].filter(name=>name.toLowerCase()!=='unsorted').sort()}
@@ -134,6 +191,7 @@ export class Model {
     })};
   }
   list(query = '') {
+    this.autoArchive();
     const q = String(query).toLowerCase(), stamp = this.clock();
     return this.s.tasks.filter(t => {
       const entries = this.s.entries.filter(e => e.thread_id === t.id);
@@ -142,10 +200,11 @@ export class Model {
         .some(value => String(value).toLowerCase().includes(q));
     }).map(t => {
       const active = t.state !== 'settled' && !t.archived_at;
-      const attention_due = !!(active && t.revisit_at && recurrenceDue({next_occurrence:t.revisit_at},stamp));
-      const recurring_due = !!(active && t.recurrence && t.next_occurrence && recurrenceDue(t,stamp));
+      const snoozed = isSnoozed(t, stamp);
+      const attention_due = !!(active && !snoozed && t.revisit_at && recurrenceDue({next_occurrence:t.revisit_at},stamp));
+      const recurring_due = !!(active && !snoozed && t.recurrence && t.next_occurrence && recurrenceDue(t,stamp));
       return {...t, entry_count: this.s.entries.filter(e => e.thread_id === t.id).length,
-        attention_due, recurring_due, due: attention_due || (recurring_due && !t.revisit_at),
+        snoozed, attention_due, recurring_due, due: attention_due || (recurring_due && !t.revisit_at),
         deadline_due: !!(active && t.due_at && occurrenceDay(t.due_at) <= occurrenceDay(stamp))};
     }).sort((a,b) => Number(b.due) - Number(a.due) || b.updated_at.localeCompare(a.updated_at));
   }
@@ -154,7 +213,7 @@ export class Model {
     if (typeof summary !== 'string') throw new Problem('Details must be text');
     const cats = categories(names), stamp = this.clock(), id = uid();
     this.s.tasks.push({id, title, summary, state: 'open', categories: cats, category: cats[0],
-      revisit_at: null, due_at: null, recurrence: null, next_occurrence: null, recurrence_end:null, recurrence_anchor:null, recurrence_timezone:null, due_action: null,
+      revisit_at: null, snoozed_until:null, deferred_occurrence:null, due_at: null, recurrence: null, next_occurrence: null, recurrence_end:null, recurrence_anchor:null, recurrence_timezone:null, due_action: null,
       action_config: {}, action_prompt: null, archived_at: null, notified_for: null,
       recurring_notified_for: null, created_at: stamp, updated_at: stamp});
     return this.get(id);
@@ -169,10 +228,10 @@ export class Model {
         changes[key] = value || '';
       } else if (key === 'state') {
         if (!states.includes(value)) throw new Problem('Invalid task state'); changes.state = value;
-      } else if (['next_occurrence','recurrence_anchor'].includes(key)) {try{changes[key]=recurrenceValue(value)}catch(error){throw new Problem(error.message)}}
+      } else if (['next_occurrence','recurrence_anchor','deferred_occurrence'].includes(key)) {try{changes[key]=recurrenceValue(value)}catch(error){throw new Problem(error.message)}}
       else if(key==='recurrence_end'){try{changes[key]=value===null?null:calendarDate(value)}catch(error){throw new Problem(error.message)}}
       else if(key==='recurrence_timezone'){try{changes[key]=recurrenceZone(value)}catch(error){throw new Problem(error.message)}}
-      else if (['due_at', 'revisit_at', 'archived_at'].includes(key)) changes[key] = key==='due_at'&&typeof value==='string'&&value.length===10?calendarDate(value):timestamp(value);
+      else if (['due_at', 'revisit_at', 'snoozed_until', 'archived_at'].includes(key)) changes[key] = key==='due_at'&&typeof value==='string'&&value.length===10?calendarDate(value):timestamp(value);
       else if (key === 'recurrence') {
         if (value !== null && !frequencies.includes(value)) throw new Problem('Invalid recurrence'); changes[key] = value;
       } else if (key === 'due_action') {
@@ -189,14 +248,29 @@ export class Model {
     if ('categories' in fields || 'category' in fields) {
       changes.categories = categories(fields.categories ?? [fields.category]); changes.category = changes.categories[0];
     }
-    if ('revisit_at' in changes) changes.notified_for = null;
+    if ('revisit_at' in changes) {
+      changes.notified_for = null;
+      // Imported complete records may explicitly restore their lifecycle fields.
+      if (!('snoozed_until' in changes)) changes.snoozed_until = snoozeFor(changes.revisit_at,this.clock());
+      if (!('deferred_occurrence' in changes)) changes.deferred_occurrence = null;
+    }
     const sameOccurrence=(a,b)=>a===b||!!a&&!!b&&(a.length===10)===(b.length===10)&&Date.parse(a)===Date.parse(b);
     const scheduleChanged=['recurrence','next_occurrence','recurrence_timezone'].some(key=>key in changes&&(key==='next_occurrence'?!sameOccurrence(changes[key],task[key]):changes[key]!==task[key]));
+    if (this.maintenance && scheduleChanged && task.deferred_occurrence) {
+      if (!('revisit_at' in changes)) Object.assign(changes,{revisit_at:null,snoozed_until:null,notified_for:null});
+      changes.deferred_occurrence = null;
+    }
     if(scheduleChanged&&!('recurrence_anchor' in changes))changes.recurrence_anchor=changes.next_occurrence===undefined?task.next_occurrence:changes.next_occurrence;
     if('next_occurrence' in changes)changes.recurring_notified_for=null;
     if('recurrence' in changes&&!changes.recurrence)Object.assign(changes,{next_occurrence:null,recurrence_anchor:null,recurrence_end:null,recurrence_timezone:null});
     const updated={...task,...changes};if(updated.recurrence_end&&updated.next_occurrence&&updated.recurrence_end<scheduleDay(updated.next_occurrence,updated.recurrence_timezone))throw new Problem('Repeat end cannot be before the next occurrence');
-    Object.assign(task, changes, {updated_at: this.clock()}); return this.get(id);
+    const reopening = this.maintenance && task.state === 'settled' &&
+      (('state' in changes && changes.state !== 'settled') || ('archived_at' in changes && changes.archived_at === null));
+    if (reopening) {
+      this.undoTaskCompletion(id);
+      changes.state = ['open','waiting','paused'].includes(changes.state) ? changes.state : 'open'; changes.archived_at = null;
+    }
+    Object.assign(task, changes, {updated_at: this.clock()}); this.autoArchive(id); return this.get(id);
   }
   setCategories(id, names, mode = 'replace') {
     const task = this.task(id), incoming = names.length ? categories(names) : [];
@@ -209,17 +283,23 @@ export class Model {
     this.task(id);
     if (!kinds.includes(kind)) throw new Problem('Invalid entry type');
     const entry = {id: uid(), thread_id: id, kind, body: required(body, 'Entry'), done: false,
-      due_at: null, revisit_at: null, notified_for: null, created_at: this.clock()};
+      due_at: null, revisit_at: null, snoozed_until:null, completed_by_task:false, notified_for: null, created_at: this.clock()};
     this.s.entries.push(entry); this.touch(id); return entry;
   }
   updateAction(id, fields) {
     const action = this.action(id), changes = {};
+    if ('body' in fields) changes.body = required(fields.body, 'Action text');
     if ('done' in fields) {
-      if (typeof fields.done !== 'boolean') throw new Problem('Completion must be true or false'); changes.done = fields.done;
+      if (typeof fields.done !== 'boolean') throw new Problem('Completion must be true or false'); changes.done = fields.done; changes.completed_by_task = false;
     }
-    for (const key of ['due_at','revisit_at']) if (key in fields) changes[key] = key==='due_at'&&typeof fields[key]==='string'&&fields[key].length===10?calendarDate(fields[key]):timestamp(fields[key]);
-    if ('revisit_at' in changes) changes.notified_for = null;
-    Object.assign(action, changes); this.touch(action.thread_id); return action;
+    for (const key of ['due_at','revisit_at','snoozed_until']) if (key in fields) changes[key] = key==='due_at'&&typeof fields[key]==='string'&&fields[key].length===10?calendarDate(fields[key]):timestamp(fields[key]);
+    if ('revisit_at' in changes) {changes.notified_for = null;if (!('snoozed_until' in changes)) changes.snoozed_until = snoozeFor(changes.revisit_at,this.clock());}
+    Object.assign(action, changes); this.touch(action.thread_id);
+    if (this.maintenance && changes.done === false) {
+      const task = this.task(action.thread_id);
+      if (task.state === 'settled') {task.state = 'open'; task.archived_at = null;}
+    }
+    this.autoArchive(action.thread_id); return action;
   }
   notes(id) { this.action(id); return this.s.notes.filter(n => n.action_id === id); }
   addNote(id, body, noteId = uid()) {
@@ -308,15 +388,17 @@ export class Model {
     if(reason)return {...this.get(id),completion:{completed:false,occurrence_at:occurrenceAt,reason}};
     description=required(description,'Completion description',10000);
     let next;try{next=nextOccurrence(task,stamp)}catch(error){throw new Problem(error.message)}
-    this.update(id, {next_occurrence: next,recurrence_anchor:task.recurrence_anchor||original}); this.record(id, description, 'milestone');
+    const deferred = task.deferred_occurrence && same(task.deferred_occurrence, original);
+    this.update(id, {next_occurrence: next,recurrence_anchor:task.recurrence_anchor||original,
+      ...(deferred ? {revisit_at:null,snoozed_until:null,deferred_occurrence:null} : {})}); this.record(id, description, 'milestone');
     return {...this.get(id),completion:{completed:true,occurrence_at:original,next_occurrence:next}};
   }
   attention() {
-    const active = this.list().filter(t => !t.archived_at && t.state !== 'settled'), lookup = new Map(active.map(t => [t.id,t]));
+    const active = this.list().filter(t => !t.archived_at && t.state !== 'settled' && !this.isSnoozed(t)), lookup = new Map(active.map(t => [t.id,t]));
     const due = value => !!(value && recurrenceDue({next_occurrence:value}, this.clock())), items = [];
     for (const a of this.s.entries.filter(e => e.kind === 'action' && !e.done)) {
       const task = lookup.get(a.thread_id);
-      if (task && (due(a.revisit_at) || due(a.due_at))) items.push({id:a.id, task_id:task.id, action_id:a.id,
+      if (task && !this.isSnoozed(a) && (due(a.revisit_at) || due(a.due_at))) items.push({id:a.id, task_id:task.id, action_id:a.id,
         title:a.body, task_title:task.title, reason:due(a.revisit_at) ? 'Scheduled attention' : 'Action due'});
     }
     for (const t of active.filter(t => t.due || t.deadline_due)) items.push({id:t.id,task_id:t.id,action_id:null,title:t.title,reason:t.attention_due?'Scheduled attention':t.deadline_due?'Task due':'Recurring occurrence'});
@@ -375,6 +457,10 @@ export class Model {
       case 'update_action_note': return this.editNote(args.action_id, args.note_id, args.text);
       case 'delete_action_note': return this.deleteNote(args.action_id, args.note_id);
       case 'update_action': {const fields={...args};if(fields.revisit_at)try{fields.revisit_at=resolveReminder(fields.revisit_at,this.preferences(),new Date(this.clock()))}catch(error){throw new Problem(error.message)}return this.updateAction(args.action_id, fields)}
+      case 'update_task': return this.update(args.id,Object.fromEntries(['title','summary'].filter(key=>key in args).map(key=>[key,args[key]])));
+      case 'complete_task': return this.completeTask(args.id, args.done === undefined ? true : args.done);
+      case 'defer_task':
+      case 'defer_action': {let when;try{when=args.when===null?null:resolveReminder(args.when,this.preferences(),new Date(this.clock()))}catch(error){throw new Problem(error.message)}return name==='defer_task'?this.deferTask(args.id,when):this.deferAction(args.action_id,when)}
       case 'set_status': return this.update(args.id, {state:args.state});
       case 'set_revisit': {let date;try{date=resolveReminder(args.when,this.preferences(),new Date(this.clock()))}catch(error){throw new Problem(error.message)}return this.update(args.id, {revisit_at:date})}
       case 'set_due_date': return this.update(args.id, {due_at:args.when});

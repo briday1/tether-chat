@@ -93,11 +93,14 @@ class Entry(BaseModel):
     kind:Literal["thought","question","action","decision","update"]="thought"
     body:str=Field(min_length=1)
 class ActionChange(BaseModel):
+    body:str|None=Field(default=None,min_length=1,max_length=20000)
     done:bool|None=None
     due_at:Deadline=None
     revisit_at:datetime|None=None
 class Done(BaseModel):
     done:bool
+class Defer(BaseModel):
+    when:str|None
 class Relation(BaseModel):
     other_id:str
 def found(x):
@@ -212,6 +215,23 @@ def archive(id:str):return db.archive_thread(id,True)
 
 @app.post("/api/threads/{id}/restore")
 def restore(id:str):return db.archive_thread(id,False)
+
+@app.post("/api/threads/{id}/complete")
+def complete_task(id:str,data:Done):
+    try:return found(db.complete_task(id,data.done))
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
+
+@app.post("/api/threads/{id}/defer")
+def defer_task(id:str,data:Defer):
+    from .decisions import resolve_reminder
+    try:return found(db.defer_task(id,resolve_reminder(data.when,db.preferences())))
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
+
+@app.post("/api/actions/{id}/defer")
+def defer_action(id:str,data:Defer):
+    from .decisions import resolve_reminder
+    try:return found(db.defer_action(id,resolve_reminder(data.when,db.preferences())))
+    except ValueError as exc:raise HTTPException(422,str(exc)) from None
 
 @app.delete("/api/threads/{id}")
 def delete(id:str):return {"deleted":db.delete(id)}

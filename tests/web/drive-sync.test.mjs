@@ -19,7 +19,7 @@ test('browser projection fills nullable fields and canonical completion',()=>{
   const entry={id:'entry1',thread_id:'task1',kind:'action',body:'Get bread',created_at:when};
   const records=project({tasks:[task],entries:[entry]});
   assert.equal(records['entry:entry1'].done,0);assert.equal(records['entry:entry1'].due_at,null);assert.equal(records['entry:entry1'].revisit_at,null);
-  assert.deepEqual(Object.keys(records['entry:entry1']).sort(),['id','thread_id','kind','body','done','due_at','revisit_at','created_at'].sort());
+  assert.deepEqual(Object.keys(records['entry:entry1']).sort(),['id','thread_id','kind','body','done','completed_by_task','due_at','revisit_at','snoozed_until','created_at'].sort());
 });
 test('malicious types, prototype fields and values fail closed',()=>{
   const prototype=JSON.parse('{"__proto__:evil":{"id":"evil"}}');assert.throws(()=>validateRecords(prototype));

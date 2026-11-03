@@ -39,6 +39,7 @@ jobs:
           python scripts/check_assistant_ui.py
           timeout 180s python -u scripts/check_web_updates.py
           python scripts/check_ui.py
+          python scripts/capture_screenshots.py
           python scripts/check_session_ui.py
           python scripts/check_voice_ui.py
       - name: Save Display layout evidence
@@ -46,7 +47,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: display-ui-screenshots
-          path: artifacts/display-*.png
+          path: |
+            artifacts/display-*.png
+            artifacts/task-controls-*.png
           if-no-files-found: ignore
       - uses: actions/cache@v4
         with:

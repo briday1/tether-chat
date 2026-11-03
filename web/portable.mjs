@@ -1,5 +1,6 @@
 import {emptyState, Model, Problem, categories, required, timestamp, copy} from './store.mjs';
 import {preferences,DEFAULT_PREFERENCES} from './decisions.mjs';
+import {recurrenceValue} from './recurrence.mjs';
 
 const tables = ['tasks','entries','notes','activity','relations','messages'];
 export function exportData(state) {
@@ -10,6 +11,8 @@ export function validateBackup(payload) {
   if (!payload || payload.format !== 'tether-chat' || payload.version !== 1 || !payload.data)
     throw new Problem('Choose a tether portable JSON backup');
   const state = emptyState(), data = payload.data;
+  // Restore the complete graph before runtime maintenance considers archiving it.
+  const model = new Model(state, undefined, {maintenance:false});
   try{state.preferences=preferences(data.preferences||{})}catch(error){throw new Problem(error.message)}
   for (const name of tables) {
     if (!Array.isArray(data[name]) || data[name].length > 200000) throw new Problem('Invalid or oversized backup table: '+name);
@@ -18,31 +21,42 @@ export function validateBackup(payload) {
   function identifier(value) {
     required(value,'Record ID',100); if (ids.has(value)) throw new Problem('Duplicate backup record ID'); ids.add(value); return value;
   }
+  function completionMarker(value) {
+    if (value === undefined) return false;
+    if (![true,false,0,1].includes(value)) throw new Problem('Invalid task completion marker');
+    return !!value;
+  }
   for (const source of data.tasks) {
-    const id = identifier(source.id), model = new Model(state);
+    const id = identifier(source.id);
     const task = model.create(required(source.title,'Title',300),source.summary || '',categories(source.categories || [source.category || 'Unsorted']));
     const saved = state.tasks.at(-1); saved.id = id;
     const fields = Object.fromEntries(['state','due_at','revisit_at','recurrence','next_occurrence','recurrence_end','recurrence_anchor','recurrence_timezone','due_action','action_config','action_prompt','archived_at']
       .filter(key => source[key] !== undefined).map(key => [key,source[key]]));
     model.update(id,fields);
+    saved.snoozed_until = timestamp(source.snoozed_until);
+    try { saved.deferred_occurrence = recurrenceValue(source.deferred_occurrence); }
+    catch (error) { throw new Problem(error.message); }
     saved.created_at = timestamp(source.created_at) || task.created_at;
     saved.updated_at = timestamp(source.updated_at) || saved.created_at;
   }
   for (const source of data.entries) {
-    const model = new Model(state); model.task(source.thread_id);
+    model.task(source.thread_id);
     const entry = model.add(source.thread_id,source.kind,source.body);
     entry.id = identifier(source.id); entry.created_at = timestamp(source.created_at) || entry.created_at;
     if (entry.kind === 'action') model.updateAction(entry.id,{done:!!source.done,due_at:source.due_at || null,revisit_at:source.revisit_at || null});
+    // These describe an existing completion; restoring is not a new user edit.
+    entry.snoozed_until = timestamp(source.snoozed_until);
+    entry.completed_by_task = completionMarker(source.completed_by_task);
   }
   for (const source of data.notes) {
-    const note = new Model(state).addNote(source.action_id,source.body,identifier(source.id));
+    const note = model.addNote(source.action_id,source.body,identifier(source.id));
     note.created_at=timestamp(source.created_at) || note.created_at; note.updated_at=timestamp(source.updated_at) || note.created_at;
   }
   for (const source of data.activity) {
-    const event = new Model(state).record(source.thread_id,source.body,source.kind,source.occurred_at);
+    const event = model.record(source.thread_id,source.body,source.kind,source.occurred_at);
     event.id=identifier(source.id); event.recorded_at=timestamp(source.recorded_at) || event.recorded_at;
   }
-  for (const source of data.relations) new Model(state).link(source.a,source.b);
+  for (const source of data.relations) model.link(source.a,source.b);
   for (const source of data.messages) {
     if (!['user','assistant'].includes(source.role) || typeof source.body !== 'string') throw new Problem('Invalid conversation record');
     state.messages.push({id:identifier(source.id),role:source.role,body:source.body,created_at:timestamp(source.created_at) || new Date().toISOString()});
@@ -65,7 +79,13 @@ export function importData(state, payload) {
       const before=existing.get(key(row));
       if (before) {
         // Notification delivery is device-specific; it is never a merge conflict.
-        const clean = item => {const result=Object.fromEntries(Object.entries(item).filter(([k]) => !['notified_for','recurring_notified_for'].includes(k)));if(table==='tasks')Object.assign(result,{action_prompt:item.action_prompt||'',recurrence_end:item.recurrence_end??null,recurrence_timezone:item.recurrence_timezone??null,recurrence_anchor:item.recurrence_anchor||(item.recurrence?item.next_occurrence:null)||null});return result};
+        const clean = item => {
+          const result=Object.fromEntries(Object.entries(item).filter(([k]) => !['notified_for','recurring_notified_for'].includes(k)));
+          if(table==='tasks')Object.assign(result,{action_prompt:item.action_prompt||'',recurrence_end:item.recurrence_end??null,recurrence_timezone:item.recurrence_timezone??null,recurrence_anchor:item.recurrence_anchor||(item.recurrence?item.next_occurrence:null)||null,deferred_occurrence:item.deferred_occurrence??null});
+          if(table==='tasks'||table==='entries')result.snoozed_until=timestamp(item.snoozed_until);
+          if(table==='entries')Object.assign(result,{done:!!item.done,completed_by_task:!!item.completed_by_task});
+          return result;
+        };
         if (JSON.stringify(canonical(clean(before))) !== JSON.stringify(canonical(clean(row))))
           throw new Problem('This backup has a different version of an existing record. Import into an empty browser profile to retain both versions. Nothing was changed.');
       } else { candidate[table].push(row); counts[table]++; }

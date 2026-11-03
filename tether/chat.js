@@ -26,21 +26,24 @@
  const journalKey='tether-chat-outbox'+suffix,draftKey='tether-chat-draft'+suffix;
  const stopKey='tether-chat-stop-requests'+suffix;
  const contextKey='tether-chat-context-'+workspace;
+ const actionContextKey=contextKey+'-action';
  let contextIds=[];try{const saved=JSON.parse(sessionStorage.getItem(contextKey)||'[]');if(Array.isArray(saved))contextIds=saved.filter(id=>typeof id==='string').slice(0,10)}catch(_){}
+ let selectedAction=null;try{const saved=JSON.parse(sessionStorage.getItem(actionContextKey)||'null');if(saved&&typeof saved.action_id==='string'&&contextIds.includes(saved.task_id))selectedAction=saved}catch(_){}
  const contextTitles=new Map(),contextBar=el('div','chat-task-context');contextBar.setAttribute('aria-label','Selected task context');
  document.querySelector('#composer').prepend(contextBar);
  const contextStyle=document.createElement('style');contextStyle.textContent='.chat-task-context{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px}.chat-task-context:empty{display:none}.chat-context-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text)}.chat-context-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}.chat-context-chip button{background:none;border:0;padding:2px;display:flex;color:var(--muted);cursor:pointer}.chat-context-chip button:hover{color:var(--text)}';document.head.append(contextStyle);
- function saveContext(){try{sessionStorage.setItem(contextKey,JSON.stringify(contextIds))}catch(_){}renderContext()}
+ function saveContext(){if(selectedAction&&!contextIds.includes(selectedAction.task_id))selectedAction=null;try{sessionStorage.setItem(contextKey,JSON.stringify(contextIds));sessionStorage.setItem(actionContextKey,JSON.stringify(selectedAction))}catch(_){}renderContext()}
  function renderContext(){
   contextBar.replaceChildren();if(!contextIds.length)return;
   contextBar.append(el('span','muted','Task context:'));
   for(const id of contextIds){const title=contextTitles.get(id)||'Selected task',chip=el('div','chat-context-chip'),remove=el('button');remove.type='button';remove.title='Remove '+title+' from chat context';remove.setAttribute('aria-label',remove.title);remove.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';remove.onclick=()=>{contextIds=contextIds.filter(value=>value!==id);saveContext()};chip.append(el('span','',title),remove);contextBar.append(chip)}
+  if(selectedAction){const chip=el('div','chat-context-chip chat-action-context'),title=selectedAction.title||'Selected action',remove=el('button');remove.type='button';remove.title='Remove action '+title+' from chat context';remove.setAttribute('aria-label',remove.title);remove.textContent='×';remove.onclick=()=>{selectedAction=null;saveContext()};chip.append(el('span','','Action: '+title),remove);contextBar.append(chip)}
  }
  async function refreshContext(){
-  await Promise.all(contextIds.map(async id=>{try{const task=await api('/threads/'+encodeURIComponent(id));contextTitles.set(id,task.title)}catch(_){contextTitles.set(id,'Unavailable task — remove to continue')}}));renderContext();
+  await Promise.all(contextIds.map(async id=>{try{const task=await api('/threads/'+encodeURIComponent(id));contextTitles.set(id,task.title);if(selectedAction?.task_id===id)selectedAction.title=task.entries.find(e=>e.kind==='action'&&e.id===selectedAction.action_id)?.body||'Unavailable action — remove to continue'}catch(_){contextTitles.set(id,'Unavailable task — remove to continue')}}));saveContext();
  }
- const contextURL=new URL(location.href),addedContext=contextURL.searchParams.get('task_context');
- if(addedContext){contextIds=[...new Set([...contextIds,addedContext])].slice(-10);saveContext();contextURL.searchParams.delete('task_context');history.replaceState(history.state,'',contextURL)}
+ const contextURL=new URL(location.href),addedContext=contextURL.searchParams.get('task_context'),addedAction=contextURL.searchParams.get('action_context');
+ if(addedContext){contextIds=[...new Set([...contextIds,addedContext])].slice(-10);selectedAction=addedAction?{task_id:addedContext,action_id:addedAction}:null;saveContext();contextURL.searchParams.delete('task_context');contextURL.searchParams.delete('action_context');history.replaceState(history.state,'',contextURL)}
  renderContext();refreshContext();
  let syncing=false,syncAgain=false,timer=null,jobs=[],first=true,submitting=false,jobStamp='';
  let attentionRequest=0,attentionStamp='',attentionTimer=null;
@@ -118,7 +121,7 @@
    node.append(el('span','retry-error',job.error+(unchanged?' No tasks were changed.':' Changes may have been saved before the failure.')));
    const retry=el('button','retry-icon');retry.type='button';retry.title='Retry this request';retry.setAttribute('aria-label','Retry this request');
    retry.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.2 5.5M20 4v7h-7"/></svg>';
-   retry.onclick=async()=>{retry.disabled=true;try{await enqueue(job.message,job.context?.kind==='attention'?{task_id:job.context.task_id,action_id:job.context.action_id}:null,job.context?.kind==='task_context'?job.context.task_ids:undefined)}finally{retry.disabled=false}};
+   retry.onclick=async()=>{retry.disabled=true;try{await enqueue(job.message,job.context?.kind==='attention'?{task_id:job.context.task_id,action_id:job.context.action_id}:null,job.context?.kind==='task_context'?job.context.task_ids:undefined,null,job.context?.action_id||null)}finally{retry.disabled=false}};
    node.append(retry);
   }else{
    node.append(el('div','tether-activity-heading',job.status==='queued'?'Queued…':'Working on your request'));
@@ -186,11 +189,11 @@
    const node=pendingNodes.get(payload.request_id);if(node){node.textContent=error.message;node.dataset.signature=''}
   }finally{sending.delete(payload.request_id)}
  }
- async function enqueue(text,attention=null,selectedContext=contextIds,interruptJobId=null){
+ async function enqueue(text,attention=null,selectedContext=contextIds,interruptJobId=null,actionId=selectedAction?.action_id||null){
   if(!attention&&text.length>50000){inputError.textContent='This message is over 50,000 characters. Split it into smaller messages. Your text has been kept.';inputError.hidden=false;return null}
   inputError.hidden=true;
-  if(window.tetherBeforeChat && !await window.tetherBeforeChat(text,attention))return null;
-  const payload={request_id:newId(),text,...(interruptJobId?{interrupt_job_id:interruptJobId}:{}),...(attention?{attention}:{task_context:[...selectedContext]})};remember(payload);
+  if(window.tetherBeforeChat && !await window.tetherBeforeChat(text,attention,{task_context:[...selectedContext],...(actionId?{action_context:actionId}:{})}))return null;
+  const payload={request_id:newId(),text,...(interruptJobId?{interrupt_job_id:interruptJobId}:{}),...(attention?{attention}:{task_context:[...selectedContext],...(actionId?{action_context:actionId}:{})})};remember(payload);
   if(chat.querySelector('.welcome'))chat.replaceChildren();
   const user=messageNode({id:'outbox-'+payload.request_id,role:'user',body:text});chat.append(user,pendingNode({id:payload.request_id,status:'queued',progress:['Sending your request…']}));scrollChat();
   updateControls();send(payload);sync();return payload.request_id;
@@ -199,7 +202,8 @@
   const target={task_id:item.task_id||item.id,action_id:item.action_id||null};const key=target.task_id+'/'+(target.action_id||'');
   if(attentionSending.has(key)||jobs.some(j=>['queued','running'].includes(j.status)&&j.context?.task_id===target.task_id&&(j.context.action_id||null)===target.action_id))return;
   attentionSending.add(key);
-  enqueue('Check in on '+item.title+(item.task_title?' in '+item.task_title:'')+'. Give me the relevant context and ask for my update.',target);
+  const request=await enqueue('Check in on '+item.title+(item.task_title?' in '+item.task_title:'')+'. Give me the relevant context and ask for my update.',target);
+  if(request){contextIds=[target.task_id];contextTitles.set(target.task_id,item.task_title||item.title);selectedAction=target.action_id?{...target,title:item.title}:null;saveContext()}
   document.querySelector('#message').focus();setTimeout(()=>attentionSending.delete(key),1200);
  }
  async function reminders(force=false){
