@@ -27,13 +27,17 @@ def export_data():
         entries = read('entries')
         for entry in entries:
             entry['done'] = bool(entry['done'])
+            entry['completed_by_task'] = bool(entry.get('completed_by_task', False))
         data = {'tasks': tasks, 'entries': entries, 'notes': read('action_notes'),
                 'activity': read('activity'), 'relations': read('relations'), 'messages': read('conversation')}
     for table in data.values():
         for row in table:
             for key in ('created_at', 'updated_at', 'occurred_at', 'recorded_at', 'due_at', 'revisit_at',
-                        'next_occurrence', 'archived_at'):
+                        'next_occurrence', 'archived_at', 'snoozed_until', 'deferred_occurrence'):
                 if key in row:
+                    # Keep calendar-only deadlines and occurrence identities calendar-only.
+                    if key in ('due_at', 'next_occurrence', 'deferred_occurrence') and isinstance(row[key], str) and len(row[key]) == 10:
+                        continue
                     row[key] = _stamp(row[key])
     data['preferences']=store.preferences()
     from .workspaces import current

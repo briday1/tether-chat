@@ -12,20 +12,26 @@ def check_composer_controls(page, chat, variant):
     saved_viewport = page.viewport_size
     field.evaluate('''n=>{const w=n.ownerDocument.defaultView;
       w.composerCheck={fetch:w.fetch,before:w.tetherBeforeChat,draft:n.value,
-        theme:n.ownerDocument.documentElement.dataset.theme,posts:[],cancels:[],
+        theme:n.ownerDocument.documentElement.dataset.theme,posts:[],requests:[],cancels:[],
         failStop:false,rejectSend:false,state:{messages:[],jobs:[]}};
       const c=w.composerCheck;w.tetherBeforeChat=async()=>true;
       w.fetch=async(input,options={})=>{const path=new URL(typeof input==='string'?input:input.url,w.location.href).pathname;
         if(path.endsWith('/api/chat/state'))return Response.json(c.state);
         if(path.endsWith('/api/chat/jobs')&&options.method==='POST'){
-          const p=JSON.parse(options.body);c.posts.push(p);
+          const p=JSON.parse(options.body);c.requests.push(p);
+          // Stop may safely retry an unacknowledged request UUID before its
+          // response arrives. Model the real queue's idempotent job creation;
+          // a duplicate submission with a new UUID still counts as another job.
+          const existing=c.posts.some(post=>post.request_id===p.request_id);
+          if(!existing)c.posts.push(p);
           if(c.rejectSend)return Response.json({detail:'Synthetic rejected message'},{status:400});
-          c.state={messages:[{id:'composer-user',role:'user',body:p.text}],jobs:[{id:p.request_id,user_message_id:'composer-user',status:'running',updated_at:String(c.posts.length),progress:[]}]};
+          if(!existing)c.state={messages:[{id:'composer-user',role:'user',body:p.text}],jobs:[{id:p.request_id,user_message_id:'composer-user',status:'running',updated_at:String(c.posts.length),progress:[]}]};
+          if(p.stop_requested){const job=c.state.jobs.find(job=>job.id===p.request_id);if(job){job.status='interrupted';job.user_stopped=true;job.updated_at='stopped-post-'+c.requests.length}}
           return Response.json({id:p.request_id});
         }
         if(path.includes('/api/chat/jobs/')&&path.endsWith('/cancel')&&options.method==='POST'){
           c.cancels.push(path);if(c.failStop)return Response.json({detail:'offline'},{status:503});
-          const job=c.state.jobs[0];job.status='interrupted';job.user_stopped=true;job.updated_at='stop-'+c.cancels.length;return Response.json(job);
+          const id=decodeURIComponent(path.split('/').at(-2)),job=c.state.jobs.find(job=>job.id===id)||{id};job.status='interrupted';job.user_stopped=true;job.updated_at='stop-'+c.cancels.length;return Response.json(job);
         }
         return c.fetch(input,options);
       };w.dispatchEvent(new Event('online'));
@@ -41,6 +47,14 @@ def check_composer_controls(page, chat, variant):
 
     def state(code):
         return field.evaluate('(n)=>{const w=n.ownerDocument.defaultView,c=w.composerCheck;' + code + '}')
+
+    def expect_posts(expected):
+        result = field.evaluate('''async(n,expected)=>{
+          const w=n.ownerDocument.defaultView,c=w.composerCheck,until=w.performance.now()+5000;
+          while(c.posts.length<expected&&w.performance.now()<until)await new Promise(resolve=>w.setTimeout(resolve,20));
+          return {expected,actual:c.posts.length,posts:c.posts,requests:c.requests};
+        }''', expected)
+        assert result['actual'] == expected, result
 
     def geometry():
         return field.evaluate('''n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}''')
@@ -88,7 +102,7 @@ def check_composer_controls(page, chat, variant):
             before = state('return c.posts.length')
             interrupt.click()
             expect(field).to_have_value('')
-            assert state('return c.posts.length') == before + 1
+            expect_posts(before + 1)
             assert state('return c.posts.at(-1).interrupt_job_id===c.posts.at(-2).request_id')
             field.fill('Draft')
             stop.click()
@@ -108,13 +122,13 @@ def check_composer_controls(page, chat, variant):
     before = state('return c.posts.length')
     field.press('Enter')
     expect(field).to_have_value('')
-    assert state('return c.posts.length') == before + 1
+    expect_posts(before + 1)
     assert state('return c.posts.at(-1).interrupt_job_id===c.posts.at(-2).request_id')
     field.fill('Submit only once')
     before = state('return c.posts.length')
     field.evaluate("n=>{const form=n.closest('form');form.requestSubmit();form.requestSubmit()}")
     expect(field).to_have_value('')
-    assert state('return c.posts.length') == before + 1
+    expect_posts(before + 1)
     assert state('return c.posts.at(-1).interrupt_job_id===c.posts.at(-2).request_id')
 
     # Dictation blocks submission, not cancellation of the running generation.

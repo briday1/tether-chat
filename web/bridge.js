@@ -42,8 +42,8 @@
     try{configuration(await api('/settings'));await window.tetherLoadPreferences?.()}catch(e){status('#providerStatus',e.message)}
     finally{for(const control of controls)control.disabled=false;form.removeAttribute('aria-busy')}
   })();
-  window.tetherBeforeChat=async(text,attention)=>{
-    try{await pendingProvider;await api('/chat/preflight','POST',{text,attention});return true}
+  window.tetherBeforeChat=async(text,attention,context={})=>{
+    try{await pendingProvider;await api('/chat/preflight','POST',{text,attention,...context});return true}
     catch(error){
       if(error.status!==401)return true;
       if($('#settings').classList.contains('hidden'))$('#navsettings').click();

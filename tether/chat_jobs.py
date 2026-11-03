@@ -209,6 +209,8 @@ def _execute(path, job_id, token):
             result = snapshot_respond(message)
             if result is None:
                 kwargs = {'task_context': job['context']['task_ids']} if job['context'].get('kind') == 'task_context' else {}
+                if kwargs and job['context'].get('action_id'):
+                    kwargs['action_context'] = job['context']['action_id']
                 result = commands.execute(message) if message.startswith('/') else ai.chat(message, progress=status, history=history, **kwargs)
             if result is None:
                 raise ValueError('Unknown command. Type /help.')

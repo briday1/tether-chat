@@ -266,7 +266,7 @@ def test_midnight_deadline_retains_timezone_in_task_and_action_api(database):
 
 def test_past_independent_reminder_does_not_disable_later_recurring_notifications(database):
     from datetime import datetime,timezone,timedelta
-    current=datetime.now(timezone.utc)
+    current=datetime.fromisoformat(store.now())
     t=store.create('Independent reminder and repeat')
     past=(current-timedelta(minutes=5)).isoformat();occurrence=(current-timedelta(minutes=1)).isoformat()
     store.update(t['id'],{'recurrence':'daily','next_occurrence':occurrence,'revisit_at':past})

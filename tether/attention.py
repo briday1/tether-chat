@@ -14,11 +14,11 @@ def items(force=False):
     # Finish an explicit reconsideration before reading the live records: a
     # task may be completed or rescheduled while the provider is responding.
     curated=ai.attention(force).get('items', [])
-    active = {t['id']: t for t in store.list_threads() if not t.get('archived_at') and t['state'] != 'settled'}
+    active = {t['id']: t for t in store.list_threads() if not t.get('archived_at') and t['state'] != 'settled' and not store.is_snoozed(t)}
     result = []
     for a in store.query("SELECT * FROM entries WHERE kind='action' AND done=0 ORDER BY created_at"):
         task = active.get(a['thread_id'])
-        if task and (_due(a.get('revisit_at')) or _due(a.get('due_at'))):
+        if task and not store.is_snoozed(a) and (_due(a.get('revisit_at')) or _due(a.get('due_at'))):
             result.append({'id': a['id'], 'task_id': task['id'], 'action_id': a['id'],
                            'title': a['body'], 'task_title': task['title'],
                            'reason': 'Scheduled attention' if _due(a.get('revisit_at')) else 'Action due'})

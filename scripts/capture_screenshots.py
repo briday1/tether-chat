@@ -56,15 +56,15 @@ def make_demo(db):
     archived = store.create("Completed onboarding checklist")
     store.update(archived["id"], {"category": "Operations"})
     store.archive_thread(archived["id"])
-    next_monday=date.today()+timedelta(days=7-date.today().weekday())
+    next_sunday=date.today()+timedelta(days=7-(date.today().weekday()+1)%7)
     for title,cat,offset in [("Prepare briefing notes","Projects",0),("Investigate dashboard bug","Product",2),("Renew development certificate","Operations",4)]:
         matches=[t for t in store.list_threads() if t["title"]==title]
-        if matches:store.update(matches[0]["id"],{"due_at":(next_monday+timedelta(days=offset)).isoformat()+"T12:00:00Z"})
+        if matches:store.update(matches[0]["id"],{"due_at":(next_sunday+timedelta(days=offset)).isoformat()+"T12:00:00Z"})
     for title,categories,offset in [("Plan monthly review",["Operations","Projects"],0),
                                     ("Review project milestones",["Projects","Product"],2),
                                     ("Update documentation",["Product"],0)]:
         task=next(t for t in store.list_threads() if t["title"]==title)
-        store.update(task["id"],{"categories":categories,"due_at":(next_monday+timedelta(days=offset)).isoformat()+"T12:00:00Z"})
+        store.update(task["id"],{"categories":categories,"due_at":(next_sunday+timedelta(days=offset)).isoformat()+"T12:00:00Z"})
     from tether.notes import task_table
     tasks={t['title']:t for t in store.list_threads()}
     project_tasks=[tasks[title] for title in ('Prepare briefing notes','Review project milestones','Weekly activity report')]
@@ -159,14 +159,14 @@ def main():
                 request_snapshot(page, "give me my next week snapshot")
                 verify_snapshot_layers(page)
                 capture_calendar(page, 'snapshot-week.png')
-                week_start=date.today()+timedelta(days=7-date.today().weekday())
+                week_start=date.today()+timedelta(days=7-(date.today().weekday()+1)%7)
                 week_end=week_start+timedelta(days=6)
                 page.goto(base + "/snapshots?start="+week_start.isoformat()+"&end="+week_end.isoformat(), wait_until="networkidle")
                 page.locator(".day").first.wait_for()
-                assert page.locator("#weekdays span").all_text_contents() == ["Mon", "Tue", "Wed", "Thu", "Fri"], "Empty weekends must be hidden"
+                assert page.locator("#weekdays span").all_text_contents() == ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], "Calendars include every day, even empty weekends"
                 assert page.locator(".summary, .stat, .eyebrow").count() == 0, "Snapshot must not include summary cards"
                 assert page.locator('input,select').count()==0, "Calendars must be read-only"
-                assert page.locator('.day').count()==5
+                assert page.locator('.day').count()==7
                 assert page.locator('.day-items .task').filter(has_text='Plan monthly review').locator('.task-categories').inner_text()=='Operations · Projects'
                 assert page.locator('.day').first.locator('.task').count()==3, 'Show multiple tasks in one day'
                 month_start=week_start.replace(day=1)
@@ -175,7 +175,7 @@ def main():
                 month_end=following-timedelta(days=1)
                 page.goto(base + "/snapshots?start="+month_start.isoformat()+"&end="+month_end.isoformat(), wait_until="networkidle")
                 page.locator(".day").first.wait_for()
-                assert page.locator("#weekdays span").all_text_contents() == ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                assert page.locator("#weekdays span").all_text_contents() == ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
                 assert page.locator(".task-marker").count()>0
                 assert page.locator("#png, #svg, #details, #day-dialog").count()==0
                 month_height=page.locator('.shell').bounding_box()['height']

@@ -17,6 +17,7 @@ class SubmitMessage(BaseModel):
     stop_requested: bool = False
     interrupt_job_id: str | None = Field(default=None, min_length=8, max_length=100)
     task_context: list[str] | None = Field(default=None, max_length=10)
+    action_context: str | None = Field(default=None, min_length=1, max_length=100)
 
 @router.get('/api/chat/state')
 def state():
@@ -26,11 +27,17 @@ def state():
 def submit(data: SubmitMessage):
     try:
         context = {'kind': 'attention', **data.attention.model_dump()} if data.attention else None
-        if not data.attention and data.task_context is not None:
-            ids = list(dict.fromkeys(data.task_context))
+        if not data.attention and (data.task_context is not None or data.action_context):
+            ids = list(dict.fromkeys(data.task_context or []))
             if any(not store.get(task_id) for task_id in ids):
                 raise ValueError('A selected context task no longer exists. Remove it and try again.')
             context = {'kind': 'task_context', 'task_ids': ids}
+            if data.action_context:
+                from .task_context import action_context
+                action = action_context(data.action_context)
+                if action['task_id'] not in ids:
+                    raise ValueError('The selected action must belong to a selected context task')
+                context['action_id'] = data.action_context
         if data.interrupt_job_id:
             context = {**(context or {}), 'interrupt_job_id': data.interrupt_job_id}
         message = attention.prompt(data.attention.task_id, data.attention.action_id) if data.attention else data.text

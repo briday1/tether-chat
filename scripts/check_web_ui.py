@@ -266,6 +266,8 @@ def main():
                 frame.get_by_role('link',name='Conversation',exact=True).click()
                 from composer_ui_checks import check_composer_controls
                 check_composer_controls(page,frame,'home-conversation')
+                from task_controls_ui_checks import check_task_controls
+                check_task_controls(page,frame)
                 assert not errors,errors
                 browser.close()
                 print('Browser edition: shared UI, voice, imports, scoped actions, encrypted keys, durable chat, backup, calendar, mobile, offline, and automatic Attention updates passed.')

@@ -113,7 +113,8 @@ def main():
                 bounds=[page.locator(s).bounding_box() for s in ['.category-section','.task-section','.actions-section']]
                 assert bounds[0]['x']<bounds[1]['x']<bounds[2]['x'],bounds
                 assert max(b['y'] for b in bounds)-min(b['y'] for b in bounds)<5,bounds
-                assert page.locator('.actions-section input').count()==0
+                expect(page.locator('.actions-section input[type="checkbox"]')).to_have_count(2)
+                assert page.locator('.actions-section input[type="date"],.actions-section input[type="datetime-local"]').count()==0
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.screenshot(path=str(out/'task-action-columns.png'))
                 page.locator('.action-list-row').filter(has_text='Contact the review team').click()
@@ -170,6 +171,15 @@ def main():
                     page.goto(base+'/',wait_until='networkidle')
                 from composer_ui_checks import check_composer_controls
                 check_composer_controls(page,page,'work-conversation')
+                if not args.mock_api:
+                    # Earlier layout checks intentionally hid Attention. These
+                    # lifecycle checks exercise the real stored reminders.
+                    page.unroute('**/api/attention*')
+                    # Calendar screenshots used a fixed date. Resume writes the
+                    # server's current time, so restore the page to that clock.
+                    page.clock.set_system_time(datetime.now(timezone.utc))
+                    from task_controls_ui_checks import check_task_controls
+                    check_task_controls(page,page)
                 # Reproduce a desktop upgrade with an old script still in the
                 # WebView cache. Its matchReferences hook must remain harmless.
                 legacy=(ROOT/'tests/fixtures/legacy-chat-2026-16.js').read_text()
