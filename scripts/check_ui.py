@@ -175,6 +175,9 @@ def main():
                     # Earlier layout checks intentionally hid Attention. These
                     # lifecycle checks exercise the real stored reminders.
                     page.unroute('**/api/attention*')
+                    # Calendar screenshots used a fixed date. Resume writes the
+                    # server's current time, so restore the page to that clock.
+                    page.clock.set_system_time(datetime.now(timezone.utc))
                     from task_controls_ui_checks import check_task_controls
                     check_task_controls(page,page)
                 # Reproduce a desktop upgrade with an old script still in the
