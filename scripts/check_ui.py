@@ -172,6 +172,9 @@ def main():
                 from composer_ui_checks import check_composer_controls
                 check_composer_controls(page,page,'work-conversation')
                 if not args.mock_api:
+                    # Earlier layout checks intentionally hid Attention. These
+                    # lifecycle checks exercise the real stored reminders.
+                    page.unroute('**/api/attention*')
                     from task_controls_ui_checks import check_task_controls
                     check_task_controls(page,page)
                 # Reproduce a desktop upgrade with an old script still in the
